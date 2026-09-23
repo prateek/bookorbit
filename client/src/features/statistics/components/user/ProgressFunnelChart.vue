@@ -184,9 +184,12 @@ watchEffect(() => {
 <template>
   <ChartCard :title="t('statistics.charts.progressFunnel.title')" :icon="Waypoints" :color-index="10" :loading :error :empty="isEmpty">
     <template #controls>
-      <DropdownMenu>
+      <DropdownMenu v-if="!isEmpty && !lowConfidence && !showFlatState">
         <DropdownMenuTrigger as-child>
-          <button class="border-border text-muted-foreground hover:text-foreground rounded-md border px-2 py-1 text-xs transition-colors">
+          <button
+            type="button"
+            class="border-border text-muted-foreground hover:text-foreground rounded-md border px-2 py-1 text-xs transition-colors pointer-coarse:min-h-11 pointer-coarse:px-3"
+          >
             {{ selectedModeLabel }}
           </button>
         </DropdownMenuTrigger>

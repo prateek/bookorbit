@@ -69,8 +69,8 @@ watchEffect(() => {
         max: 100,
         startAngle: 210,
         endAngle: -30,
-        center: ['50%', '57%'],
-        radius: '95%',
+        center: ['50%', '55%'],
+        radius: '82%',
         splitNumber: 5,
         axisLine: {
           lineStyle: {
@@ -85,12 +85,12 @@ watchEffect(() => {
           },
         },
         progress: { show: false },
-        pointer: { show: true, width: 4, length: '70%', itemStyle: { color: activeColor } },
+        pointer: { show: true, width: 4, length: '52%', itemStyle: { color: activeColor } },
         axisTick: { show: false },
         splitLine: { distance: -16, length: 6 },
-        axisLabel: { distance: -24, fontSize: 10 },
-        detail: { valueAnimation: true, formatter: '{value}%', fontSize: 24, fontWeight: 700, color: activeColor, offsetCenter: [0, '22%'] },
-        title: { show: true, offsetCenter: [0, '44%'], fontSize: 11, color: foreground },
+        axisLabel: { distance: 18, fontSize: 11 },
+        detail: { valueAnimation: true, formatter: '{value}%', fontSize: 24, fontWeight: 700, color: activeColor, offsetCenter: [0, '42%'] },
+        title: { show: true, offsetCenter: [0, '68%'], fontSize: 11, color: foreground },
         data: [{ value: data.value.integrityScore, name: 'Integrity' }],
       },
     ],
@@ -104,9 +104,9 @@ watchEffect(() => {
       <VChart :option="option" autoresize style="height: 76%" />
       <div class="mt-0 grid grid-cols-3 gap-2 px-1">
         <div v-for="card in statCards" :key="card.label" class="bg-muted/40 border-border/60 rounded-md border px-2 py-1 text-center">
-          <p class="text-muted-foreground text-[10px] leading-none">{{ card.label }}</p>
+          <p class="text-muted-foreground text-[11px] leading-none">{{ card.label }}</p>
           <p class="mt-1 text-sm leading-none font-semibold tabular-nums">{{ card.percent }}%</p>
-          <p class="text-muted-foreground mt-0.5 text-[10px] leading-none">{{ card.ratio }}</p>
+          <p class="text-muted-foreground mt-0.5 text-[11px] leading-none">{{ card.ratio }}</p>
         </div>
       </div>
     </div>

@@ -24,8 +24,13 @@ const images = computed(() => visibleMedia.value.filter((m) => m.type === 'image
 
 // Every image sits in an identical-size frame and is letterboxed inside it (object-contain), so
 // highlights with very different screenshot shapes line up uniformly. The frame background fills
-// the leftover space; nothing is cropped or distorted.
-const mediaFrameClass = computed(() => (props.compact ? 'h-36 w-56' : 'h-48 w-72'))
+// the leftover space; nothing is cropped or distorted. On a phone the archive frame takes the
+// column width, since a fixed 288px frame shrinks desktop screenshots past reading.
+const mediaFrameClass = computed(() => {
+  if (props.compact) return 'h-36 w-56'
+  const phoneWidth = visibleMedia.value.length > 1 ? 'max-sm:w-[85%]' : 'max-sm:w-full'
+  return `${phoneWidth} max-sm:aspect-video sm:h-48 sm:w-72`
+})
 
 const lightboxOpen = ref(false)
 const lightboxIndex = ref(0)
@@ -54,12 +59,12 @@ function handleMediaError(item: ReleaseMedia): void {
 
     <div class="min-w-0 flex-1">
       <p class="line-clamp-2 text-sm font-semibold text-foreground">{{ highlight.title }}</p>
-      <p v-if="highlight.body" class="mt-1 line-clamp-4 text-sm leading-relaxed text-muted-foreground">{{ highlight.body }}</p>
+      <p v-if="highlight.body" :class="['mt-1 text-sm leading-relaxed text-muted-foreground', compact && 'line-clamp-4']">{{ highlight.body }}</p>
 
       <div v-if="props.showMedia && visibleMedia.length" class="relative mt-3">
         <span
           v-if="visibleMedia.length > 1"
-          class="pointer-events-none absolute right-1 top-1 z-10 rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+          class="pointer-events-none absolute right-1 top-1 z-10 rounded-full bg-background/80 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
         >
           {{ visibleMedia.length }}
         </span>

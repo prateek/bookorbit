@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef, watchEffect } from 'vue'
+import { computed, shallowRef, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VChart from 'vue-echarts'
 import { TrendingUp } from '@lucide/vue'
@@ -13,6 +13,7 @@ const { t } = useI18n()
 
 const { data, loading, error } = useFormatShareOverTime()
 const option = shallowRef({})
+const singleFormat = computed(() => new Set(data.value.items.map((item) => item.format)).size === 1)
 
 watchEffect(() => {
   if (!data.value.items.length) return
@@ -93,6 +94,7 @@ watchEffect(() => {
     :loading
     :error
     :empty="!data.items.length"
+    :not-applicable="singleFormat"
   >
     <VChart :option autoresize style="height: 100%" />
   </ChartCard>

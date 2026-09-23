@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Medal, Trophy } from '@lucide/vue'
 import type { FilterState } from '../types'
@@ -34,6 +35,11 @@ function handleLocked(): void {
   emit('change', 'locked')
 }
 
+const pillBase =
+  'flex min-h-11 min-w-0 flex-col items-center justify-center rounded-md px-1 py-1 text-[13px] leading-tight font-medium transition-colors sm:flex-row sm:px-3 sm:py-1.5 sm:text-sm pointer-fine:sm:min-h-0'
+
+const totalCount = computed(() => props.earnedCount + props.lockedCount)
+
 function pillClass(filter: FilterState): string {
   return props.activeFilter === filter
     ? 'bg-primary/15 text-foreground shadow-sm ring-1 ring-primary/20'
@@ -60,24 +66,26 @@ function pillClass(filter: FilterState): string {
 
       <div class="bg-border h-px w-full sm:h-8 sm:w-px" />
 
-      <div class="-mx-1 overflow-x-auto px-1 pb-0.5 sm:mx-0 sm:px-0 sm:pb-0">
-        <div class="inline-flex min-w-max items-center gap-1 rounded-md border border-border/50 bg-background/70 p-1">
-          <button :class="['shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors', pillClass('all')]" @click="handleAll">
-            {{ t('achievements.filter.all') }}
-          </button>
-          <button :class="['shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors', pillClass('earned')]" @click="handleEarned">
-            {{ t('achievements.filter.earned', { count: earnedCount }) }}
-          </button>
-          <button
-            :class="['shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors', pillClass('in-progress')]"
-            @click="handleInProgress"
-          >
-            {{ t('achievements.filter.inProgress', { count: inProgressCount }) }}
-          </button>
-          <button :class="['shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors', pillClass('locked')]" @click="handleLocked">
-            {{ t('achievements.filter.locked', { count: lockedCount }) }}
-          </button>
-        </div>
+      <div class="grid grid-cols-4 gap-1 rounded-md border border-border/50 bg-background/70 p-1 sm:inline-flex sm:w-auto sm:items-center">
+        <button type="button" :aria-pressed="activeFilter === 'all'" :class="[pillBase, pillClass('all')]" @click="handleAll">
+          <span>{{ t('achievements.filter.all') }}</span>
+          <span class="text-xs tabular-nums opacity-70 sm:hidden">{{ totalCount }}</span>
+        </button>
+        <button type="button" :aria-pressed="activeFilter === 'earned'" :class="[pillBase, pillClass('earned')]" @click="handleEarned">
+          <span class="sm:hidden">{{ t('achievements.filter.earnedShort') }}</span>
+          <span class="text-xs tabular-nums opacity-70 sm:hidden">{{ earnedCount }}</span>
+          <span class="max-sm:hidden">{{ t('achievements.filter.earned', { count: earnedCount }) }}</span>
+        </button>
+        <button type="button" :aria-pressed="activeFilter === 'in-progress'" :class="[pillBase, pillClass('in-progress')]" @click="handleInProgress">
+          <span class="sm:hidden">{{ t('achievements.filter.inProgressShort') }}</span>
+          <span class="text-xs tabular-nums opacity-70 sm:hidden">{{ inProgressCount }}</span>
+          <span class="max-sm:hidden">{{ t('achievements.filter.inProgress', { count: inProgressCount }) }}</span>
+        </button>
+        <button type="button" :aria-pressed="activeFilter === 'locked'" :class="[pillBase, pillClass('locked')]" @click="handleLocked">
+          <span class="sm:hidden">{{ t('achievements.filter.lockedShort') }}</span>
+          <span class="text-xs tabular-nums opacity-70 sm:hidden">{{ lockedCount }}</span>
+          <span class="max-sm:hidden">{{ t('achievements.filter.locked', { count: lockedCount }) }}</span>
+        </button>
       </div>
     </div>
   </div>

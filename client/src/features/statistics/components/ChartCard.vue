@@ -16,6 +16,8 @@ const props = defineProps<{
   emptyDescription?: string
   unknownCount?: number
   error?: boolean
+  /** Removes the card from the grid when the chart has nothing to say for this library, such as a one-format donut. */
+  notApplicable?: boolean
 }>()
 
 const { t } = useI18n()
@@ -31,8 +33,10 @@ const iconStyle = computed(() => {
 
 <template>
   <div
+    :data-chart-not-applicable="notApplicable && !loading ? '' : undefined"
     :class="[
       'bg-card text-card-foreground flex h-full min-h-[320px] flex-col overflow-hidden rounded-lg border shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md md:min-h-0',
+      'has-[[data-chart-empty-state]]:min-h-0',
     ]"
   >
     <div class="flex min-h-0 flex-1 flex-col p-4">
@@ -45,7 +49,7 @@ const iconStyle = computed(() => {
         </div>
         <div class="flex items-center gap-2">
           <slot name="controls" />
-          <GripVertical class="drag-handle text-muted-foreground hover:text-muted-foreground size-4 cursor-grab active:cursor-grabbing" />
+          <GripVertical class="drag-handle text-muted-foreground size-4 cursor-grab active:cursor-grabbing pointer-coarse:hidden" />
         </div>
       </div>
 

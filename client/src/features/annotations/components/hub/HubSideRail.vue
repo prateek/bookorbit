@@ -58,14 +58,14 @@ function handleOpenTrash() {
 
 <template>
   <aside class="flex min-h-0 flex-col self-start overflow-hidden rounded-xl border border-border bg-card">
-    <header class="flex h-[42px] flex-none items-center gap-2 border-b border-border px-3">
+    <header class="flex h-[42px] flex-none items-center gap-2 border-b border-border px-3 pointer-coarse:h-13">
       <h2 class="truncate text-[13px] font-bold text-foreground">
         {{ t('annotations.hub.railTitle', { marks: formatNumber(overview.total), books: formatNumber(overview.books) }) }}
       </h2>
       <button
         v-if="overview.trashed > 0"
         type="button"
-        class="ml-auto inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold transition-colors"
+        class="ml-auto inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold transition-colors pointer-coarse:h-11 pointer-coarse:text-[13px]"
         :class="trashOpen ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
         :aria-pressed="trashOpen"
         @click="handleOpenTrash"
@@ -93,7 +93,7 @@ function handleOpenTrash() {
             v-for="entry in colors"
             :key="entry.color"
             type="button"
-            class="inline-flex h-6 items-center gap-1.5 rounded-md border py-0 pl-1.5 pr-2 text-[11.5px] font-semibold transition-colors"
+            class="inline-flex h-6 items-center gap-1.5 rounded-md border py-0 pl-1.5 pr-2 text-[11.5px] font-semibold transition-colors pointer-coarse:h-11 pointer-coarse:px-3 pointer-coarse:text-[13px]"
             :class="
               selectedColors.includes(entry.color)
                 ? 'border-primary/50 bg-primary/15 text-foreground'
@@ -130,7 +130,7 @@ function handleOpenTrash() {
             v-for="entry in overview.originBreakdown"
             :key="entry.origin"
             type="button"
-            class="-mx-1 inline-flex h-6 items-center gap-1.5 rounded px-1 text-[11.5px] transition-colors"
+            class="-mx-1 inline-flex h-6 items-center gap-1.5 rounded px-1 text-[11.5px] transition-colors pointer-coarse:h-11 pointer-coarse:text-[13px]"
             :class="selectedOrigin === entry.origin ? 'text-primary' : 'text-muted-foreground hover:text-foreground'"
             :aria-pressed="selectedOrigin === entry.origin"
             @click="emit('toggleOrigin', entry.origin)"
@@ -151,7 +151,7 @@ function handleOpenTrash() {
             </p>
             <button
               type="button"
-              class="-mx-1 mt-0.5 inline-flex h-6 items-center rounded px-1 text-[11.5px] font-semibold text-[var(--pill-repaired)] underline underline-offset-2"
+              class="-mx-1 mt-0.5 inline-flex h-6 items-center rounded px-1 text-[11.5px] font-semibold text-[var(--pill-repaired)] underline underline-offset-2 pointer-coarse:h-11 pointer-coarse:text-[13px]"
               @click="handleReview"
             >
               {{ t('annotations.hub.reviewThem') }}
@@ -167,23 +167,29 @@ function handleOpenTrash() {
             v-for="book in overview.shelf"
             :key="book.bookId"
             type="button"
-            class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-1.5 py-1 text-left transition-colors"
+            class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-1.5 py-1 text-left transition-colors pointer-coarse:min-h-12"
             :class="selectedBookId === book.bookId ? 'bg-primary/15' : 'hover:bg-muted'"
             :aria-pressed="selectedBookId === book.bookId"
             @click="emit('toggleBook', book.bookId, book.bookTitle)"
           >
             <AnnotationBookThumb :book-id="book.bookId" :title="book.bookTitle" class="h-[39px] w-[26px]" />
             <span class="flex min-w-0 flex-col">
-              <span class="truncate text-[12px] leading-4 text-foreground">{{ book.bookTitle ?? t('annotations.unknownBook') }}</span>
-              <span v-if="book.author" class="truncate text-[10.5px] leading-[14px] text-muted-foreground">{{ book.author }}</span>
+              <span class="truncate text-[12px] leading-4 text-foreground pointer-coarse:text-sm pointer-coarse:leading-5">{{
+                book.bookTitle ?? t('annotations.unknownBook')
+              }}</span>
+              <span
+                v-if="book.author"
+                class="truncate text-[10.5px] leading-[14px] text-muted-foreground pointer-coarse:text-xs pointer-coarse:leading-4"
+                >{{ book.author }}</span
+              >
             </span>
-            <span class="text-[11.5px] font-bold text-muted-foreground">{{ formatNumber(book.count) }}</span>
+            <span class="text-[11.5px] font-bold text-muted-foreground pointer-coarse:text-[13px]">{{ formatNumber(book.count) }}</span>
           </button>
         </div>
         <RouterLink
           v-if="overview.books > overview.shelf.length"
           :to="{ name: 'libraries' }"
-          class="mt-1 inline-flex h-6 flex-none items-center gap-1 rounded px-1.5 text-[11.5px] font-semibold text-muted-foreground transition-colors hover:text-primary"
+          class="mt-1 inline-flex h-6 flex-none items-center gap-1 rounded px-1.5 text-[11.5px] font-semibold text-muted-foreground transition-colors hover:text-primary pointer-coarse:h-11 pointer-coarse:text-[13px]"
         >
           {{ t('annotations.hub.allBooks', { count: overview.books }) }}
           <ChevronRight :size="10" />

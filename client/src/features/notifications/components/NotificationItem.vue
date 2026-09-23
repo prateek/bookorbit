@@ -39,6 +39,9 @@ const isFailed = computed(() => meta.value?.severity === NotificationSeverity.Er
 const isWarning = computed(() => meta.value?.severity === NotificationSeverity.Warning)
 const relativeTime = computed(() => formatRelativeTime(props.notification.updatedAt))
 const occurrences = computed(() => props.notification.count)
+// A merged scan summary already rewrites its message with running totals, so a repeat badge would count the same thing twice.
+const messageCarriesCount = computed(() => props.notification.meta?.summary != null && typeof props.notification.meta.summary === 'object')
+const showOccurrences = computed(() => occurrences.value > 1 && !messageCarriesCount.value)
 
 function handleClick() {
   if (!props.notification.read) {
@@ -85,21 +88,24 @@ function handleDismiss(e: Event) {
 
       <div class="min-w-0 flex-1">
         <div class="flex items-start justify-between gap-2">
-          <p class="truncate text-sm leading-tight" :class="notification.read ? 'text-foreground' : 'font-semibold text-foreground'">
+          <p
+            class="truncate text-sm leading-tight max-md:text-[15px]"
+            :class="notification.read ? 'text-foreground' : 'font-semibold text-foreground'"
+          >
             {{ notification.title }}
           </p>
           <div class="flex shrink-0 items-center gap-1.5">
             <span
-              v-if="occurrences > 1"
-              class="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground"
+              v-if="showOccurrences"
+              class="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-muted-foreground max-md:text-xs"
               :aria-label="$t('notifications.occurrences', { count: occurrences })"
             >
               {{ $t('notifications.occurrencesShort', { count: occurrences }) }}
             </span>
-            <span class="text-[11px] text-muted-foreground">{{ relativeTime }}</span>
+            <span class="text-[11px] text-muted-foreground max-md:text-xs">{{ relativeTime }}</span>
           </div>
         </div>
-        <p v-if="notification.message" class="mt-1 line-clamp-3 break-words text-xs text-muted-foreground">
+        <p v-if="notification.message" class="mt-1 line-clamp-3 break-words text-xs text-muted-foreground max-md:text-[13px] max-md:leading-snug">
           {{ notification.message }}
         </p>
       </div>

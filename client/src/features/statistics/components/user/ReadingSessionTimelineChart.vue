@@ -775,6 +775,7 @@ function getIsoWeekStart(year: number, week: number): Date {
       <div class="border-border/60 bg-muted/5 min-h-0 flex-1 rounded-lg border p-2">
         <ChartEmptyState
           v-if="isEmpty"
+          :collapsible="false"
           :icon="CalendarRange"
           :title="t('statistics.charts.readingSessionTimeline.noSessionsTitle')"
           :description="t('statistics.charts.readingSessionTimeline.noSessionsDescription')"

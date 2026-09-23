@@ -18,6 +18,7 @@ vi.mock('vue-sonner', () => ({
 import { useAuth } from '@/features/auth/composables/useAuth'
 import { api } from '@/lib/api'
 import { toast } from 'vue-sonner'
+import { LIBRARY_CHART_IDS } from '../statistics-chart-meta'
 
 const mockUseAuth = vi.mocked(useAuth)
 const mockApi = vi.mocked(api)
@@ -60,6 +61,28 @@ const LEGACY_USER_CHART_ORDER_WITH_SOURCE_SECOND: StatisticsChartId[] = [
   'reading-clock',
   'reading-session-timeline',
   'session-archetypes',
+]
+
+const LEGACY_LIBRARY_CHART_ORDER_HEALTH_FIRST: StatisticsChartId[] = [
+  'library-integrity-gauge',
+  'format-distribution',
+  'metadata-score-distribution',
+  'metadata-freshness-gauge',
+  'largest-books',
+  'genre-distribution',
+  'format-share-over-time',
+  'top-authors',
+  'metadata-completeness',
+  'acquisition-lag-scatter',
+  'library-metadata-completeness',
+  'storage-by-format',
+  'language-distribution',
+  'page-count-distribution',
+  'publication-decade',
+  'genre-cooccurrence',
+  'top-series',
+  'books-added-over-time',
+  'publication-year-timeline',
 ]
 
 function chartEntries(ids: StatisticsChartId[]): ChartConfigEntry[] {
@@ -131,5 +154,30 @@ describe('useStatisticsConfig - persist', () => {
     const chartIds = orderedUserCharts.value.map((chart) => chart.id)
     expect(chartIds[1]).toBe('peak-reading-hours')
     expect(chartIds.at(-1)).toBe('reading-source-distribution')
+  })
+
+  it('moves a saved copy of the old health-first library order to the reader-first defaults', async () => {
+    setupAuth({
+      statisticsConfig: {
+        charts: chartEntries(LEGACY_LIBRARY_CHART_ORDER_HEALTH_FIRST),
+      },
+    })
+
+    const { useStatisticsConfig } = await import('./useStatisticsConfig')
+    const { init, orderedLibraryCharts } = useStatisticsConfig()
+    init()
+
+    expect(orderedLibraryCharts.value.map((chart) => chart.id)).toEqual(LIBRARY_CHART_IDS)
+  })
+
+  it('keeps a library order the reader customised', async () => {
+    const customised: StatisticsChartId[] = [...LEGACY_LIBRARY_CHART_ORDER_HEALTH_FIRST.slice(1), LEGACY_LIBRARY_CHART_ORDER_HEALTH_FIRST[0]!]
+    setupAuth({ statisticsConfig: { charts: chartEntries(customised) } })
+
+    const { useStatisticsConfig } = await import('./useStatisticsConfig')
+    const { init, orderedLibraryCharts } = useStatisticsConfig()
+    init()
+
+    expect(orderedLibraryCharts.value.map((chart) => chart.id)).toEqual(customised)
   })
 })

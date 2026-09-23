@@ -9,7 +9,7 @@ const model = defineModel<BreakdownDimension>({ required: true })
 <template>
   <select
     v-model="model"
-    class="border-border bg-background text-foreground rounded-md border px-2 py-1 text-xs"
+    class="border-border bg-background text-foreground rounded-md border px-2 py-1 text-xs pointer-coarse:min-h-11"
     :aria-label="t('statistics.breakdown.ariaLabel')"
   >
     <option v-for="option in BREAKDOWN_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>

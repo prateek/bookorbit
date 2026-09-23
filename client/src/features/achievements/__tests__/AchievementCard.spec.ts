@@ -86,22 +86,30 @@ describe('AchievementCard', () => {
     expect(wrapper.text()).not.toContain('Earned')
   })
 
-  it('toggles isExpanded on click for non-hidden achievements', async () => {
+  it('expands earned achievements from a real button that reports its state', async () => {
     const wrapper = mount(AchievementCard, {
       props: { achievement: makeAchievement({ earned: true, awardedAt: '2026-01-05T00:00:00Z' }) },
     })
-    const expandedBefore = wrapper.find('[class*="border-t"]').exists()
-    await wrapper.trigger('click')
-    const expandedAfter = wrapper.find('[class*="border-t"]').exists()
-    expect(expandedAfter).not.toBe(expandedBefore)
+    const toggle = wrapper.get('button')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('[class*="border-t"]').exists()).toBe(false)
+
+    await toggle.trigger('click')
+
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('[class*="border-t"]').exists()).toBe(true)
   })
 
-  it('does not expand on click for hidden locked achievements', async () => {
-    const wrapper = mount(AchievementCard, {
+  it('offers no expand control for hidden or locked achievements', async () => {
+    const hidden = mount(AchievementCard, {
       props: { achievement: makeAchievement({ hidden: true, earned: false }) },
     })
-    await wrapper.trigger('click')
-    expect(wrapper.find('[class*="border-t"]').exists()).toBe(false)
+    const locked = mount(AchievementCard, { props: { achievement: makeAchievement() } })
+
+    expect(hidden.find('button').exists()).toBe(false)
+    expect(locked.find('button').exists()).toBe(false)
+    await hidden.trigger('click')
+    expect(hidden.find('[class*="border-t"]').exists()).toBe(false)
   })
 
   it('shows progress bar when threshold and currentProgress are set and not earned', () => {
@@ -138,7 +146,7 @@ describe('AchievementCard', () => {
         }),
       },
     })
-    await wrapper.trigger('click')
+    await wrapper.get('button').trigger('click')
     expect(wrapper.text()).toContain('Dune')
   })
 })
