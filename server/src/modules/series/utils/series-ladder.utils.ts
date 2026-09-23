@@ -1,4 +1,4 @@
-import type { SeriesIndex, SeriesVolumeSlot, SeriesVolumeStatus } from '@bookorbit/types';
+import type { SeriesVolumeSlot, SeriesVolumeStatus } from '@bookorbit/types';
 import { SERIES_VOLUME_SLOT_LIMIT } from '@bookorbit/types';
 
 import type { SeriesMemberRow } from '../series.repository';
@@ -8,7 +8,6 @@ export type SeriesLadder = {
   volumes: SeriesVolumeSlot[];
   truncated: boolean;
   gaps: number[];
-  next: { bookId: number; index: SeriesIndex | null; title: string | null } | null;
 };
 
 const STATUS_RANK: Record<SeriesVolumeStatus, number> = { read: 3, reading: 2, unread: 1, missing: 0 };
@@ -32,6 +31,9 @@ function integerIndexOf(value: string | null): number | null {
  * Two books can sit on the same number - the same volume held in two libraries, or in two formats -
  * and the slot then shows the furthest the user got with either, because that is what "have I read
  * volume four" means to the person asking.
+ *
+ * The up-next pointer is not derived here: the ladder is capped, and "next" has to hold for a
+ * series of any length, so the repository computes it in SQL.
  */
 export function buildVolumeLadder(params: {
   members: SeriesMemberRow[];
@@ -42,13 +44,13 @@ export function buildVolumeLadder(params: {
   const { members, bookCount, expectedBookCount } = params;
 
   if (members.length === 0) {
-    return { volumes: [], truncated: params.truncated, gaps: [], next: null };
+    return { volumes: [], truncated: params.truncated, gaps: [] };
   }
 
   // A series we could not read in full can still be counted, but naming a volume missing needs
   // every sibling in hand, so a truncated one draws no ladder rather than a wrong one.
   if (params.truncated) {
-    return { volumes: [], truncated: true, gaps: [], next: firstOpenMember(members) };
+    return { volumes: [], truncated: true, gaps: [] };
   }
 
   const indices = members.map((m) => m.seriesIndex).filter((idx): idx is string => idx !== null);
@@ -95,25 +97,5 @@ export function buildVolumeLadder(params: {
     volumes.push({ index: null, bookId: member.bookId, title: member.title, status: memberStatus(member.status) });
   }
 
-  return { volumes, truncated, gaps, next: nextFromSlots(volumes, members) };
-}
-
-/**
- * The volume to open next: the one already in progress, else the first unread in series order.
- * The raw membership index is reported rather than the slot's, so a half-numbered volume such as
- * 4.5 keeps its number even though the ladder itself only has whole-numbered rungs.
- */
-function nextFromSlots(volumes: SeriesVolumeSlot[], members: SeriesMemberRow[]): SeriesLadder['next'] {
-  const slot = volumes.find((s) => s.status === 'reading' && s.bookId !== null) ?? volumes.find((s) => s.status === 'unread' && s.bookId !== null);
-  if (slot?.bookId != null) {
-    const member = members.find((m) => m.bookId === slot.bookId);
-    return { bookId: slot.bookId, index: member?.seriesIndex ?? null, title: slot.title };
-  }
-  // Nothing open inside the drawn ladder; a capped one may still have something past its end.
-  return firstOpenMember(members);
-}
-
-function firstOpenMember(members: SeriesMemberRow[]): SeriesLadder['next'] {
-  const open = members.find((m) => m.status === 'reading') ?? members.find((m) => m.status !== 'read');
-  return open ? { bookId: open.bookId, index: open.seriesIndex, title: open.title } : null;
+  return { volumes, truncated, gaps };
 }

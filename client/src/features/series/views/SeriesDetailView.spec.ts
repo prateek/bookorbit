@@ -147,6 +147,8 @@ function makeSeriesInfo(overrides: Partial<SeriesDetail> = {}): SeriesDetail {
     authors: ['Author'],
     possibleGaps: [],
     expectedBookCount: null,
+    readingCount: 0,
+    next: null,
     ...overrides,
   }
 }

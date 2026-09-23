@@ -14,7 +14,7 @@ import {
   collectionBooks,
   narrators,
 } from '../../db/schema';
-import { seriesIndexOrderBy } from '../../common/utils/series-index-sql.utils';
+import { publishedDateOrderBy, seriesIndexOrderBy } from '../../common/utils/series-index-sql.utils';
 
 export type BookSortContext = {
   defaultCollectionId?: number;
@@ -177,6 +177,7 @@ export class BookSortBuilder {
         if (!allSorts.some((s) => s.field === 'series')) {
           result.push(sql`${bookMetadata.seriesName} ${sql.raw(D)} NULLS LAST`);
         }
+        result.push(publishedDateOrderBy(bookMetadata.publishedDate, D));
         break;
       case 'format':
         result.push(sql.raw(`(SELECT bf.format FROM book_files bf WHERE bf.id = books.primary_file_id) ${D} NULLS LAST`));

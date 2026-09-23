@@ -1,8 +1,9 @@
 import 'reflect-metadata';
 
 import type { RequestUser } from '../../common/types/request-user';
+import { FORBIDDEN_PERMISSION_KEY } from '../../common/decorators/forbid-permission.decorator';
 import { SeriesController } from './series.controller';
-import { EMPTY_CONTENT_FILTER_RULES } from '@bookorbit/types';
+import { EMPTY_CONTENT_FILTER_RULES, Permission } from '@bookorbit/types';
 
 function makeUser(overrides?: Partial<RequestUser>): RequestUser {
   return {
@@ -29,6 +30,7 @@ function makeController() {
     findAll: vi.fn(),
     findBooks: vi.fn(),
     findNextBook: vi.fn(),
+    markRead: vi.fn(),
   };
 
   const controller = new SeriesController(seriesService as any);
@@ -78,5 +80,19 @@ describe('SeriesController', () => {
 
     expect(seriesService.findNextBook).toHaveBeenCalledWith(user, 42, 90, dto);
     expect(result).toBe(expected);
+  });
+
+  it('markRead delegates to service and is closed to demo-restricted accounts', async () => {
+    const { controller, seriesService } = makeController();
+    const user = makeUser();
+    seriesService.markRead.mockResolvedValue({ updated: 12 });
+
+    const result = await controller.markRead(user, 42, { upToIndex: '12' });
+
+    expect(seriesService.markRead).toHaveBeenCalledWith(user, 42, { upToIndex: '12' });
+    expect(result).toEqual({ updated: 12 });
+    expect(Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, SeriesController.prototype.markRead)).toMatchObject({
+      permission: Permission.DemoRestricted,
+    });
   });
 });

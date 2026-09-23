@@ -138,7 +138,7 @@ export class RecommendationService {
       }
 
       const libraryIds = await this.libraryService.findAccessibleLibraryIds(user);
-      const rows = await this.recRepo.findSeriesBooks(series.id, libraryIds, user.isSuperuser ? undefined : user.contentFilters);
+      const rows = await this.recRepo.findSeriesBooks(series.id, libraryIds, user.isSuperuser ? undefined : user.contentFilters, bookId);
 
       this.logger.log(
         `[${SERIES_BOOKS_EVENT}] [end] bookId=${bookId} durationMs=${Date.now() - startedAt} seriesId=${series.id} seriesName="${sanitizeLogValue(series.name ?? '')}" resultCount=${rows.length} - series books lookup completed`,

@@ -398,11 +398,12 @@ describe('BookQueryBuilder', () => {
 
     const result = builder.buildOrderBy([{ field: 'seriesIndex', dir: 'desc' }]);
 
-    expect(result).toHaveLength(4);
-    expect(raw).toHaveBeenCalledTimes(3);
+    expect(result).toHaveLength(5);
+    expect(raw).toHaveBeenCalledTimes(4);
     expect(raw).toHaveBeenNthCalledWith(1, 'DESC');
     expect(raw).toHaveBeenNthCalledWith(2, 'DESC');
     expect(raw).toHaveBeenNthCalledWith(3, 'DESC');
+    expect(raw).toHaveBeenNthCalledWith(4, 'DESC');
   });
 
   it('falls back to default order when runtime direction is invalid', () => {
@@ -1761,6 +1762,7 @@ describe('seriesStatusRuleToSql', () => {
     expect(text).toContain('lag(');
     expect(text).toContain('partition by');
     expect(text).toContain('previous_is_completed');
+    expect(text).toContain('s.published_date asc nulls last, s.added_at asc');
     expect(text).toContain("'read'");
     expect(text).toContain("'skimmed'");
   });
@@ -1870,7 +1872,7 @@ describe('BookQueryBuilder.buildCollapseOrderBy', () => {
     const result = BookQueryBuilder.buildCollapseOrderBy([{ field: 'seriesIndex', dir: 'asc' }], 1);
     expect(result).toContain("split_part(series_index::text, '.', 1)::numeric");
     expect(result).toContain('series_index COLLATE "C" ASC NULLS LAST');
-    expect(result).toContain('sort_title ASC NULLS LAST, r.id ASC');
+    expect(result).toContain('sort_title ASC NULLS LAST, published_date ASC NULLS LAST, r.id ASC');
   });
 
   it('does not add sort_title fallback when series field is already in sort', () => {
@@ -1882,7 +1884,7 @@ describe('BookQueryBuilder.buildCollapseOrderBy', () => {
       1,
     );
     expect(result).toContain("split_part(series_index::text, '.', 1)::numeric");
-    expect(result).toContain('series_index COLLATE "C" ASC NULLS LAST, sort_title ASC NULLS LAST, r.id ASC');
+    expect(result).toContain('series_index COLLATE "C" ASC NULLS LAST, published_date ASC NULLS LAST, sort_title ASC NULLS LAST, r.id ASC');
   });
 
   it('generates user-scoped subquery for readProgress', () => {

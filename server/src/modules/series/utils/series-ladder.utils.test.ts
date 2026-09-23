@@ -89,7 +89,6 @@ describe('buildVolumeLadder', () => {
     expect(ladder.volumes).toEqual([]);
     expect(ladder.truncated).toBe(true);
     expect(ladder.gaps).toEqual([]);
-    expect(ladder.next?.bookId).toBe(1);
   });
 
   it('caps a very long ladder and says so', () => {
@@ -98,27 +97,5 @@ describe('buildVolumeLadder', () => {
 
     expect(ladder.volumes).toHaveLength(60);
     expect(ladder.truncated).toBe(true);
-  });
-
-  describe('next volume', () => {
-    it('prefers the one already in progress over an earlier unread one', () => {
-      const ladder = build([member(1, '1'), member(2, '2', 'reading')]);
-      expect(ladder.next).toEqual({ bookId: 2, index: '2', title: 'Book 2' });
-    });
-
-    it('falls back to the first unread in series order', () => {
-      const ladder = build([member(1, '1', 'read'), member(2, '2'), member(3, '3')]);
-      expect(ladder.next?.bookId).toBe(2);
-    });
-
-    it('keeps a half number rather than rounding it onto a rung', () => {
-      const ladder = build([member(1, '1', 'read'), member(2, '1.5')]);
-      expect(ladder.next).toEqual({ bookId: 2, index: '1.5', title: 'Book 2' });
-    });
-
-    it('is null once every volume is read', () => {
-      const ladder = build([member(1, '1', 'read'), member(2, '2', 'read')]);
-      expect(ladder.next).toBeNull();
-    });
   });
 });

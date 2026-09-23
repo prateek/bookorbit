@@ -274,10 +274,11 @@ describe('BookSortBuilder', () => {
 
     const result = service.build([{ field: 'seriesIndex', dir: 'desc' }]);
 
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(5);
     expect(raw).toHaveBeenNthCalledWith(1, 'DESC');
     expect(raw).toHaveBeenNthCalledWith(2, 'DESC');
     expect(raw).toHaveBeenNthCalledWith(3, 'DESC');
+    expect(raw).toHaveBeenNthCalledWith(4, 'DESC');
   });
 
   it('does not add series name fallback when series is already sorted', () => {
@@ -288,10 +289,11 @@ describe('BookSortBuilder', () => {
       { field: 'seriesIndex', dir: 'desc' },
     ]);
 
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(5);
     expect(raw).toHaveBeenNthCalledWith(1, 'ASC');
     expect(raw).toHaveBeenNthCalledWith(2, 'DESC');
     expect(raw).toHaveBeenNthCalledWith(3, 'DESC');
+    expect(raw).toHaveBeenNthCalledWith(4, 'DESC');
   });
 
   it('adds multiple sorts in the requested order', () => {
