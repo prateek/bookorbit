@@ -36,10 +36,10 @@ const deleteMocks = vi.hoisted(() => ({
 vi.mock('@/features/book/components/BookCoverCard.vue', () => ({
   default: {
     name: 'BookCoverCard',
-    props: ['book', 'coverAspectRatio', 'showLabel'],
+    props: ['book', 'coverAspectRatio', 'showLabel', 'hideFormatBadge'],
     emits: ['action'],
     template: `
-      <div class="book-card" :data-aspect="coverAspectRatio" :data-show-label="String(showLabel)">
+      <div class="book-card" :data-aspect="coverAspectRatio" :data-show-label="String(showLabel)" :data-hide-format="String(hideFormatBadge)">
         <span>{{ book.title }}</span>
         <button class="quick-action" @click="$emit('action', 'quick-view')" />
         <button class="collection-action" @click="$emit('action', 'add-to-collection')" />
@@ -187,6 +187,24 @@ describe('DashboardScroller', () => {
     ['random', 'No books found.'],
   ] as const)('keeps existing empty-state copy for %s', (type, copy) => {
     expect(mountScroller({ type }).text()).toContain(copy)
+  })
+
+  it('collapses an empty shelf to its header line', () => {
+    const wrapper = mountScroller({ type: 'continue-listening' })
+
+    const empty = wrapper.get('[data-testid="shelf-empty"]')
+    expect(empty.element.parentElement?.querySelector('h2')?.textContent).toBe('Shelf')
+    expect(wrapper.find('[data-testid="shelf-band"]').exists()).toBe(false)
+    expect(wrapper.find('.py-10').exists()).toBe(false)
+    expect(wrapper.findAll('button')).toHaveLength(0)
+  })
+
+  it('hides format badges only when every book on the shelf shares one format', () => {
+    const uniform = mountScroller({ type: 'recently-added', books: [makeBook(1, 'epub'), makeBook(2, 'epub')] })
+    expect(uniform.findAll('.book-card').map((card) => card.attributes('data-hide-format'))).toEqual(['true', 'true'])
+
+    const mixed = mountScroller({ type: 'recently-added', books: [makeBook(1, 'epub'), makeBook(2, 'pdf')] })
+    expect(mixed.findAll('.book-card').map((card) => card.attributes('data-hide-format'))).toEqual(['false', 'false'])
   })
 
   it('asks cover cards for their labels so touch screens get titles below the cover', () => {

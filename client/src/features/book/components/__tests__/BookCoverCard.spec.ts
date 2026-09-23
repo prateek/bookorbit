@@ -210,6 +210,17 @@ describe('BookCoverCard - present state', () => {
     expect(wrapper.find('.lucide-headphones').exists()).toBe(true)
   })
 
+  it('drops the format overlay when the list says every card shares one format', () => {
+    cardOverlays.value = ['format']
+    expect(mountCard(presentBook).text()).toContain('EPUB')
+    const wrapper = mount(BookCoverCard, {
+      props: { book: presentBook, hideFormatBadge: true },
+      global: { ...globalStubs, provide: { [COVER_ASPECT_RATIO_KEY as symbol]: ref('2/3') } },
+    })
+
+    expect(wrapper.text()).not.toContain('EPUB')
+  })
+
   it('opens the reader on desktop card click by default', async () => {
     const wrapper = mountCard(presentBook)
 
@@ -439,6 +450,13 @@ describe('BookCoverCard — series position overlay', () => {
     cardOverlays.value = ['series-position']
     const wrapper = mountCard(bookWithSeries)
     expect(wrapper.text()).toContain('#3')
+  })
+
+  it('sets the series number at a readable size on a dark backing', () => {
+    cardOverlays.value = ['series-position']
+    const badge = mountCard(bookWithSeries).get('[data-testid="book-card-series-position"]')
+    expect(badge.classes()).toContain('bg-black/80')
+    expect(badge.get('span').classes()).toContain('text-xs')
   })
 
   it('marks the series badge as a card click blocker and disables hit-testing on hover', () => {

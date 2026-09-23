@@ -109,11 +109,8 @@ const collapsedProgressPercent = computed(() => {
 })
 const authorLine = computed(() => props.book.authors.join(', ') || null)
 const authorQuery = computed(() => props.book.authors[0] ?? null)
-const seriesLine = computed(() => {
-  if (!displaySeriesName.value) return null
-  const idx = props.book.seriesIndex
-  return idx != null ? `${displaySeriesName.value} #${idx}` : displaySeriesName.value
-})
+const seriesLine = computed(() => displaySeriesName.value)
+const seriesPositionLabel = computed(() => (props.book.seriesIndex != null ? `#${props.book.seriesIndex}` : null))
 
 const isMissing = computed(() => props.book.status === 'missing')
 const primaryFile = computed(() => props.book.files.find((f) => f.role === 'primary') ?? props.book.files[0] ?? null)
@@ -481,6 +478,12 @@ function handleRowClick(event: MouseEvent) {
             :aria-label="readStatusIcon.label"
             role="img"
           />
+          <span
+            v-if="seriesPositionLabel"
+            data-testid="book-list-row-series-position"
+            class="shrink-0 rounded bg-muted px-1.5 text-xs font-semibold leading-5 tabular-nums text-foreground"
+            >{{ seriesPositionLabel }}</span
+          >
           <span class="text-sm font-medium text-foreground truncate leading-snug" :class="isMissing ? 'opacity-60' : ''">{{
             displayTitle ?? '-'
           }}</span>

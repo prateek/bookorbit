@@ -11,6 +11,7 @@ import AddToCollectionSheet from '@/features/collection/components/AddToCollecti
 import DeleteBookDialog from '@/features/book/components/DeleteBookDialog.vue'
 import { useDashboardScroller } from '../composables/useDashboardScroller'
 import { useDeleteBook } from '@/features/book/composables/useDeleteBook'
+import { hasUniformFormat } from '@/features/book/lib/uniform-format'
 import { MIN_SHELF_ROWS, chunkIntoBands, effectiveShelfRows, shelfBookLimit } from '../lib/shelf-rows'
 
 defineOptions({
@@ -42,6 +43,18 @@ const { books, loading, error, refresh } = useDashboardScroller(
 )
 
 const bands = computed(() => chunkIntoBands(books.value, shelfRows.value))
+const hideFormatBadges = computed(() => hasUniformFormat(books.value))
+const isEmpty = computed(() => !loading.value && !error.value && books.value.length === 0)
+
+const emptyMessage = computed(() => {
+  if (props.type === 'continue-reading') return t('dashboard.scroller.empty.continueReading')
+  if (props.type === 'continue-listening') return t('dashboard.scroller.empty.continueListening')
+  if (props.type === 'want-to-read') return t('dashboard.scroller.empty.wantToRead')
+  if (props.type === 'up-next-in-series') return t('dashboard.scroller.empty.upNextInSeries')
+  if (props.type === 'recently-added') return t('dashboard.scroller.empty.recentlyAdded')
+  if (props.type === 'smart-scope') return t('dashboard.scroller.empty.smartScope')
+  return t('dashboard.scroller.empty.default')
+})
 
 const scrollEl = ref<HTMLElement | null>(null)
 
@@ -125,21 +138,28 @@ function newCountVisibilityClass(book: BookCard): string {
 
 <template>
   <section v-bind="attrs" class="group/scroller overflow-hidden rounded-2xl border border-primary/40 bg-card/30 shadow-sm backdrop-blur-[1px]">
-    <!-- Header -->
-    <div class="mb-2 flex items-center justify-between px-5 pt-4">
-      <div class="flex items-center gap-2.5">
+    <!-- Header; an empty shelf collapses to this single line -->
+    <div class="flex items-center justify-between px-5" :class="isEmpty ? 'py-3' : 'mb-2 pt-4'">
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-0.5">
         <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50">
           <component :is="typeIcon" :size="14" class="text-foreground" />
         </div>
-        <h2 class="text-[15px] font-bold tracking-tight">{{ title }}</h2>
+        <h2 class="shrink-0 text-[15px] font-bold tracking-tight">{{ title }}</h2>
         <span
           v-if="!loading && !error && books.length > 0"
           class="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-bold tabular-nums text-foreground"
         >
           {{ books.length }}
         </span>
+        <p
+          v-if="isEmpty"
+          data-testid="shelf-empty"
+          class="w-full min-w-0 truncate ps-9.5 text-xs text-muted-foreground sm:w-auto sm:flex-1 sm:ps-0 sm:text-sm"
+        >
+          {{ emptyMessage }}
+        </p>
       </div>
-      <div class="flex items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/scroller:opacity-100">
+      <div v-if="!isEmpty" class="flex items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/scroller:opacity-100">
         <button
           class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           @click="scrollBy(-560)"
@@ -173,24 +193,8 @@ function newCountVisibilityClass(book: BookCard): string {
       </button>
     </div>
 
-    <!-- Empty -->
-    <div v-else-if="books.length === 0" class="flex flex-col items-center justify-center py-10 gap-3 text-center animate-fade-up">
-      <div class="h-12 w-12 rounded-full bg-muted flex items-center justify-center animate-scale-in">
-        <component :is="typeIcon" :size="20" class="text-muted-foreground" />
-      </div>
-      <p class="text-sm text-muted-foreground">
-        <template v-if="type === 'continue-reading'">{{ t('dashboard.scroller.empty.continueReading') }}</template>
-        <template v-else-if="type === 'continue-listening'">{{ t('dashboard.scroller.empty.continueListening') }}</template>
-        <template v-else-if="type === 'want-to-read'">{{ t('dashboard.scroller.empty.wantToRead') }}</template>
-        <template v-else-if="type === 'up-next-in-series'">{{ t('dashboard.scroller.empty.upNextInSeries') }}</template>
-        <template v-else-if="type === 'recently-added'">{{ t('dashboard.scroller.empty.recentlyAdded') }}</template>
-        <template v-else-if="type === 'smart-scope'">{{ t('dashboard.scroller.empty.smartScope') }}</template>
-        <template v-else>{{ t('dashboard.scroller.empty.default') }}</template>
-      </p>
-    </div>
-
     <!-- Books rows -->
-    <div v-else ref="scrollEl" class="overflow-x-auto px-5 pb-5 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div v-else-if="!isEmpty" ref="scrollEl" class="overflow-x-auto px-5 pb-5 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div class="flex w-max flex-col gap-5">
         <div v-for="(band, bandIndex) in bands" :key="bandIndex" data-testid="shelf-band" class="flex items-end gap-5">
           <div
@@ -201,7 +205,13 @@ function newCountVisibilityClass(book: BookCard): string {
             style="animation: dashboardFadeUp 0.35s ease both"
             :style="{ animationDelay: coverAnimationDelay(index) }"
           >
-            <BookCoverCard :book="book" :cover-aspect-ratio="book.coverAspectRatio" :show-label="true" @action="handleBookAction(book, $event)" />
+            <BookCoverCard
+              :book="book"
+              :cover-aspect-ratio="book.coverAspectRatio"
+              :show-label="true"
+              :hide-format-badge="hideFormatBadges"
+              @action="handleBookAction(book, $event)"
+            />
             <p
               v-if="reservesNewCountLine"
               class="mt-1 h-4 truncate text-[11px] font-semibold leading-4 text-primary"

@@ -47,8 +47,22 @@ export const SCROLLER_LABELS: Record<ScrollerType, string> = {
 
 const VALID_SCROLLER_TYPES = new Set<ScrollerType>(SCROLLER_TYPES.filter((type) => APP_FEATURES.podcasts || type !== 'continue-podcasts'))
 
+// Continue Listening keeps its default slot until the accessible libraries are known to hold no
+// audiobooks. Saved layouts are never touched: this only shapes what "default" means.
+const continueListeningByDefault = ref(true)
+
 function cloneDefaultScrollers(): ScrollerConfig[] {
-  return DEFAULT_SCROLLERS.map((scroller) => ({ ...scroller }))
+  return DEFAULT_SCROLLERS.map((scroller) =>
+    scroller.type === 'continue-listening' ? { ...scroller, enabled: continueListeningByDefault.value } : { ...scroller },
+  )
+}
+
+function hasSavedConfig(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null
+  } catch {
+    return false
+  }
 }
 
 function parseStoredScrollers(value: unknown): unknown[] | null {
@@ -224,11 +238,28 @@ export function useDashboardConfig() {
     save()
   }
 
+  function setAudiobooksAvailable(available: boolean) {
+    if (continueListeningByDefault.value === available) return
+    continueListeningByDefault.value = available
+    if (!hasSavedConfig()) scrollers.value = cloneDefaultScrollers()
+  }
+
   function reset() {
     scrollers.value = cloneDefaultScrollers()
     shelfLayout.value = SHELF_LAYOUT.WIDE
     localStorage.removeItem(STORAGE_KEY)
   }
 
-  return { scrollers, shelfLayout, saveScrollers, saveShelfSettings, addScroller, pruneDeletedSmartScopeScrollers, reset, MAX_SCROLLERS }
+  return {
+    scrollers,
+    shelfLayout,
+    defaultScrollers: cloneDefaultScrollers,
+    saveScrollers,
+    saveShelfSettings,
+    addScroller,
+    pruneDeletedSmartScopeScrollers,
+    setAudiobooksAvailable,
+    reset,
+    MAX_SCROLLERS,
+  }
 }

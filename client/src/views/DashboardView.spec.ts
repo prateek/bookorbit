@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   scrollers: null as unknown as Ref<never[]>,
   shelfLayout: null as unknown as Ref<string>,
   pruneDeletedSmartScopeScrollers: vi.fn<(ids: number[]) => void>(),
+  setAudiobooksAvailable: vi.fn<(available: boolean) => void>(),
   maybeStartTour: vi.fn<() => void>(),
 }))
 
@@ -57,6 +58,7 @@ vi.mock('@/features/dashboard/composables/useDashboardConfig', () => ({
     scrollers: mocks.scrollers,
     shelfLayout: mocks.shelfLayout,
     pruneDeletedSmartScopeScrollers: mocks.pruneDeletedSmartScopeScrollers,
+    setAudiobooksAvailable: mocks.setAudiobooksAvailable,
   }),
 }))
 
@@ -91,6 +93,7 @@ describe('DashboardView library loading states', () => {
     mocks.fetchLibraries.mockReset().mockResolvedValue()
     mocks.fetchSmartScopes.mockReset().mockResolvedValue()
     mocks.pruneDeletedSmartScopeScrollers.mockReset()
+    mocks.setAudiobooksAvailable.mockReset()
     mocks.maybeStartTour.mockReset()
   })
 
@@ -190,6 +193,23 @@ describe('DashboardView library loading states', () => {
     // A shelf snapshots its fetch limit on setup, so the row count has to be part
     // of the key or three rows would re-flow the books fetched for one.
     expect(after.element).not.toBe(before)
+  })
+
+  it('tells the shelf defaults whether any loaded library could hold audiobooks', async () => {
+    wrapper = await mountView()
+    expect(mocks.setAudiobooksAvailable).not.toHaveBeenCalled()
+
+    mocks.libraries.value = [
+      { id: 1, type: 'books', allowedFormats: ['epub'] } as Library,
+      { id: 2, type: 'podcasts', allowedFormats: [] as string[] } as Library,
+    ]
+    mocks.librariesLoaded.value = true
+    await flushPromises()
+    expect(mocks.setAudiobooksAvailable).toHaveBeenLastCalledWith(false)
+
+    mocks.libraries.value = [...mocks.libraries.value, { id: 3, type: 'books', allowedFormats: [] as string[] } as Library]
+    await flushPromises()
+    expect(mocks.setAudiobooksAvailable).toHaveBeenLastCalledWith(true)
   })
 
   it('moves from the error state to dashboard content after a successful retry', async () => {

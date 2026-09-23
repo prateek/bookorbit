@@ -95,7 +95,8 @@ describe('DashboardPodcastScroller', () => {
     await flushPromises()
 
     expect(wrapper.findAll('button[aria-label^="Resume "]')).toHaveLength(0)
-    expect(wrapper.text()).toContain('No podcast episodes in progress yet')
+    expect(wrapper.get('[data-testid="podcast-shelf-empty"]').text()).toContain('No podcast episodes in progress yet')
+    expect(wrapper.findAll('button')).toHaveLength(0)
   })
 
   it('offers a retry after a failed request', async () => {
