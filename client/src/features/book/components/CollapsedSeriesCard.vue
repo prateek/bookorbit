@@ -10,6 +10,9 @@ import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '../lib/cover
 import { useCoverVersions } from '../composables/useCoverVersions'
 import { useDisplaySettings, type GridCardLabelField } from '@/composables/useDisplaySettings'
 import { fetchAuthors } from '@/features/author/api/author'
+import { useGridCardLabels } from '../composables/useGridCardLabels'
+import { seriesCoverSeed } from '../lib/cover-seed'
+import { decodeHtmlEntities } from '../lib/display-text'
 
 const MAX_COLLAPSED_STACK_COVERS = 3
 const STACK_COVER_STEP_PCT = 8
@@ -25,10 +28,16 @@ const router = useRouter()
 const injectedCoverAspectRatio = inject(COVER_ASPECT_RATIO_KEY, ref(DEFAULT_COVER_ASPECT_RATIO))
 const coverAspectRatio = computed(() => props.book.coverAspectRatio ?? injectedCoverAspectRatio.value)
 const { coverUrl } = useCoverVersions()
-const { seriesCardCoverMode, gridCardPrimaryLabel, gridCardSecondaryLabel, cardInfoMode, cardOverlays } = useDisplaySettings()
+const { seriesCardCoverMode, cardOverlays } = useDisplaySettings()
+const {
+  effectiveCardInfoMode: cardInfoMode,
+  effectivePrimaryLabel: gridCardPrimaryLabel,
+  effectiveSecondaryLabel: gridCardSecondaryLabel,
+} = useGridCardLabels()
 
 const collapsed = computed(() => props.book.collapsedSeries!)
-const seriesName = computed(() => props.book.seriesName ?? '')
+const seriesName = computed(() => decodeHtmlEntities(props.book.seriesName ?? ''))
+const coverSeed = computed(() => (seriesName.value.trim() ? seriesCoverSeed(seriesName.value) : `series-${props.book.seriesId ?? props.book.id}`))
 const authorLine = computed(() => props.book.authors.join(', ') || null)
 const authorQuery = computed(() => props.book.authors[0] ?? null)
 const hoverTitleClampClass = computed(() => (coverAspectRatio.value === '1/1' ? 'line-clamp-1' : 'line-clamp-2'))
@@ -49,7 +58,11 @@ const mosaicCoverIds = computed(() => allCoverIds.value.slice(0, 4))
 const tileCount = computed(() => Math.max(mosaicCoverIds.value.length, 1))
 const failedCovers = ref(new Set<number>())
 const loadedCovers = ref(new Set<number>())
-const activeStackCoverIds = computed(() => allCoverIds.value.filter((bookId) => !failedCovers.value.has(bookId)))
+// Only the representative book's hasCover is known here; requesting its thumbnail when it has none just 404s.
+function isCoverUnavailable(bookId: number): boolean {
+  return failedCovers.value.has(bookId) || (bookId === props.book.id && !props.book.hasCover)
+}
+const activeStackCoverIds = computed(() => allCoverIds.value.filter((bookId) => !isCoverUnavailable(bookId)))
 const stackCoverIds = computed(() => activeStackCoverIds.value.slice(0, MAX_COLLAPSED_STACK_COVERS))
 
 const resolvedCoverId = computed<number | null>(() => {
@@ -193,7 +206,10 @@ function resolveSeriesLabel(field: GridCardLabelField): string | null {
 }
 
 const primaryLabelText = computed(() => resolveSeriesLabel(gridCardPrimaryLabel.value))
-const secondaryLabelText = computed(() => resolveSeriesLabel(gridCardSecondaryLabel.value))
+const secondaryLabelText = computed(() => {
+  const text = resolveSeriesLabel(gridCardSecondaryLabel.value)
+  return text === primaryLabelText.value ? null : text
+})
 </script>
 
 <template>
@@ -227,7 +243,7 @@ const secondaryLabelText = computed(() => resolveSeriesLabel(gridCardSecondaryLa
               :has-cover="true"
               :title="seriesName"
               :author-line="authorLine"
-              :seed="`series-${bookId}`"
+              :seed="coverSeed"
               alt=""
               loading="lazy"
               decoding="async"
@@ -250,7 +266,13 @@ const secondaryLabelText = computed(() => resolveSeriesLabel(gridCardSecondaryLa
             class="absolute inset-x-[24%] bottom-[6%] top-[6%] overflow-hidden rounded-md shadow-[0_12px_28px_-18px_rgba(15,23,42,0.7)]"
             data-testid="series-cover-stack-fallback"
           >
-            <BookCoverPlaceholder title="" author-line="" :is-audio="false" seed="series-empty" />
+            <BookCoverPlaceholder :title="seriesName" :author-line="authorLine" :is-audio="false" :seed="coverSeed" />
+            <div
+              class="absolute right-1.5 top-1.5 z-20 rounded-sm bg-black/70 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-white"
+              data-testid="series-count-badge"
+            >
+              {{ collapsed.bookCount }}
+            </div>
           </div>
         </div>
 
@@ -261,10 +283,10 @@ const secondaryLabelText = computed(() => resolveSeriesLabel(gridCardSecondaryLa
             :class="singleCoverLoaded && !singleCoverFailed ? 'opacity-0 pointer-events-none' : 'opacity-100'"
             aria-hidden="true"
           >
-            <BookCoverPlaceholder title="" author-line="" :is-audio="false" :seed="`series-${resolvedCoverId}`" />
+            <BookCoverPlaceholder :title="seriesName" author-line="" :is-audio="false" :seed="coverSeed" />
           </div>
           <img
-            v-if="!singleCoverFailed"
+            v-if="!singleCoverFailed && !isCoverUnavailable(resolvedCoverId)"
             :src="coverUrl(resolvedCoverId, 'thumbnail', coverVersionFor(resolvedCoverId))"
             class="absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ease-out"
             :class="singleCoverLoaded ? 'opacity-100' : 'opacity-0'"
@@ -273,7 +295,10 @@ const secondaryLabelText = computed(() => resolveSeriesLabel(gridCardSecondaryLa
             @load="handleSingleCoverLoad"
             @error="handleSingleCoverError"
           />
-          <span v-if="!singleCoverLoaded && !singleCoverFailed" class="absolute inset-0 z-[1] animate-pulse bg-foreground/5" />
+          <span
+            v-if="!singleCoverLoaded && !singleCoverFailed && !isCoverUnavailable(resolvedCoverId)"
+            class="absolute inset-0 z-[1] animate-pulse bg-foreground/5"
+          />
         </div>
 
         <!-- Adaptive cover mosaic -->
@@ -285,10 +310,10 @@ const secondaryLabelText = computed(() => resolveSeriesLabel(gridCardSecondaryLa
                 :class="loadedCovers.has(bookId) && !failedCovers.has(bookId) ? 'opacity-0 pointer-events-none' : 'opacity-100'"
                 aria-hidden="true"
               >
-                <BookCoverPlaceholder title="" author-line="" :is-audio="false" :seed="`series-${bookId}`" />
+                <BookCoverPlaceholder title="" author-line="" :is-audio="false" :seed="coverSeed" />
               </div>
               <img
-                v-if="!failedCovers.has(bookId)"
+                v-if="!isCoverUnavailable(bookId)"
                 :src="coverUrl(bookId, 'thumbnail', coverVersionFor(bookId))"
                 class="absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ease-out"
                 :class="loadedCovers.has(bookId) ? 'opacity-100' : 'opacity-0'"
@@ -297,11 +322,11 @@ const secondaryLabelText = computed(() => resolveSeriesLabel(gridCardSecondaryLa
                 @load="() => handleCoverLoad(bookId)"
                 @error="() => handleCoverError(bookId)"
               />
-              <span v-if="!loadedCovers.has(bookId) && !failedCovers.has(bookId)" class="absolute inset-0 z-[1] animate-pulse bg-foreground/5" />
+              <span v-if="!loadedCovers.has(bookId) && !isCoverUnavailable(bookId)" class="absolute inset-0 z-[1] animate-pulse bg-foreground/5" />
             </div>
           </template>
           <div v-if="mosaicCoverIds.length === 0" class="relative overflow-hidden" :class="tileClass(0)" data-testid="series-cover-fallback">
-            <BookCoverPlaceholder title="" author-line="" :is-audio="false" seed="series-empty" />
+            <BookCoverPlaceholder :title="seriesName" author-line="" :is-audio="false" :seed="coverSeed" />
           </div>
         </div>
 

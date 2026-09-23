@@ -51,6 +51,7 @@ import { useViewDisplaySettings } from '@/composables/useViewDisplaySettings'
 import { useViewSearch } from '@/features/book/composables/useViewSearch'
 import FilterSummary from '@/features/book/components/FilterSummary.vue'
 import { sortFieldLabel } from '@/features/book/lib/filter-labels'
+import { countFilterRules } from '@/features/smart-scope/lib/rule-summary'
 import BookShuffleButton from '@/features/book/components/BookShuffleButton.vue'
 import { DEFAULT_COVER_ASPECT_RATIO } from '@/features/book/lib/cover-aspect-ratio'
 import { usePageTitle } from '@/composables/usePageTitle'
@@ -155,6 +156,17 @@ const sortChip = computed(() => {
 })
 
 const filterExpanded = smartScopeFilterExpanded
+// Phones show the rules as a one-line summary so results start above the fold; tapping it reveals the chips.
+const mobileRulesExpanded = ref(false)
+const ruleSummaryLabel = computed(() => {
+  const ruleCount = countFilterRules(smartScope.value?.filter as GroupRule | undefined)
+  const parts = [ruleCount > 0 ? t('views.smartScope.ruleSummary', { count: ruleCount }) : null, sortChip.value]
+  return parts.filter(Boolean).join(' · ')
+})
+
+function toggleMobileRules() {
+  mobileRulesExpanded.value = !mobileRulesExpanded.value
+}
 const mobileControlsExpanded = ref(false)
 
 function handleSaveCurrentView(name: string) {
@@ -257,6 +269,9 @@ const {
   selectionMode,
   onMoveToLibrary: (bookId) => openMoveForBook(bookId),
 })
+
+const selectableLoadedCount = computed(() => books.value.reduce((count, book) => (book.collapsedSeries ? count : count + 1), 0))
+const allLoadedSelected = computed(() => selectableLoadedCount.value > 0 && selectedCount.value >= selectableLoadedCount.value)
 
 const {
   open: moveToLibraryOpen,
@@ -478,6 +493,9 @@ defineOptions({ name: 'SmartScopeView' })
       :visible="selectionMode"
       :count="selectedCount"
       :in-flight="inFlight"
+      :can-select-all="true"
+      :all-selected="allLoadedSelected"
+      @toggle-select-all="handleSelectAllLoaded"
       @send="sendBookOpen = true"
       @download="handleDownloadFiles"
       @export-metadata="openMetadataExport"
@@ -804,10 +822,24 @@ defineOptions({ name: 'SmartScopeView' })
 
         <template v-else>
           <!-- Filter summary -->
+          <button
+            v-if="filterExpanded && (smartScope?.filter || sortChip)"
+            type="button"
+            data-testid="smart-scope-rule-summary"
+            class="mb-2 flex min-h-11 w-full items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-3 text-left text-sm text-muted-foreground sm:hidden"
+            :aria-expanded="mobileRulesExpanded"
+            :aria-label="mobileRulesExpanded ? t('views.smartScope.hideRules') : t('views.smartScope.showRules')"
+            @click="toggleMobileRules"
+          >
+            <Filter :size="14" class="shrink-0" />
+            <span class="min-w-0 flex-1 truncate">{{ ruleSummaryLabel }}</span>
+            <component :is="mobileRulesExpanded ? ChevronUp : ChevronDown" :size="14" class="shrink-0" />
+          </button>
           <div
             v-if="filterExpanded && (smartScope?.filter || sortChip)"
-            class="flex flex-wrap items-center gap-2 mb-4"
-            :class="isSmartScopeOwner ? 'cursor-pointer' : ''"
+            data-testid="smart-scope-rule-chips"
+            class="flex-wrap items-center gap-2 mb-4"
+            :class="[isSmartScopeOwner ? 'cursor-pointer' : '', mobileRulesExpanded ? 'flex' : 'hidden sm:flex']"
             @click="openEditor"
           >
             <FilterSummary v-if="smartScope?.filter" :node="smartScope.filter as GroupRule" />
@@ -874,6 +906,7 @@ defineOptions({ name: 'SmartScopeView' })
             :allow-move-to-library="true"
             @action="handleBookAction"
             @select="handleSelect"
+            @update:book="handleTableBookUpdate"
           />
 
           <!-- List view -->
@@ -887,6 +920,7 @@ defineOptions({ name: 'SmartScopeView' })
               @select="handleSelect(book.id, $event)"
               :allow-move-to-library="true"
               @action="handleBookAction(book, $event)"
+              @update:book="handleTableBookUpdate"
             />
           </div>
 

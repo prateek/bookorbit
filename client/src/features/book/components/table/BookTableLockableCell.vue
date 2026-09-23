@@ -28,7 +28,9 @@ defineEmits<{
           :aria-label="isLocked ? t('book.table.locks.unlockField') : t('book.table.locks.lockField')"
           class="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm transition-colors"
           :class="
-            isLocked ? 'text-primary hover:text-primary' : 'opacity-0 text-muted-foreground group-hover/cell:opacity-100 hover:text-muted-foreground'
+            isLocked
+              ? 'text-primary hover:text-primary'
+              : 'opacity-0 text-muted-foreground group-hover/cell:opacity-100 [@media(hover:none)]:opacity-100 hover:text-muted-foreground'
           "
           @click.stop="$emit('toggle-lock')"
         >

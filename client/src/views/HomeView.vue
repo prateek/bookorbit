@@ -432,6 +432,11 @@ const {
   onMoveToLibrary: (bookId) => openMoveForBook(bookId),
 })
 
+const selectableLoadedCount = computed(() => books.value.reduce((count, book) => (book.collapsedSeries ? count : count + 1), 0))
+const allLoadedSelected = computed(
+  () => querySelection.value !== null || (selectableLoadedCount.value > 0 && selectedCount.value >= selectableLoadedCount.value),
+)
+
 const {
   open: moveToLibraryOpen,
   payload: movePayload,
@@ -973,6 +978,7 @@ defineOptions({ name: 'HomeView' })
               :allow-move-to-library="true"
               @action="handleBookAction(book, $event)"
               @select="handleSelect(book.id, $event)"
+              @update:book="handleTableBookUpdate"
             />
           </div>
 
@@ -1043,7 +1049,7 @@ defineOptions({ name: 'HomeView' })
     >
       <div
         v-if="showQuerySelectionBanner && !querySelection"
-        class="fixed bottom-16 left-1/2 z-40 -translate-x-1/2 flex items-center gap-3 rounded-lg border border-primary/30 bg-background px-4 py-2.5 text-sm shadow-lg"
+        class="fixed bottom-[calc(4rem+var(--app-bottom-nav-height,0px))] left-1/2 z-40 -translate-x-1/2 flex items-center gap-3 rounded-lg border border-primary/30 bg-background px-4 py-2.5 text-sm shadow-lg"
       >
         <span class="text-muted-foreground">
           {{ t('views.library.querySelection.loadedSelected', { selected: formatNumber(selectedCount), total: formatNumber(total) }) }}
@@ -1062,6 +1068,9 @@ defineOptions({ name: 'HomeView' })
       :count="querySelection ? querySelection.total : selectedCount"
       :in-flight="inFlight"
       :query-scoped="querySelection !== null"
+      :can-select-all="true"
+      :all-selected="allLoadedSelected"
+      @toggle-select-all="handleSelectAllLoaded"
       @send="sendBookOpen = true"
       @download="handleDownloadFiles"
       @export-metadata="openMetadataExport(querySelection ? 'all-matching' : 'selected')"

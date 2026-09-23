@@ -50,6 +50,11 @@ function handleViewModeUpdate(value: unknown) {
   emit('update:viewMode', value)
 }
 
+// This menu is phone-only and has no table option; phones render a saved table preference as the list.
+const displayedViewMode = computed<BookViewMode>(() =>
+  props.viewMode === 'table' && props.allowedViewModes.includes('list') ? 'list' : props.viewMode,
+)
+
 const slots = useSlots()
 
 const hasViewModeActions = computed(
@@ -66,14 +71,20 @@ const hasActions = computed(
 <template>
   <DropdownMenu v-if="hasActions">
     <DropdownMenuTrigger as-child>
-      <Button variant="ghost" size="icon" class="md:hidden h-8 w-8 text-muted-foreground hover:text-foreground">
+      <Button
+        variant="ghost"
+        size="icon"
+        data-testid="view-header-mobile-menu-trigger"
+        class="md:hidden relative h-8 w-8 text-muted-foreground hover:text-foreground after:absolute after:-inset-1.5 after:content-['']"
+        :aria-label="t('components.viewHeader.mobileMenu.moreOptions')"
+      >
         <MoreHorizontal :size="15" />
       </Button>
     </DropdownMenuTrigger>
 
     <DropdownMenuContent align="end" class="w-44">
       <template v-if="showViewModeToggle && (allowedViewModes.includes('grid') || allowedViewModes.includes('list'))">
-        <DropdownMenuRadioGroup :model-value="viewMode" @update:model-value="handleViewModeUpdate">
+        <DropdownMenuRadioGroup :model-value="displayedViewMode" @update:model-value="handleViewModeUpdate">
           <DropdownMenuRadioItem v-if="allowedViewModes.includes('grid')" value="grid">{{
             t('components.viewHeader.mobileMenu.grid')
           }}</DropdownMenuRadioItem>

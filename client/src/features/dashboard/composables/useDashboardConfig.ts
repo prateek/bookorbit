@@ -18,14 +18,16 @@ interface StoredDashboardConfig {
   shelfLayout: DashboardShelfLayout
 }
 
+// Only reaches users with no saved layout. Up Next leads because a finished book drops out of
+// Continue Reading, and for series readers the next entry is what they came back for.
 const ALL_DEFAULT_SCROLLERS: ScrollerConfig[] = [
-  { id: '2', type: 'recently-added', label: 'Recently Added', enabled: true, order: 1, limit: 20, rows: 1 },
-  { id: '3', type: 'random', label: 'Discover Something New', enabled: true, order: 2, limit: 20, rows: 1 },
-  { id: '1', type: 'continue-reading', label: 'Continue Reading', enabled: true, order: 3, limit: 20, rows: 1 },
-  { id: '5', type: 'continue-listening', label: 'Continue Listening', enabled: true, order: 4, limit: 20, rows: 1 },
-  { id: '7', type: 'continue-podcasts', label: 'Continue Podcasts', enabled: false, order: 5, limit: 20, rows: 1 },
-  { id: '6', type: 'want-to-read', label: 'Want to Read', enabled: false, order: 6, limit: 20, rows: 1 },
-  { id: '4', type: 'up-next-in-series', label: 'Up Next in Series', enabled: false, order: 7, limit: 20, rows: 1 },
+  { id: '4', type: 'up-next-in-series', label: 'Up Next in Series', enabled: true, order: 1, limit: 20, rows: 1 },
+  { id: '1', type: 'continue-reading', label: 'Continue Reading', enabled: true, order: 2, limit: 20, rows: 1 },
+  { id: '2', type: 'recently-added', label: 'Recently Added', enabled: true, order: 3, limit: 20, rows: 1 },
+  { id: '3', type: 'random', label: 'Discover Something New', enabled: true, order: 4, limit: 20, rows: 1 },
+  { id: '5', type: 'continue-listening', label: 'Continue Listening', enabled: true, order: 5, limit: 20, rows: 1 },
+  { id: '7', type: 'continue-podcasts', label: 'Continue Podcasts', enabled: false, order: 6, limit: 20, rows: 1 },
+  { id: '6', type: 'want-to-read', label: 'Want to Read', enabled: false, order: 7, limit: 20, rows: 1 },
 ]
 
 export const DEFAULT_SCROLLERS = ALL_DEFAULT_SCROLLERS.filter((scroller) => APP_FEATURES.podcasts || scroller.type !== 'continue-podcasts')

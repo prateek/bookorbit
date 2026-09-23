@@ -7,10 +7,13 @@ import BookCoverArtwork from '../BookCoverArtwork.vue'
 import BookCoverImage from '../BookCoverImage.vue'
 import BookCoverSurface from '../BookCoverSurface.vue'
 import { useRefreshingBooks } from '@/features/book/composables/useRefreshingBooks'
+import { bookCoverSeed } from '../../lib/cover-seed'
+import { decodeHtmlEntities } from '../../lib/display-text'
 
 const props = defineProps<{
   bookId: number
   title: string | null
+  seriesName?: string | null
   version?: string | number | Date | null
   hasCover: boolean
   isAudio: boolean
@@ -21,7 +24,8 @@ const emit = defineEmits<{ 'cover-click': [] }>()
 const { t } = useI18n()
 const { isRefreshing } = useRefreshingBooks()
 
-const seed = computed(() => props.title ?? String(props.bookId))
+const seed = computed(() => bookCoverSeed({ id: props.bookId, title: props.title, seriesName: props.seriesName }))
+const displayTitle = computed(() => decodeHtmlEntities(props.title) ?? null)
 const isRefreshingBook = computed(() => isRefreshing(props.bookId))
 const { coverUrl } = useCoverVersions()
 const thumbnailSrc = computed(() => coverUrl(props.bookId, 'thumbnail', props.version))
@@ -91,11 +95,11 @@ const adjustedTop = computed(() => {
       <BookCoverArtwork
         :src="thumbnailSrc"
         :has-cover="hasCover"
-        :title="title"
+        :title="displayTitle"
         :author-line="null"
         :is-audio="isAudio"
         :seed="seed"
-        :alt="title ?? ''"
+        :alt="displayTitle ?? ''"
         frame-aspect-ratio="1/1"
         :spine="!isAudio"
         :is-comic="isComic"

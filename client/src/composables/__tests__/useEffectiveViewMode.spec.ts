@@ -32,11 +32,11 @@ describe('useEffectiveViewMode', () => {
     expect(effectiveViewMode.value).toBe('table')
   })
 
-  it('forces grid on mobile when viewMode is table', () => {
+  it('falls back to the dense list on mobile when viewMode is table', () => {
     breakpointMd.value = false
     const { viewMode, effectiveViewMode } = useEffectiveViewMode()
     viewMode.value = 'table'
-    expect(effectiveViewMode.value).toBe('grid')
+    expect(effectiveViewMode.value).toBe('list')
   })
 
   it('keeps grid viewMode as-is on mobile', () => {

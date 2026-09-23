@@ -6,6 +6,7 @@ import { FORMAT_TO_GROUP, type BookCard } from '@bookorbit/types'
 import BookCoverSurface from '../BookCoverSurface.vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
+import { decodeHtmlEntities } from '../../lib/display-text'
 
 const props = defineProps<{
   book: BookCard
@@ -19,7 +20,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const collapsed = computed(() => props.book.collapsedSeries!)
-const seriesName = computed(() => props.book.seriesName ?? '')
+const seriesName = computed(() => decodeHtmlEntities(props.book.seriesName ?? ''))
 const readCount = computed(() => collapsed.value.readCount)
 const bookCount = computed(() => collapsed.value.bookCount)
 const coverIds = computed(() => collapsed.value.coverBookIds.filter((id) => id > 0).slice(0, 4))
