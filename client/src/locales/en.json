@@ -8988,6 +8988,19 @@
       "savePreferenceFailed": "Failed to save preference",
       "whatsNewToggle": "Show \"What's New\" after updates",
       "whatsNewToggleHint": "A popup highlighting new features after the app updates. The archive stays available either way.",
+      "push": {
+        "groupLabel": "This device",
+        "toggle": "Push notifications on this device",
+        "hint": "Get a notification when new books or chapters arrive in your libraries. Tapping it opens the new chapter or series here. Follows your Library scanning notification level.",
+        "iosHint": "On iPhone and iPad this only works in BookOrbit added to your Home Screen.",
+        "iosInstall": "Open BookOrbit from your Home Screen to turn this on. In Safari, tap Share, then Add to Home Screen.",
+        "unsupported": "This browser does not support push notifications.",
+        "blocked": "Notifications are blocked for BookOrbit. Allow them in your device settings, then try again.",
+        "enabled": "Push notifications are on for this device",
+        "disabled": "Push notifications are off for this device",
+        "enableFailed": "Could not turn on push notifications",
+        "disableFailed": "Could not turn off push notifications"
+      },
       "groups": {
         "library": "Library",
         "files": "Files",
