@@ -15,6 +15,7 @@ import DashboardWelcome from '@/features/dashboard/components/DashboardWelcome.v
 import DashboardWidgetRow from '@/features/dashboard/components/DashboardWidgetRow.vue'
 import { SHELF_LAYOUT, useDashboardConfig } from '@/features/dashboard/composables/useDashboardConfig'
 import { useDashboardLabels } from '@/features/dashboard/composables/useDashboardLabels'
+import { canHoldAudiobooks } from '@/features/dashboard/lib/audiobook-shelf'
 import { useOnboardingTour } from '@/features/onboarding/composables/useOnboardingTour'
 import { useSmartScopes } from '@/features/smart-scope/composables/useSmartScopes'
 
@@ -22,7 +23,7 @@ const { t } = useI18n()
 const { hasPermission } = usePermissions()
 const { user } = useAuth()
 const { libraries, loading: librariesLoading, loaded: librariesLoaded, error: librariesError, fetchLibraries } = useLibraries()
-const { scrollers, shelfLayout, pruneDeletedSmartScopeScrollers } = useDashboardConfig()
+const { scrollers, shelfLayout, pruneDeletedSmartScopeScrollers, setAudiobooksAvailable } = useDashboardConfig()
 const { shelfTitle } = useDashboardLabels()
 const { maybeStartTour } = useOnboardingTour()
 const { smartScopes, loaded: smartScopesLoaded, fetchSmartScopes } = useSmartScopes()
@@ -73,6 +74,15 @@ watch(
   ([isLoaded, allSmartScopes]) => {
     if (!isLoaded) return
     pruneDeletedSmartScopeScrollers(allSmartScopes.map((smartScope) => smartScope.id))
+  },
+  { immediate: true },
+)
+
+watch(
+  [librariesLoaded, libraries],
+  ([isLoaded, allLibraries]) => {
+    if (!isLoaded) return
+    setAudiobooksAvailable(canHoldAudiobooks(allLibraries))
   },
   { immediate: true },
 )

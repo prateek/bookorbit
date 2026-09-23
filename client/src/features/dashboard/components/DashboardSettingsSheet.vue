@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { useSmartScopes } from '@/features/smart-scope/composables/useSmartScopes'
 import { useLibraries } from '@/features/library/composables/useLibraries'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
-import { DEFAULT_SCROLLERS, SCROLLER_LABELS, SHELF_LAYOUT, useDashboardConfig, type DashboardShelfLayout } from '../composables/useDashboardConfig'
+import { SCROLLER_LABELS, SHELF_LAYOUT, useDashboardConfig, type DashboardShelfLayout } from '../composables/useDashboardConfig'
 import { SHELF_ROW_OPTIONS } from '../lib/shelf-rows'
 import { useDashboardLabels } from '../composables/useDashboardLabels'
 import { useDashboardWidgets } from '../composables/useDashboardWidgets'
@@ -21,7 +21,7 @@ const emit = defineEmits<{ 'update:open': [value: boolean]; saved: [] }>()
 const { t } = useI18n()
 const { isDemoRestrictedAccount } = usePermissions()
 
-const { scrollers, shelfLayout, syncAcrossSessions, saveShelfSettings, MAX_SCROLLERS } = useDashboardConfig()
+const { scrollers, shelfLayout, syncAcrossSessions, defaultScrollers, saveShelfSettings, MAX_SCROLLERS } = useDashboardConfig()
 const { widgets, libraryIds, saveWidgets, saveLibraryScope, DEFAULT_WIDGETS } = useDashboardWidgets()
 const { smartScopes, fetchSmartScopes } = useSmartScopes()
 const { libraries, fetchLibraries } = useLibraries()
@@ -57,7 +57,7 @@ watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
-      draft.value = (Array.isArray(scrollers.value) ? scrollers.value : DEFAULT_SCROLLERS).map((s) => ({ ...s }))
+      draft.value = (Array.isArray(scrollers.value) ? scrollers.value : defaultScrollers()).map((s) => ({ ...s }))
       shelfLayoutDraft.value = shelfLayout.value
       syncShelvesDraft.value = syncAcrossSessions.value
       saveError.value = false
@@ -203,7 +203,7 @@ function resetToDefault() {
   if (activeTab.value === 'widgets') {
     widgetDraft.value = DEFAULT_WIDGETS.map((w) => ({ ...w }))
   } else {
-    draft.value = DEFAULT_SCROLLERS.map((s) => ({ ...s }))
+    draft.value = defaultScrollers()
     shelfLayoutDraft.value = SHELF_LAYOUT.WIDE
   }
 }
