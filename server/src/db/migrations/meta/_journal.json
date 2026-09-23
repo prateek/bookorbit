@@ -883,6 +883,13 @@
       "when": 1792516862511,
       "tag": "0125_mobile-serial-fixes",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1792516862512,
+      "tag": "0126_add_user_unfollowed_series",
+      "breakpoints": true
     }
   ]
 }

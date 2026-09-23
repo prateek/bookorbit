@@ -52,6 +52,8 @@ export type SeriesSummary = {
   nextTitle: string | null;
   /** Whether the up-next volume is already in progress; absent or null when there is none. */
   nextStatus?: "reading" | "unread" | null;
+  /** False once the user unfollows the series; unfollowed series stay off shelves and new-chapter pushes. */
+  following: boolean;
 };
 
 /** Counts for the whole result set, ignoring the active completion filter. */
@@ -97,6 +99,8 @@ export type SeriesDetail = {
   expectedBookCount: number | null;
   /** Null once every book is read. */
   next: SeriesContinueTarget | null;
+  /** See {@link SeriesSummary.following}. */
+  following: boolean;
 };
 
 export type SeriesBooksPage = BooksPage & {
@@ -120,4 +124,10 @@ export type SeriesNextBookResponse = {
 export type SeriesMarkReadResponse = {
   /** Books that were not read before and now are. */
   updated: number;
+};
+
+/** The user's follow state for one series after a follow or unfollow. */
+export type SeriesFollowResponse = {
+  seriesId: number;
+  following: boolean;
 };

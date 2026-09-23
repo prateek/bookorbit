@@ -1,5 +1,5 @@
 import { api } from '@/lib/api'
-import type { SeriesBooksPage, SeriesIndex, SeriesMarkReadResponse, SeriesPage } from '@bookorbit/types'
+import type { SeriesBooksPage, SeriesFollowResponse, SeriesIndex, SeriesMarkReadResponse, SeriesPage } from '@bookorbit/types'
 import type { CompletionStatus, SeriesBookSort, SeriesListSort, SortDirection } from '../types/series'
 
 type ListSeriesParams = {
@@ -64,5 +64,12 @@ export async function markSeriesRead(seriesId: number, params: MarkSeriesReadPar
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`Failed to mark series read: ${res.status}`)
+  return res.json()
+}
+
+/** Follows or unfollows a series for the signed-in user. Unfollowed series stay off shelves and new-chapter pushes. */
+export async function setSeriesFollowing(seriesId: number, following: boolean): Promise<SeriesFollowResponse> {
+  const res = await api(`/api/v1/series/${seriesId}/follow`, { method: following ? 'PUT' : 'DELETE' })
+  if (!res.ok) throw new Error(`Failed to update series follow state: ${res.status}`)
   return res.json()
 }

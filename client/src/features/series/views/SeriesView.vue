@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenu
 import { formatNumber } from '@/i18n/formatters'
 import { cn } from '@/lib/utils'
 import { onAppResumed } from '@/components/sidebar/useAppResume'
+import { onSeriesFollowChangedWhileAway } from '../composables/useSeriesFollowChanges'
 import type { BookViewMode } from '@/composables/useDisplaySettings'
 import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
 import { useLibraries } from '@/features/library/composables/useLibraries'
@@ -259,9 +260,12 @@ onMounted(async () => {
   if (sentinel.value) observer.observe(sentinel.value)
 })
 
-onAppResumed(() => {
+function refreshLoadedList() {
   if (initialLoadComplete.value) void refresh()
-})
+}
+
+onAppResumed(refreshLoadedList)
+onSeriesFollowChangedWhileAway(refreshLoadedList)
 
 onUnmounted(() => {
   observer?.disconnect()
