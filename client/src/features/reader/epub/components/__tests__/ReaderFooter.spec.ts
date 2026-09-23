@@ -1,6 +1,8 @@
 import { mount } from '@vue/test-utils'
+import { computed, ref } from 'vue'
 import { describe, expect, it } from 'vitest'
 import ReaderFooter from '../ReaderFooter.vue'
+import { READER_PAGE_CONTEXT } from '../../composables/readerPageContext'
 
 const globalStubs = {
   stubs: {
@@ -195,5 +197,55 @@ describe('ReaderFooter', () => {
     await input.trigger('keydown', { key: 'Escape' })
 
     expect(wrapper.find('input[type="text"]').exists()).toBe(false)
+  })
+
+  it('opens the go-to input with a numeric keyboard at a size iOS will not zoom on', async () => {
+    const wrapper = mount(ReaderFooter, {
+      props: defaultProps,
+      global: globalStubs,
+    })
+
+    await wrapper.get('button[aria-label="Jump to location"]').trigger('click')
+
+    const input = wrapper.get('input[type="text"]')
+    expect(input.attributes('inputmode')).toBe('decimal')
+    expect(input.classes()).toContain('text-base')
+  })
+
+  describe('scroll-mode progress', () => {
+    function mountWithFlow(flow: 'paginated' | 'scrolled') {
+      return mount(ReaderFooter, {
+        props: { ...defaultProps, fraction: 0.257 },
+        global: {
+          stubs: { ...globalStubs.stubs, teleport: true },
+          provide: {
+            [READER_PAGE_CONTEXT as symbol]: {
+              mode: computed(() => ({ fg: '#000000', bg: '#ffffff', link: '#0066cc' })),
+              flow: ref(flow),
+            },
+          },
+        },
+      })
+    }
+
+    it('keeps a thin progress bar on screen while reading in scrolled flow', () => {
+      const bar = mountWithFlow('scrolled').get('[data-testid="scroll-progress"]')
+
+      expect(bar.attributes('aria-valuenow')).toBe('25.7')
+      expect(bar.get('div').attributes('style')).toContain('width: 25.7%')
+    })
+
+    it('leaves paginated flow without the extra bar', () => {
+      expect(mountWithFlow('paginated').find('[data-testid="scroll-progress"]').exists()).toBe(false)
+    })
+
+    it('renders no bar when no reader page context is provided', () => {
+      const wrapper = mount(ReaderFooter, {
+        props: defaultProps,
+        global: { stubs: { ...globalStubs.stubs, teleport: true } },
+      })
+
+      expect(wrapper.find('[data-testid="scroll-progress"]').exists()).toBe(false)
+    })
   })
 })

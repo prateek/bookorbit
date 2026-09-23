@@ -30,7 +30,7 @@ function onInput(event: Event) {
 
 <template>
   <div>
-    <label :for="inputId" class="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{{ label }}</label>
+    <label :for="inputId" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ label }}</label>
     <div class="flex items-center gap-2.5">
       <component :is="minIcon" v-if="minIcon" :size="15" class="shrink-0 text-muted-foreground" aria-hidden="true" />
       <input
@@ -46,29 +46,49 @@ function onInput(event: Event) {
         @input="onInput"
       />
       <component :is="maxIcon" v-if="maxIcon" :size="15" class="shrink-0 text-muted-foreground" aria-hidden="true" />
-      <span class="w-14 shrink-0 text-right text-xs font-semibold tabular-nums text-foreground">{{ displayValue }}</span>
+      <span class="w-16 shrink-0 text-right text-[13px] font-semibold tabular-nums text-foreground">{{ displayValue }}</span>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* The input is a tall, transparent hit area; the visible track is drawn by the pseudo-elements. */
 .reader-range {
   appearance: none;
-  height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(to right, var(--primary) var(--reader-range-fill), var(--border) var(--reader-range-fill));
+  height: 36px;
+  background: transparent;
   cursor: pointer;
 }
 
 .reader-range:focus-visible {
   outline: 2px solid var(--primary);
-  outline-offset: 4px;
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
+.reader-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--primary) var(--reader-range-fill), var(--border) var(--reader-range-fill));
+}
+
+.reader-range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.reader-range::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--primary);
 }
 
 .reader-range::-webkit-slider-thumb {
   appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
   border: 2px solid var(--card);
   border-radius: 999px;
   background: var(--primary);
@@ -76,11 +96,28 @@ function onInput(event: Event) {
 }
 
 .reader-range::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   border: 2px solid var(--card);
   border-radius: 999px;
   background: var(--primary);
   box-shadow: var(--elevation-sm);
+}
+
+@media (pointer: coarse) {
+  .reader-range {
+    height: 44px;
+  }
+
+  .reader-range::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+    margin-top: -11px;
+  }
+
+  .reader-range::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+  }
 }
 </style>
