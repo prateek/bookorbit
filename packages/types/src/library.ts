@@ -83,6 +83,7 @@ export interface Library {
   excludePatterns: string[];
   readingThreshold: number;
   markAsFinishedPercentComplete: number;
+  countSeriesAsOneBook: boolean;
   fileNamingPattern?: string | null;
   fileWriteEnabled: boolean;
   fileWriteWriteCover: boolean;

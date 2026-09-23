@@ -98,6 +98,7 @@ function makeLibrary(): Library {
     excludePatterns: [],
     readingThreshold: 10,
     markAsFinishedPercentComplete: 90,
+    countSeriesAsOneBook: false,
     fileNamingPattern: null,
     fileWriteEnabled: false,
     fileWriteWriteCover: false,

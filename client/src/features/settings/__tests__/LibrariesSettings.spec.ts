@@ -81,6 +81,7 @@ function makeLibrary(overrides: Partial<Library> = {}): Library {
     excludePatterns: [],
     readingThreshold: 10,
     markAsFinishedPercentComplete: 90,
+    countSeriesAsOneBook: false,
     fileNamingPattern: null,
     fileWriteEnabled: false,
     fileWriteWriteCover: false,
@@ -515,6 +516,7 @@ describe('LibrariesSettings ledger', () => {
           metadataPrecedence: ['embedded', 'opfFile'],
           readingThreshold: 0.25,
           markAsFinishedPercentComplete: 98,
+          countSeriesAsOneBook: true,
         }),
       ]
       accessRef.value = [{ userId: 1 }, { userId: 2 }]
@@ -526,6 +528,7 @@ describe('LibrariesSettings ledger', () => {
       expect(panel).toContain('1 pattern')
       expect(panel).toContain('25%')
       expect(panel).toContain('98%')
+      expect(panel).toContain('One book')
       expect(panel).toContain('2 people')
     })
 

@@ -38,6 +38,7 @@ function blankForm() {
     excludePatterns: [] as string[],
     readingThreshold: 0.25,
     markAsFinishedPercentComplete: 98,
+    countSeriesAsOneBook: false,
     fileWriteEnabled: false,
     fileWriteWriteCover: true,
     fileWriteEpubEnabled: true,
@@ -130,6 +131,7 @@ export function useLibraryCreator() {
     form.excludePatterns = [...library.excludePatterns]
     form.readingThreshold = library.readingThreshold
     form.markAsFinishedPercentComplete = library.markAsFinishedPercentComplete
+    form.countSeriesAsOneBook = library.countSeriesAsOneBook
     form.fileWriteEnabled = library.fileWriteEnabled
     form.fileWriteWriteCover = library.fileWriteWriteCover
     form.fileWriteEpubEnabled = library.fileWriteEpubEnabled
