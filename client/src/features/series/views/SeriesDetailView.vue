@@ -665,7 +665,7 @@ defineOptions({ name: 'SeriesDetailView' })
     <main ref="mainRef" class="flex-1 min-h-0 overflow-y-auto py-2">
       <div class="mb-3 flex min-h-11 items-center px-1">
         <button
-          class="inline-flex h-8 items-center gap-1 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          class="inline-flex h-8 pointer-coarse:min-h-11 items-center gap-1 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           @click="goBack"
         >
           <ChevronLeft :size="14" />

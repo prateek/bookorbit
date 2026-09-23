@@ -151,7 +151,7 @@ async function handleCopyPattern() {
         variant="ghost"
         size="icon-sm"
         type="button"
-        class="-ms-1.5 @2xl/naming:hidden"
+        class="touch-target -ms-1.5 @2xl/naming:hidden"
         :aria-label="t('settings.reader.fileNaming.backToRules')"
         @click="handleBack"
       >
