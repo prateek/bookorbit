@@ -53,15 +53,29 @@ describe('EpubController', () => {
       stream,
       contentType: 'application/xhtml+xml',
       size: 321,
+      version: 'v1',
     });
 
-    await controller.getFile(9, 'OPS/text/Chapter%201.xhtml', '13', user, reply as any);
+    await controller.getFile(9, 'OPS/text/Chapter%201.xhtml', '13', user, reply as any, 'v1');
 
     expect(epubService.streamFile).toHaveBeenCalledWith(9, 'OPS/text/Chapter 1.xhtml', 13, user);
     expect(reply.header).toHaveBeenNthCalledWith(1, 'Content-Type', 'application/xhtml+xml');
     expect(reply.header).toHaveBeenNthCalledWith(2, 'Content-Length', 321);
-    expect(reply.header).toHaveBeenNthCalledWith(3, 'Cache-Control', 'public, max-age=3600');
+    expect(reply.header).toHaveBeenNthCalledWith(3, 'Cache-Control', 'private, max-age=31536000, immutable');
     expect(reply.send).toHaveBeenCalledWith(stream);
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['stale', 'old-version'],
+  ])('requires revalidation when the requested version is %s', async (_label, requestedVersion) => {
+    const reply = { header: vi.fn(), send: vi.fn() };
+    epubService.streamFile.mockResolvedValue({ stream: new PassThrough(), contentType: 'text/css', size: 5, version: 'v2' });
+
+    await controller.getFile(9, 'OPS/style.css', '13', { id: 1, isSuperuser: false, permissions: [] } as any, reply as any, requestedVersion);
+
+    expect(reply.header).toHaveBeenCalledWith('Cache-Control', 'private, no-cache');
+    expect(reply.header).not.toHaveBeenCalledWith('Cache-Control', expect.stringContaining('public'));
   });
 
   it('delegates media-overlay playlist requests', async () => {
@@ -114,7 +128,7 @@ describe('EpubController', () => {
 
     expect(reply.header).toHaveBeenCalledWith('Content-Type', 'application/xml');
     expect(reply.header).not.toHaveBeenCalledWith('Content-Length', expect.anything());
-    expect(reply.header).toHaveBeenCalledWith('Cache-Control', 'public, max-age=3600');
+    expect(reply.header).toHaveBeenCalledWith('Cache-Control', 'private, no-cache');
   });
 
   it('rejects malformed encoded file paths', async () => {

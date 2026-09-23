@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ArrowLeft, RotateCw } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { useFoliate, type RelocateDetail } from './epub/composables/useFoliate'
@@ -10,6 +11,9 @@ import { useReadingSession } from './shared/composables/useReadingSession'
 import { useReaderPageTitle } from './shared/composables/useReaderPageTitle'
 import { useReaderState } from './epub/composables/useReaderState'
 import { useReaderSettings } from './shared/composables/useReaderSettings'
+import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
+import { primarySeriesId, useReaderBack } from './shared/composables/useReaderBack'
+import { useBookStatus } from '@/features/book/composables/useBookStatus'
 import { useCustomFonts } from './epub/composables/useCustomFonts'
 import { useVisibility } from './shared/composables/useVisibility'
 import { useWakeLock } from './shared/composables/useWakeLock'
@@ -41,6 +45,7 @@ import ReaderSettingsPanel from './epub/components/ReaderSettingsPanel.vue'
 import SelectionPopup from './epub/components/SelectionPopup.vue'
 import ReaderSearchPanel from './epub/components/ReaderSearchPanel.vue'
 import NoteDialog from './shared/components/NoteDialog.vue'
+import NextChapterCard from './shared/components/NextChapterCard.vue'
 import DictionaryPopover from './epub/components/DictionaryPopover.vue'
 import TranslationPopover from './epub/components/TranslationPopover.vue'
 import TranslationSheet from './epub/components/TranslationSheet.vue'
@@ -139,7 +144,7 @@ const visibility = useVisibility()
 const { headerVisible, footerVisible, isPinned, handleMiddleTap, togglePinned, hideOverlays, setVisibilityLock } = visibility
 const { toggleFullscreen } = useFullscreen()
 
-useWakeLock()
+const wakeLock = useWakeLock()
 
 const bookmarks = useBookmarks()
 const annotations = useAnnotations()
@@ -241,6 +246,9 @@ function handleTranslate() {
 }
 
 const bookMeta = ref<BookDetail | null>(null)
+const { goBack } = useReaderBack(bookId, () => bookMeta.value)
+const { nextBook, load: loadNextBook } = useSeriesNextBook('epub')
+const { setStatus } = useBookStatus()
 
 const {
   foliateReady,
@@ -769,6 +777,8 @@ function onRelocateHandler(detail: RelocateDetail) {
     }
   }
   onActivity()
+  wakeLock.notifyActivity()
+  updateAtBookEnd()
   bookmarks.setCfi(detail?.cfi ?? null)
   toc.setActiveHref(detail?.tocItem?.href ?? '')
   const renderer = getRenderer()
@@ -784,6 +794,10 @@ function onApplyStylesHandler(renderer: FoliateRenderer) {
 }
 
 function onMiddleTapHandler() {
+  wakeLock.notifyActivity()
+  // The card sits over the last lines, so it is dismissed to read them; the tap that brings back
+  // the reader controls brings it back too, or there is no way on to the next chapter.
+  if (isAtBookEnd.value) endCardDismissed.value = false
   handleMiddleTap()
 }
 
@@ -868,20 +882,62 @@ setAnnotationClickHandler(handleAnnotationClick)
 
 onUnmounted(clearFoliateSource)
 
-onMounted(async () => {
+const isSpecializedReader = isAudioFormat || isPdfFormat || isComicFormat
+// Covers the work before foliate starts opening (fonts, progress, settings), which would otherwise
+// leave a blank page, and any failure there, which would otherwise leave nothing at all.
+const setupPending = ref(!isSpecializedReader)
+const setupError = ref<string | null>(null)
+const readerLoading = computed(() => setupPending.value || loading.value)
+const readerError = computed(() => (readerLoading.value ? null : (setupError.value ?? error.value)))
+
+function loadBookMeta() {
+  void api(`/api/v1/books/${bookId}`)
+    .then((r) => r.json() as Promise<BookDetail>)
+    .then((b) => {
+      bookMeta.value = b
+      markedRead.value = b.readStatus?.status === 'read'
+      if (trackingEnabled.value) void loadNextBook(primarySeriesId(b), bookId)
+    })
+    .catch(() => {})
+}
+
+onMounted(() => {
   // Specialized readers own their own progress/settings/loading lifecycle.
-  if (isAudioFormat || isPdfFormat || isComicFormat) return
+  if (isSpecializedReader) return
 
-  void Promise.all([
-    api(`/api/v1/books/${bookId}`)
-      .then((r) => r.json() as Promise<BookDetail>)
-      .then((b) => {
-        bookMeta.value = b
-      })
-      .catch(() => {}),
-    ...(isTtsAvailable ? [loadUserPreferences().catch(() => {})] : []),
-  ])
+  loadBookMeta()
+  if (isTtsAvailable) void loadUserPreferences().catch(() => {})
+  void setupReader()
+})
 
+// Set once this setup run has the book on screen; a later failure (bookmarks, annotations) is not
+// worth covering a readable book with an error.
+let setupOpenedBook = false
+
+async function setupReader() {
+  setupPending.value = true
+  setupError.value = null
+  setupOpenedBook = false
+  try {
+    await openReader()
+  } catch (e) {
+    console.error('[ReaderView] setup failed', e)
+    if (!setupOpenedBook) setupError.value = e instanceof Error ? e.message : t('reader.failedToLoadBook')
+  } finally {
+    setupPending.value = false
+  }
+}
+
+async function handleRetry() {
+  await progress.flush()
+  await setupReader()
+}
+
+function handleBack() {
+  goBack()
+}
+
+async function openReader() {
   await customFonts.fetchAllFonts()
   await refreshFontFaces()
 
@@ -914,7 +970,10 @@ onMounted(async () => {
     mediaOverlaySectionIndex: savedNarration?.section,
     preferMediaOverlay: savedNarration != null,
   })
+  if (error.value) return
   initialOpenCompleted = true
+  setupOpenedBook = true
+  setupPending.value = false
   setChapters(getChapters())
   sectionFractions.value = getSectionFractions()
   await bookmarks.load(bookId)
@@ -954,7 +1013,76 @@ onMounted(async () => {
       applySavedTtsResumeHighlight()
     }
   }
+}
+
+// ── End of book ────────────────────────────────────────────────────────────────
+// A web serial is one file per chapter, so the end of the book is the end of the chapter: offer the
+// next one in the series and an explicit "Mark as read".
+const isAtBookEnd = ref(false)
+const endCardDismissed = ref(false)
+const markedRead = ref(false)
+const markingRead = ref(false)
+const openingNext = ref(false)
+const END_FRACTION = 0.9999
+
+const showEndCard = computed(
+  () =>
+    trackingEnabled.value &&
+    isAtBookEnd.value &&
+    !endCardDismissed.value &&
+    !readerLoading.value &&
+    !readerError.value &&
+    !isNavigationLocked.value &&
+    !showTapZones.value,
+)
+
+type EndAwareRenderer = FoliateRenderer & { atEnd?: boolean; scrolled?: boolean }
+
+function updateAtBookEnd() {
+  const renderer = getRenderer() as EndAwareRenderer | null
+  // The paginator knows exactly when the last page is showing; in scrolled flow (and for renderers
+  // without `atEnd`) the reported fraction reaches 1 at the bottom of the last section.
+  const reachedEnd = renderer && !renderer.scrolled && typeof renderer.atEnd === 'boolean' ? renderer.atEnd : fraction.value >= END_FRACTION
+  if (!reachedEnd) endCardDismissed.value = false
+  isAtBookEnd.value = reachedEnd
+}
+
+// Peek mode stays inside one book; once tracked reading starts, the series handoff applies.
+watch(trackingEnabled, (enabled) => {
+  if (enabled && bookMeta.value && !nextBook.value) void loadNextBook(primarySeriesId(bookMeta.value), bookId)
 })
+
+function dismissEndCard() {
+  endCardDismissed.value = true
+}
+
+async function handleOpenNextChapter() {
+  const target = nextBook.value
+  if (!target || openingNext.value) return
+  openingNext.value = true
+  try {
+    // The route keeps its name and only its params change, so the last position has to be written
+    // here or the chapter just finished stays short of complete.
+    await progress.flush()
+    await router.replace({ name: 'reader', params: { bookId: target.bookId, fileId: target.fileId }, query: { format: target.format } })
+  } finally {
+    openingNext.value = false
+  }
+}
+
+async function handleMarkRead() {
+  if (markingRead.value || markedRead.value) return
+  markingRead.value = true
+  try {
+    await progress.flush()
+    await setStatus(bookId, 'read')
+    markedRead.value = true
+  } catch {
+    toast.error(t('reader.endCard.markFailed'))
+  } finally {
+    markingRead.value = false
+  }
+}
 
 const epubSetters: Record<string, (v: unknown) => void> = {
   fontSize: (v) => setFontSize(v as number),
@@ -1270,7 +1398,7 @@ onUnmounted(() => {
       :showTapZones="showTapZones"
       class="transition-all duration-300"
       :class="headerVisible && !showTapZones ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'"
-      @back="router.back()"
+      @back="handleBack"
       @toggleSidebar="showSidebar = !showSidebar"
       @toggleSearch="showSearch = !showSearch"
       @toggleBookmark="bookmarks.toggle(bookId, cfi ?? '', chapterTitle)"
@@ -1302,7 +1430,7 @@ onUnmounted(() => {
     </Transition>
 
     <div class="absolute inset-0">
-      <div v-if="loading" class="absolute inset-0 flex items-center justify-center z-10 bg-background">
+      <div v-if="readerLoading" class="absolute inset-0 flex items-center justify-center z-10 bg-background">
         <div class="flex flex-col items-center gap-3">
           <div class="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           <p class="text-sm text-muted-foreground">
@@ -1311,12 +1439,32 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div v-if="error && !loading" class="absolute inset-0 flex items-center justify-center z-10 p-8 bg-background">
+      <div v-if="readerError" class="absolute inset-0 flex items-center justify-center z-[45] p-8 bg-background" role="alert">
         <div class="text-center max-w-sm">
           <p class="text-sm font-medium mb-2 text-foreground">
             {{ t('reader.failedToLoadBook') }}
           </p>
-          <p class="text-xs text-muted-foreground">{{ error }}</p>
+          <p class="text-xs text-muted-foreground break-words">{{ readerError }}</p>
+          <div class="mt-5 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              class="inline-flex h-11 min-w-24 items-center justify-center gap-1.5 rounded-lg border border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
+              data-testid="reader-error-back"
+              @click="handleBack"
+            >
+              <ArrowLeft :size="16" aria-hidden="true" />
+              {{ t('reader.header.goBack') }}
+            </button>
+            <button
+              type="button"
+              class="inline-flex h-11 min-w-24 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
+              data-testid="reader-error-retry"
+              @click="handleRetry"
+            >
+              <RotateCw :size="16" aria-hidden="true" />
+              {{ t('reader.retry') }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1586,6 +1734,22 @@ onUnmounted(() => {
       @nextSection="navigateToSection(sectionIndex + 1)"
       @seek="navigateToFraction($event)"
     />
+
+    <div
+      v-if="showEndCard"
+      class="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+3.5rem)] z-[45] flex justify-center px-3"
+    >
+      <NextChapterCard
+        class="pointer-events-auto"
+        :next-book="nextBook"
+        :marked-read="markedRead"
+        :marking-read="markingRead"
+        :opening-next="openingNext"
+        @open-next="handleOpenNextChapter"
+        @mark-read="handleMarkRead"
+        @dismiss="dismissEndCard"
+      />
+    </div>
 
     <ReaderSidebar
       v-if="showSidebar"

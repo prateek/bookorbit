@@ -44,6 +44,8 @@ export const makeStreamingLoader = (bookId, baseUrl, bookInfo, fetchFile = fetch
     const params = new URLSearchParams()
     if (bookType) params.append('bookType', bookType)
     if (fileId != null) params.append('fileId', String(fileId))
+    // The file version lets the server mark the response immutable; it changes when the file does.
+    if (typeof bookInfo?.version === 'string' && bookInfo.version) params.append('v', bookInfo.version)
     const qs = params.toString()
     if (qs) url += `?${qs}`
     return url

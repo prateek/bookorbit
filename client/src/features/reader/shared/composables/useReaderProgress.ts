@@ -88,8 +88,24 @@ export function useReaderProgress(
   let saveTimer: ReturnType<typeof setTimeout> | null = null
   let lastValidPercentage = 0
 
+  // A page turn is only written after a short pause, so anything still pending when the reader is
+  // closed, backgrounded or unloaded is written straight away instead of being dropped. iOS Home
+  // Screen apps are often killed while hidden, without an unload event.
+  function onVisibilityChange() {
+    if (document.visibilityState === 'hidden') void flush()
+  }
+
+  function onPageHide() {
+    void flush()
+  }
+
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('pagehide', onPageHide)
+
   onUnmounted(() => {
-    if (saveTimer) clearTimeout(saveTimer)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    window.removeEventListener('pagehide', onPageHide)
+    void flush()
   })
 
   function updatePercentage(value: unknown, fallback = lastValidPercentage): number {
@@ -121,10 +137,18 @@ export function useReaderProgress(
     mediaOverlaySectionIndex.value = typeof data.mediaOverlaySectionIndex === 'number' ? data.mediaOverlaySectionIndex : null
   }
 
-  function scheduleSave() {
+  function cancelScheduledSave() {
     if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = null
+  }
+
+  function scheduleSave() {
+    cancelScheduledSave()
     if (!unref(trackingEnabled)) return
-    saveTimer = setTimeout(() => save(), 2000)
+    saveTimer = setTimeout(() => {
+      saveTimer = null
+      void save()
+    }, 2000)
   }
 
   function onRelocate(detail: RelocateDetail) {
@@ -153,7 +177,7 @@ export function useReaderProgress(
     timeTotal.value = detail?.time?.total ?? 0
 
     if (!hasSaveableLocation) {
-      if (saveTimer) clearTimeout(saveTimer)
+      cancelScheduledSave()
       return
     }
     pendingSource.value = 'text'
@@ -174,11 +198,24 @@ export function useReaderProgress(
     mediaOverlaySectionIndex.value = null
   }
 
-  async function save() {
+  /** Writes a pending debounced save now. `keepalive` lets the request outlive the page. */
+  async function flush() {
+    if (!saveTimer) return
+    clearTimeout(saveTimer)
+    saveTimer = null
+    try {
+      await save({ keepalive: true })
+    } catch {
+      // Best effort: the page may be going away, and the next relocate schedules another save.
+    }
+  }
+
+  async function save(options: { keepalive?: boolean } = {}) {
     if (!unref(trackingEnabled)) return
     const safePercentage = updatePercentage(percentage.value)
     await api(`/api/v1/books/files/${fileId}/progress`, {
       method: 'POST',
+      ...(options.keepalive ? { keepalive: true } : {}),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         cfi: cfi.value,
@@ -341,6 +378,7 @@ export function useReaderProgress(
     setMediaOverlayProgress,
     clearMediaOverlayProgress,
     save,
+    flush,
     cycleFooterMode,
     updateHeadsFeet,
   }

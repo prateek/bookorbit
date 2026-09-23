@@ -1,18 +1,22 @@
 import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { useWakeLock } from '../useWakeLock'
+import { WAKE_LOCK_IDLE_MS, useWakeLock } from '../useWakeLock'
+
+let notifyActivity: () => void = () => {}
+const mounted: { unmount: () => void }[] = []
 
 function mountWithWakeLock() {
   const wrapper = mount(
     defineComponent({
       setup() {
-        useWakeLock()
+        ;({ notifyActivity } = useWakeLock())
         return {}
       },
       template: '<div />',
     }),
   )
+  mounted.push(wrapper)
   return wrapper
 }
 
@@ -43,6 +47,13 @@ describe('useWakeLock', () => {
   })
 
   afterEach(() => {
+    for (const wrapper of mounted.splice(0)) {
+      try {
+        wrapper.unmount()
+      } catch {
+        // Already unmounted by the test.
+      }
+    }
     vi.restoreAllMocks()
   })
 
@@ -85,5 +96,49 @@ describe('useWakeLock', () => {
 
     expect(() => mountWithWakeLock()).not.toThrow()
     await vi.waitFor(() => expect(requestFn).toHaveBeenCalled())
+  })
+
+  describe('idle release', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('lets the screen sleep after five minutes without interaction', async () => {
+      vi.useFakeTimers()
+      mountWithWakeLock()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(requestFn).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(WAKE_LOCK_IDLE_MS - 1000)
+      expect(releaseFn).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(releaseFn).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps the lock while the reader keeps turning pages', async () => {
+      vi.useFakeTimers()
+      mountWithWakeLock()
+      await vi.advanceTimersByTimeAsync(0)
+
+      await vi.advanceTimersByTimeAsync(WAKE_LOCK_IDLE_MS - 1000)
+      notifyActivity()
+      await vi.advanceTimersByTimeAsync(WAKE_LOCK_IDLE_MS - 1000)
+
+      expect(releaseFn).not.toHaveBeenCalled()
+      expect(requestFn).toHaveBeenCalledTimes(1)
+    })
+
+    it('reacquires the lock on the next interaction after going idle', async () => {
+      vi.useFakeTimers()
+      mountWithWakeLock()
+      await vi.advanceTimersByTimeAsync(WAKE_LOCK_IDLE_MS)
+      expect(releaseFn).toHaveBeenCalledTimes(1)
+
+      window.dispatchEvent(new Event('pointerdown'))
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(requestFn).toHaveBeenCalledTimes(2)
+    })
   })
 })
