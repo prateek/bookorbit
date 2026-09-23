@@ -9574,6 +9574,36 @@
       "leadBookLoadError": "Failed to load lead book details",
       "noBooksToEdit": "This series has no books to edit.",
       "loadFullSeriesError": "Failed to load the full series for editing.",
+      "continueAt": "Continue: {name}",
+      "startAt": "Start: {name}",
+      "moreActions": "More series actions",
+      "markAllRead": "Mark all read",
+      "markReadUpToHere": "Mark read up to here",
+      "markReadTitle": "Mark as read?",
+      "markReadConfirmLabel": "Mark read",
+      "markReadUpToConfirm": "Mark every book in this series up to #{index} as read?",
+      "markAllReadConfirm": "{count, plural, one {Mark the # book in this series as read?} other {Mark all # books in this series as read?}}",
+      "markedRead": "Marked as read",
+      "markReadError": "Could not mark the series as read",
+      "allChaptersRead": "Everything in this series is read",
+      "jumpToNextUnread": "Jump to next unread",
+      "sortAndFilter": "Sort and filter",
+      "loadEarlier": "Load earlier books",
+      "showFirstBook": "Show first book details",
+      "hideFirstBook": "Hide first book details",
+      "upNext": "Up next",
+      "chapterDetails": "Details",
+      "chapterActions": "Actions for {title}",
+      "chapterState": {
+        "read": "Read",
+        "reading": "In progress",
+        "unread": "Unread"
+      },
+      "readFilter": {
+        "label": "Read status",
+        "all": "All",
+        "unread": "Unread"
+      },
       "sort": {
         "seriesOrder": "Series Order",
         "title": "Title",
@@ -9622,7 +9652,9 @@
       "finished": "Read end to end",
       "reading": "Reading",
       "next": "Next",
-      "start": "Start"
+      "start": "Start",
+      "nextLine": "{kicker}: {name}",
+      "updated": "updated {when}"
     },
     "grouping": {
       "label": "Group by",

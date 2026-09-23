@@ -27,6 +27,18 @@ export function useSeriesList() {
 
   let requestToken = 0
 
+  function currentQuery() {
+    return {
+      q: q.value.trim() || undefined,
+      size: PAGE_SIZE,
+      sort: sort.value,
+      order: order.value,
+      libraryId: libraryId.value,
+      completionStatus: completionStatus.value,
+      author: author.value?.trim() || undefined,
+    }
+  }
+
   async function load(reset = false): Promise<void> {
     if (!reset && loading.value) return
     if (!reset && !hasMore.value) return
@@ -42,16 +54,7 @@ export function useSeriesList() {
     }
 
     try {
-      const data = await fetchSeries({
-        q: q.value.trim() || undefined,
-        page: requestPage,
-        size: PAGE_SIZE,
-        sort: sort.value,
-        order: order.value,
-        libraryId: libraryId.value,
-        completionStatus: completionStatus.value,
-        author: author.value?.trim() || undefined,
-      })
+      const data = await fetchSeries({ ...currentQuery(), page: requestPage })
 
       if (token !== requestToken) return
 
@@ -64,6 +67,27 @@ export function useSeriesList() {
       error.value = err instanceof Error ? err.message : 'Failed to load series'
     } finally {
       if (token === requestToken) loading.value = false
+    }
+  }
+
+  /**
+   * Refetches the first page in place and drops the pages after it, so a resume costs one request
+   * however far the reader had scrolled and the list never empties first; infinite scroll reloads
+   * the rest. Any load that starts meanwhile wins and the refreshed page is dropped.
+   */
+  async function refresh(): Promise<void> {
+    if (loading.value || page.value === 0) return
+    const token = requestToken
+    try {
+      const data = await fetchSeries({ ...currentQuery(), page: 0 })
+      if (token !== requestToken) return
+      items.value = data.items
+      total.value = data.total
+      facets.value = data.facets ?? { ...EMPTY_FACETS }
+      page.value = 1
+      error.value = null
+    } catch {
+      // The list on screen is still valid; a failed background refresh should not replace it with an error.
     }
   }
 
@@ -81,5 +105,6 @@ export function useSeriesList() {
     completionStatus,
     author,
     load,
+    refresh,
   }
 }

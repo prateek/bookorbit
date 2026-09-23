@@ -3,12 +3,21 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AlertCircle, Check, Layers } from '@lucide/vue'
 import type { SeriesSummary } from '@bookorbit/types'
-import { formatNumber } from '@/i18n/formatters'
+import { formatNumber, formatRelativeFromNow } from '@/i18n/formatters'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 import BookCoverArtwork from '@/features/book/components/BookCoverArtwork.vue'
 import SeriesVolumeTrack from './SeriesVolumeTrack.vue'
 import SeriesLibraryChip from './SeriesLibraryChip.vue'
-import { seriesAuthorLine, seriesExtraAuthorCount, seriesRowFacts, seriesCoverSlots } from '../lib/series-summary'
+import {
+  parseAddedAt,
+  seriesAuthorLine,
+  seriesExtraAuthorCount,
+  seriesNextKickerKey,
+  seriesNextValue,
+  seriesRowFacts,
+  seriesCoverSlots,
+  seriesUnreadCount,
+} from '../lib/series-summary'
 import { STACK_MAX_VISIBLE, coverStackLayout, orderForStack } from '../lib/cover-stack-layout'
 
 const props = defineProps<{ series: SeriesSummary }>()
@@ -53,6 +62,20 @@ const gapPreview = computed(() => {
 const progressLabel = computed(() =>
   facts.value.isSingleVolume ? t('series.card.oneVolumeShort') : `${formatNumber(facts.value.readVolumes)}/${formatNumber(facts.value.ownedVolumes)}`,
 )
+
+const nextLine = computed(() => {
+  const value = seriesNextValue(props.series, facts.value)
+  return value ? t('series.index.nextLine', { kicker: t(seriesNextKickerKey(facts.value, props.series.nextStatus)), name: value }) : null
+})
+
+const phoneMeta = computed(() => {
+  const parts: string[] = []
+  const added = parseAddedAt(props.series.lastAddedAt)
+  if (added) parts.push(t('series.index.updated', { when: formatRelativeFromNow(added) }))
+  const unread = seriesUnreadCount(props.series)
+  if (unread > 0 && !facts.value.isComplete) parts.push(t('series.track.unreadCount', { count: unread }))
+  return parts.join(' · ')
+})
 
 const cardLabel = computed(() => t('series.card.label', { name: props.series.name, read: facts.value.readVolumes, total: facts.value.ownedVolumes }))
 
@@ -135,6 +158,10 @@ function handleOpen() {
       <h3 class="line-clamp-2 break-words text-[14.5px] font-semibold leading-snug tracking-[-0.014em] text-foreground">{{ series.name }}</h3>
       <p v-if="authorLine" class="truncate text-[12.5px] text-muted-foreground">
         {{ extraAuthors > 0 ? t('series.authorsPlus', { authors: authorLine, count: extraAuthors }) : authorLine }}
+      </p>
+      <p v-if="nextLine" class="hidden truncate text-[12.5px] text-foreground max-[519px]:block" data-testid="series-card-next">{{ nextLine }}</p>
+      <p v-if="phoneMeta" class="hidden truncate text-[11.5px] tabular-nums text-muted-foreground max-[519px]:block" data-testid="series-card-meta">
+        {{ phoneMeta }}
       </p>
 
       <div class="mt-auto flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1.5 pt-2 max-[519px]:mt-1.5 max-[519px]:flex-nowrap">

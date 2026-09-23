@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, defineComponent, nextTick, reactive, ref, type PropType } from 'vue'
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import type { BookCard, SeriesBooksPage, SeriesDetail } from '@bookorbit/types'
+import { APP_RESUMED_EVENT } from '@/components/sidebar/useAppResume'
 import SeriesDetailView from './SeriesDetailView.vue'
 
 const GROUP_BY_MEDIA_STORAGE_KEY = 'bookorbit:series-detail:group-by-media'
@@ -13,11 +14,15 @@ class MockIntersectionObserver {
   takeRecords = vi.fn<() => IntersectionObserverEntry[]>(() => [])
 }
 
+enableAutoUnmount(afterEach)
+
 const mocks = vi.hoisted(() => ({
   route: null as unknown as { params: { seriesId: string }; query: Record<string, unknown> },
   routerPush: vi.fn<(to: unknown) => Promise<void>>(),
   fetchLibraries: vi.fn<() => Promise<void>>(),
   setBookContext: vi.fn<(ids: number[], total: number) => void>(),
+  setBookSlotContext: vi.fn<(slots: unknown[], total: number) => void>(),
+  firstIndex: null as unknown as { value: number },
   loadBooks: vi.fn<(input?: unknown) => Promise<void>>(),
   seriesInfo: null as unknown as { value: SeriesDetail | null },
   items: null as unknown as { value: BookCard[] },
@@ -29,6 +34,14 @@ const mocks = vi.hoisted(() => ({
   sort: null as unknown as { value: 'seriesIndex' | 'title' | 'addedAt' },
   order: null as unknown as { value: 'asc' | 'desc' },
   libraryId: null as unknown as { value: number | null },
+  readFilter: null as unknown as { value: 'all' | 'unread' },
+  hasEarlier: null as unknown as { value: boolean },
+  loadingEarlier: null as unknown as { value: boolean },
+  isCompact: null as unknown as { value: boolean },
+  jumpTo: vi.fn<(bookId: number) => Promise<boolean>>(),
+  loadEarlier: vi.fn<() => Promise<number>>(),
+  refresh: vi.fn<() => Promise<void>>(),
+  markSeriesRead: vi.fn<(seriesId: number, params: unknown) => Promise<unknown>>(),
   fetchSeriesBooks: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   api: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }))
@@ -43,11 +56,16 @@ vi.mock('vue-router', async (importOriginal) => {
 })
 
 vi.mock('@/features/auth/composables/usePermissions', () => ({
-  usePermissions: () => ({ hasPermission: () => true }),
+  usePermissions: () => ({ hasPermission: () => true, isDemoRestrictedAccount: ref(false) }),
 }))
 
+vi.mock('@vueuse/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@vueuse/core')>()
+  return { ...actual, useMediaQuery: () => mocks.isCompact }
+})
+
 vi.mock('@/features/book/composables/useBookNavigation', () => ({
-  useBookNavigation: () => ({ setBookContext: mocks.setBookContext }),
+  useBookNavigation: () => ({ setBookContext: mocks.setBookContext, setBookSlotContext: mocks.setBookSlotContext }),
 }))
 
 vi.mock('@/features/book/composables/useCoverVersions', () => ({
@@ -81,6 +99,7 @@ vi.mock('@/features/book/composables/useSafeHtml', () => ({
 
 vi.mock('../api/series', () => ({
   fetchSeriesBooks: (...args: unknown[]) => mocks.fetchSeriesBooks(...args),
+  markSeriesRead: (seriesId: number, params: unknown) => mocks.markSeriesRead(seriesId, params),
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -96,10 +115,17 @@ vi.mock('../composables/useSeriesDetail', () => ({
     error: mocks.error,
     notFound: mocks.notFound,
     hasMore: mocks.hasMore,
+    hasEarlier: mocks.hasEarlier,
+    firstIndex: mocks.firstIndex,
+    loadingEarlier: mocks.loadingEarlier,
     sort: mocks.sort,
     order: mocks.order,
     libraryId: mocks.libraryId,
+    readFilter: mocks.readFilter,
     load: mocks.loadBooks,
+    jumpTo: mocks.jumpTo,
+    loadEarlier: mocks.loadEarlier,
+    refresh: mocks.refresh,
   }),
 }))
 
@@ -152,6 +178,17 @@ function makeSeriesInfo(overrides: Partial<SeriesDetail> = {}): SeriesDetail {
     ...overrides,
   }
 }
+
+const ConfirmDialogStub = defineComponent({
+  name: 'ConfirmDialog',
+  props: { open: { type: Boolean, required: true }, description: { type: String, default: '' } },
+  emits: ['confirm', 'cancel'],
+  template: `
+    <div v-if="open" data-testid="confirm-dialog" :data-description="description">
+      <button data-testid="confirm-dialog-confirm" @click="$emit('confirm')">confirm</button>
+    </div>
+  `,
+})
 
 const VirtualBookGridStub = defineComponent({
   name: 'VirtualBookGrid',
@@ -250,6 +287,7 @@ function mountView() {
         EntityNotFound: true,
         SeriesCompletionBar: true,
         SeriesGapBanner: true,
+        ConfirmDialog: ConfirmDialogStub,
       },
     },
   })
@@ -274,12 +312,24 @@ describe('SeriesDetailView', () => {
     mocks.sort = ref('seriesIndex')
     mocks.order = ref('asc')
     mocks.libraryId = ref<number | null>(null)
+    mocks.readFilter = ref('all')
+    mocks.hasEarlier = ref(false)
+    mocks.firstIndex = ref(0)
+    mocks.loadingEarlier = ref(false)
+    mocks.isCompact = ref(false)
+    mocks.jumpTo.mockReset()
+    mocks.jumpTo.mockResolvedValue(true)
+    mocks.loadEarlier.mockReset()
+    mocks.loadEarlier.mockResolvedValue(0)
+    mocks.markSeriesRead.mockReset()
+    mocks.markSeriesRead.mockResolvedValue({ updated: 1 })
 
     mocks.routerPush.mockReset()
     mocks.routerPush.mockResolvedValue(undefined)
     mocks.fetchLibraries.mockReset()
     mocks.fetchLibraries.mockResolvedValue(undefined)
     mocks.setBookContext.mockReset()
+    mocks.setBookSlotContext.mockReset()
     mocks.loadBooks.mockReset()
     mocks.loadBooks.mockResolvedValue(undefined)
     mocks.fetchSeriesBooks.mockReset()
@@ -558,5 +608,143 @@ describe('SeriesDetailView', () => {
 
     expect(mocks.loadBooks).not.toHaveBeenCalled()
     expect(mocks.setBookContext).not.toHaveBeenCalled()
+  })
+
+  describe('continuing a series', () => {
+    const next = { bookId: 55, title: 'Chapter Five', seriesIndex: '5', status: 'unread' as const, fileId: 900, format: 'epub' }
+
+    it('makes continuing the primary action and opens the reader straight on the next chapter', async () => {
+      mocks.seriesInfo.value = makeSeriesInfo({ bookCount: 9, readCount: 4, next })
+
+      const wrapper = mountView()
+      await nextTick()
+
+      const button = wrapper.get('[data-testid="series-continue"]')
+      expect(button.text()).toContain('#5 Chapter Five')
+      expect(button.text()).toMatch(/Continue/)
+
+      await button.trigger('click')
+      expect(mocks.routerPush).toHaveBeenCalledWith({ name: 'reader', params: { bookId: 55, fileId: 900 }, query: { format: 'epub' } })
+    })
+
+    it('offers to start a series nobody has opened, falling back to the book page without a readable file', async () => {
+      mocks.seriesInfo.value = makeSeriesInfo({ bookCount: 3, readCount: 0, next: { ...next, fileId: null, format: null } })
+
+      const wrapper = mountView()
+      await nextTick()
+
+      const button = wrapper.get('[data-testid="series-continue"]')
+      expect(button.text()).toMatch(/Start/)
+
+      await button.trigger('click')
+      expect(mocks.routerPush).toHaveBeenCalledWith({ name: 'book-detail', params: { bookId: 55 } })
+    })
+
+    it('has no continue action once every book is read', async () => {
+      mocks.seriesInfo.value = makeSeriesInfo({ bookCount: 1, readCount: 1, next: null })
+
+      const wrapper = mountView()
+      await nextTick()
+
+      expect(wrapper.find('[data-testid="series-continue"]').exists()).toBe(false)
+    })
+
+    it('switches to series order before jumping to the next unread chapter', async () => {
+      mocks.seriesInfo.value = makeSeriesInfo({ bookCount: 9, readCount: 4, next })
+      mocks.sort.value = 'title'
+
+      const wrapper = mountView()
+      await nextTick()
+      await wrapper.get('[data-testid="series-jump-next"]').trigger('click')
+      await flushPromises()
+
+      expect(mocks.sort.value).toBe('seriesIndex')
+      expect(mocks.jumpTo).toHaveBeenCalledWith(55)
+    })
+  })
+
+  describe('on a phone', () => {
+    beforeEach(() => {
+      mocks.isCompact.value = true
+    })
+
+    it('lists chapters as dense rows instead of a cover grid', async () => {
+      mocks.items.value = [makeBook({ id: 7, seriesIndex: '1', title: 'One' }), makeBook({ id: 8, seriesIndex: '2', title: 'Two' })]
+
+      const wrapper = mountView()
+      await nextTick()
+
+      expect(wrapper.find('[data-testid="virtual-book-grid"]').exists()).toBe(false)
+      const rows = wrapper.findAll('[data-testid="series-chapter-row"]')
+      expect(rows).toHaveLength(2)
+      expect(rows[1]!.text()).toContain('#2')
+      expect(rows[1]!.text()).toContain('Two')
+    })
+
+    it('opens the reader when a chapter row is tapped', async () => {
+      mocks.items.value = [makeBook({ id: 7, seriesIndex: '1', files: [{ id: 70, format: 'epub', role: 'primary', sizeBytes: null }] })]
+
+      const wrapper = mountView()
+      await nextTick()
+      await wrapper.get('[data-testid="series-chapter-row"] button').trigger('click')
+
+      expect(mocks.routerPush).toHaveBeenCalledWith({ name: 'reader', params: { bookId: 7, fileId: 70 }, query: { format: 'epub' } })
+    })
+
+    it('filters to unread chapters from the compact control row', async () => {
+      const wrapper = mountView()
+      await nextTick()
+      await wrapper.get('[data-testid="series-unread-filter"]').trigger('click')
+
+      expect(mocks.readFilter.value).toBe('unread')
+    })
+
+    it('confirms before marking every chapter up to a row as read', async () => {
+      mocks.libraryId.value = 3
+      mocks.items.value = [makeBook({ id: 7, seriesIndex: '12' })]
+
+      const wrapper = mountView()
+      await nextTick()
+      wrapper.getComponent({ name: 'SeriesChapterList' }).vm.$emit('markReadUpTo', mocks.items.value[0])
+      await nextTick()
+
+      const dialog = wrapper.get('[data-testid="confirm-dialog"]')
+      expect(dialog.attributes('data-description')).toContain('#12')
+      expect(mocks.markSeriesRead).not.toHaveBeenCalled()
+
+      mocks.loadBooks.mockClear()
+      await wrapper.get('[data-testid="confirm-dialog-confirm"]').trigger('click')
+      await flushPromises()
+
+      expect(mocks.markSeriesRead).toHaveBeenCalledWith(42, { upToIndex: '12', libraryId: 3 })
+      expect(mocks.loadBooks).toHaveBeenCalledWith({ reset: true, keepPreviousData: true })
+      expect(wrapper.find('[data-testid="confirm-dialog"]').exists()).toBe(false)
+    })
+
+    it('keeps true series positions for book navigation after a jump', async () => {
+      mocks.items.value = [makeBook({ id: 501, seriesIndex: '501' }), makeBook({ id: 502, seriesIndex: '502' })]
+      mocks.total.value = 1700
+      mocks.firstIndex.value = 500
+
+      mountView()
+      await nextTick()
+
+      const [slots, total] = mocks.setBookSlotContext.mock.lastCall!
+      expect(total).toBe(1700)
+      expect(slots).toHaveLength(502)
+      expect(slots[500]).toMatchObject({ id: 501 })
+      expect(slots[0]).toMatchObject({ placeholder: true })
+    })
+  })
+
+  it('refreshes the loaded chapters in place when the app resumes', async () => {
+    mountView()
+    await flushPromises()
+    mocks.loadBooks.mockClear()
+
+    window.dispatchEvent(new CustomEvent(APP_RESUMED_EVENT))
+
+    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.loadBooks).not.toHaveBeenCalled()
   })
 })

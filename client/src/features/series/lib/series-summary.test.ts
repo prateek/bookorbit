@@ -1,7 +1,16 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import type { SeriesSummary, SeriesVolumeSlot } from '@bookorbit/types'
-import { parseAddedAt, seriesAuthorLine, seriesCoverSlots, seriesExtraAuthorCount, seriesRowFacts } from './series-summary'
+import {
+  parseAddedAt,
+  seriesAuthorLine,
+  seriesCoverSlots,
+  seriesExtraAuthorCount,
+  seriesNextKickerKey,
+  seriesNextValue,
+  seriesRowFacts,
+  seriesUnreadCount,
+} from './series-summary'
 
 function slot(overrides: Partial<SeriesVolumeSlot> = {}): SeriesVolumeSlot {
   return { index: 1, bookId: 1, title: 'One', status: 'unread', ...overrides }
@@ -72,10 +81,49 @@ describe('seriesRowFacts', () => {
     expect(facts.readingVolumes).toBe(1)
   })
 
+  it('uses the true book counts when the ladder is capped short of the whole series', () => {
+    const capped = Array.from({ length: 60 }, (_, i) => slot({ index: i + 1, bookId: i + 1, status: i < 50 ? 'read' : 'unread' }))
+    const facts = seriesRowFacts(summary({ bookCount: 89, readCount: 70, readingCount: 1, volumes: capped, volumesTruncated: true }))
+
+    expect(facts.ownedVolumes).toBe(89)
+    expect(facts.readVolumes).toBe(70)
+    expect(facts.readingVolumes).toBe(1)
+    expect(facts.percentRead).toBe(79)
+    expect(facts.isComplete).toBe(false)
+  })
+
   it('is complete only when every owned volume is read', () => {
     const read = [slot({ index: 1, bookId: 1, status: 'read' }), slot({ index: 2, bookId: 2, status: 'read' })]
     expect(seriesRowFacts(summary({ volumes: read })).isComplete).toBe(true)
     expect(seriesRowFacts(summary({ volumes: [], bookCount: 0, readCount: 0 })).isComplete).toBe(false)
+  })
+})
+
+describe('up next', () => {
+  it('names the next volume by number and title until the series is finished', () => {
+    const inProgress = summary({ bookCount: 89, readCount: 40, nextBookId: 41, nextIndex: '41', nextTitle: 'Forty-one', volumesTruncated: true })
+    expect(seriesNextValue(inProgress, seriesRowFacts(inProgress))).toBe('#41 · Forty-one')
+    expect(seriesNextKickerKey(seriesRowFacts(inProgress))).toBe('series.index.next')
+
+    const done = summary({ bookCount: 2, readCount: 2, nextTitle: 'Stale' })
+    expect(seriesNextValue(done, seriesRowFacts(done))).toBeNull()
+  })
+
+  it('says "reading" only when the next volume itself is in progress', () => {
+    const staleReading = seriesRowFacts(summary({ bookCount: 600, readCount: 500, readingCount: 1, volumesTruncated: true }))
+    expect(seriesNextKickerKey(staleReading, 'unread')).toBe('series.index.next')
+    expect(seriesNextKickerKey(staleReading, 'reading')).toBe('series.index.reading')
+
+    const onlyReading = seriesRowFacts(summary({ bookCount: 10, readCount: 0, readingCount: 1, volumesTruncated: true }))
+    expect(seriesNextKickerKey(onlyReading, 'unread')).toBe('series.index.next')
+
+    const fresh = seriesRowFacts(summary({ bookCount: 10, readCount: 0, readingCount: 0, volumesTruncated: true }))
+    expect(seriesNextKickerKey(fresh, 'unread')).toBe('series.index.start')
+  })
+
+  it('counts unread books from the true totals, not the capped ladder', () => {
+    expect(seriesUnreadCount(summary({ bookCount: 1700, readCount: 500 }))).toBe(1200)
+    expect(seriesUnreadCount(summary({ bookCount: 3, readCount: 3 }))).toBe(0)
   })
 })
 

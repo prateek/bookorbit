@@ -357,6 +357,7 @@ describe('useSeriesDetail', () => {
       sort: 'title',
       order: 'desc',
       libraryId: 3,
+      readState: null,
     })
   })
 
@@ -470,5 +471,157 @@ describe('useSeriesDetail', () => {
 
     expect(error.value).toBeNull()
     expect(items.value[0]!.id).toBe(1)
+  })
+
+  describe('jumping into a long series', () => {
+    const info = {
+      id: 42,
+      name: 'Serial',
+      bookCount: 1700,
+      readCount: 500,
+      readingCount: 0,
+      authors: [],
+      possibleGaps: [],
+      expectedBookCount: null,
+      next: null,
+    }
+
+    function page(ids: number[], pageNumber: number) {
+      return { items: ids.map((id) => ({ id }) as BookCard), total: 1700, page: pageNumber, size: 50, seriesInfo: info }
+    }
+
+    it('starts the loaded run at the page the server anchored on', async () => {
+      mockFetchSeriesBooks.mockResolvedValueOnce(page([501, 502], 10))
+
+      const { items, hasEarlier, hasMore, jumpTo } = useSeriesDetail(ref(42))
+      const found = await jumpTo(501)
+
+      expect(found).toBe(true)
+      expect(mockFetchSeriesBooks).toHaveBeenCalledWith(42, expect.objectContaining({ page: 0, anchorBookId: 501 }))
+      expect(items.value.map((b) => b.id)).toEqual([501, 502])
+      expect(hasEarlier.value).toBe(true)
+      expect(hasMore.value).toBe(true)
+    })
+
+    it('fills in earlier pages without duplicating what is loaded', async () => {
+      mockFetchSeriesBooks
+        .mockResolvedValueOnce(page([501], 10))
+        .mockResolvedValueOnce(page([551], 11))
+        .mockResolvedValueOnce(page([451, 501], 9))
+
+      const { items, hasEarlier, load, jumpTo, loadEarlier } = useSeriesDetail(ref(42))
+      await jumpTo(501)
+      await load()
+      const added = await loadEarlier()
+
+      expect(mockFetchSeriesBooks).toHaveBeenNthCalledWith(2, 42, expect.objectContaining({ page: 11 }))
+      expect(mockFetchSeriesBooks).toHaveBeenNthCalledWith(3, 42, expect.objectContaining({ page: 9 }))
+      expect(added).toBe(1)
+      expect(items.value.map((b) => b.id)).toEqual([451, 501, 551])
+      expect(hasEarlier.value).toBe(true)
+    })
+
+    it('keeps a jumped run paired with its pages when a preserving reload fails', async () => {
+      mockFetchSeriesBooks.mockResolvedValueOnce(page([501], 10)).mockRejectedValueOnce(new Error('Failed to fetch series books: 500'))
+
+      const { items, hasEarlier, firstIndex, load, jumpTo } = useSeriesDetail(ref(42))
+      await jumpTo(501)
+      await load({ reset: true, keepPreviousData: true })
+
+      expect(items.value.map((b) => b.id)).toEqual([501])
+      expect(hasEarlier.value).toBe(true)
+      expect(firstIndex.value).toBe(500)
+
+      mockFetchSeriesBooks.mockResolvedValueOnce(page([551], 11))
+      await load()
+      expect(mockFetchSeriesBooks).toHaveBeenLastCalledWith(42, expect.objectContaining({ page: 11 }))
+    })
+
+    it('returns to the first page once a preserving reload succeeds', async () => {
+      mockFetchSeriesBooks.mockResolvedValueOnce(page([501], 10)).mockResolvedValueOnce(page([1, 2], 0))
+
+      const { items, hasEarlier, firstIndex, load, jumpTo } = useSeriesDetail(ref(42))
+      await jumpTo(501)
+      await load({ reset: true, keepPreviousData: true })
+
+      expect(items.value.map((b) => b.id)).toEqual([1, 2])
+      expect(hasEarlier.value).toBe(false)
+      expect(firstIndex.value).toBe(0)
+    })
+
+    it('refreshes only the first page of a jumped run and drops the pages after it', async () => {
+      mockFetchSeriesBooks
+        .mockResolvedValueOnce(page([501], 10))
+        .mockResolvedValueOnce(page([551], 11))
+        .mockResolvedValueOnce({ ...page([501, 502], 10), total: 1702 })
+        .mockResolvedValueOnce(page([551, 552], 11))
+
+      const { items, total, loading, firstIndex, hasMore, load, jumpTo, refresh } = useSeriesDetail(ref(42))
+      await jumpTo(501)
+      await load()
+      const pending = refresh()
+      expect(loading.value).toBe(false)
+      expect(items.value.map((b) => b.id)).toEqual([501, 551])
+      await pending
+
+      expect(mockFetchSeriesBooks).toHaveBeenCalledTimes(3)
+      expect(mockFetchSeriesBooks).toHaveBeenNthCalledWith(3, 42, expect.objectContaining({ page: 10 }))
+      expect(items.value.map((b) => b.id)).toEqual([501, 502])
+      expect(total.value).toBe(1702)
+      expect(firstIndex.value).toBe(500)
+      expect(hasMore.value).toBe(true)
+
+      await load()
+      expect(mockFetchSeriesBooks).toHaveBeenLastCalledWith(42, expect.objectContaining({ page: 11 }))
+    })
+
+    it('drops a refresh that a newer load superseded, and keeps the list when a refresh fails', async () => {
+      let resolveRefresh!: (value: ReturnType<typeof page>) => void
+      mockFetchSeriesBooks
+        .mockResolvedValueOnce(page([1, 2], 0))
+        .mockImplementationOnce(() => new Promise((resolve) => (resolveRefresh = resolve)))
+        .mockResolvedValueOnce(page([3], 0))
+        .mockRejectedValueOnce(new Error('Failed to fetch series books: 500'))
+
+      const { items, error, load, refresh } = useSeriesDetail(ref(42))
+      await load(true)
+      const pending = refresh()
+      await load({ reset: true, keepPreviousData: true })
+      resolveRefresh(page([9], 0))
+      await pending
+      expect(items.value.map((b) => b.id)).toEqual([3])
+
+      await refresh()
+      expect(items.value.map((b) => b.id)).toEqual([3])
+      expect(error.value).toBeNull()
+    })
+
+    it('drops a refresh when loadEarlier moves the run underneath it', async () => {
+      let resolveRefresh!: (value: ReturnType<typeof page>) => void
+      mockFetchSeriesBooks
+        .mockResolvedValueOnce(page([501], 10))
+        .mockImplementationOnce(() => new Promise((resolve) => (resolveRefresh = resolve)))
+        .mockResolvedValueOnce(page([451], 9))
+
+      const { items, firstIndex, jumpTo, loadEarlier, refresh } = useSeriesDetail(ref(42))
+      await jumpTo(501)
+      const pending = refresh()
+      await loadEarlier()
+      resolveRefresh(page([999], 10))
+      await pending
+
+      expect(items.value.map((b) => b.id)).toEqual([451, 501])
+      expect(firstIndex.value).toBe(450)
+    })
+
+    it('asks the server for unread books only when the unread filter is on', async () => {
+      mockFetchSeriesBooks.mockResolvedValue(page([], 0))
+
+      const { readFilter, load } = useSeriesDetail(ref(42))
+      readFilter.value = 'unread'
+      await load(true)
+
+      expect(mockFetchSeriesBooks).toHaveBeenCalledWith(42, expect.objectContaining({ readState: 'unread' }))
+    })
   })
 })

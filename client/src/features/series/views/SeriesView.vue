@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowUpDown, Filter, Library, Rows3, Search, X } from '@lucide/vue'
 
 import ViewHeader from '@/components/ViewHeader.vue'
+import { onAppResumed } from '@/components/sidebar/useAppResume'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { BookViewMode } from '@/composables/useDisplaySettings'
 import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
@@ -26,7 +27,7 @@ const mainRef = ref<HTMLElement | null>(null)
 useScrollRestoreOnActivate(mainRef)
 
 const { libraries, fetchLibraries } = useLibraries()
-const { items, total, facets, loading, error, hasMore, q, sort, order, libraryId, completionStatus, load } = useSeriesList()
+const { items, total, facets, loading, error, hasMore, q, sort, order, libraryId, completionStatus, load, refresh } = useSeriesList()
 
 const CARD_WIDTH_KEY = 'bookorbit:seriesCardWidth'
 const GRID_GAP_KEY = 'bookorbit:seriesGridGap'
@@ -254,6 +255,10 @@ onMounted(async () => {
     headerObserver.observe(pageHeader.value)
     measureHeaderOffset()
   }
+})
+
+onAppResumed(() => {
+  if (initialLoadComplete.value) void refresh()
 })
 
 onUnmounted(() => {
