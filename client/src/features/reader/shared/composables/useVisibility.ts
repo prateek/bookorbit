@@ -1,6 +1,17 @@
-import { onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
 const AUTO_HIDE_DELAY_MS = 3000
+const CHROME_SELECTOR = '[data-reader-chrome]'
+
+// On a touch screen there is no hover to bring the bars back, so they stay up until the next tap.
+function prefersPersistentControls() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+  return window.matchMedia('(hover: none) and (pointer: coarse)').matches
+}
+
+function isInsideChrome(target: EventTarget | null) {
+  return target instanceof Element && target.closest(CHROME_SELECTOR) !== null
+}
 
 export function useVisibility() {
   const headerVisible = ref(false)
@@ -8,6 +19,7 @@ export function useVisibility() {
   const isPinned = ref(false)
 
   let isVisibilityLocked = false
+  let isInteractingWithChrome = false
   let hideTimer: ReturnType<typeof setTimeout> | null = null
 
   function clearHideTimer() {
@@ -18,6 +30,7 @@ export function useVisibility() {
 
   function scheduleHide() {
     clearHideTimer()
+    if (isInteractingWithChrome || prefersPersistentControls()) return
     hideTimer = setTimeout(() => {
       if (!isPinned.value && !isVisibilityLocked) {
         headerVisible.value = false
@@ -108,7 +121,43 @@ export function useVisibility() {
     footerVisible.value = false
   }
 
-  onUnmounted(clearHideTimer)
+  function areControlsTemporarilyVisible() {
+    return !isPinned.value && !isVisibilityLocked && (headerVisible.value || footerVisible.value)
+  }
+
+  function handleChromePointerDown(event: Event) {
+    if (!isInsideChrome(event.target)) return
+    isInteractingWithChrome = true
+    clearHideTimer()
+  }
+
+  function handleChromePointerUp() {
+    if (!isInteractingWithChrome) return
+    isInteractingWithChrome = false
+    if (areControlsTemporarilyVisible()) scheduleHide()
+  }
+
+  function handleChromeActivity(event: Event) {
+    if (isInteractingWithChrome || !isInsideChrome(event.target)) return
+    if (areControlsTemporarilyVisible()) scheduleHide()
+  }
+
+  onMounted(() => {
+    document.addEventListener('pointerdown', handleChromePointerDown, true)
+    document.addEventListener('pointerup', handleChromePointerUp, true)
+    document.addEventListener('pointercancel', handleChromePointerUp, true)
+    document.addEventListener('input', handleChromeActivity, true)
+    document.addEventListener('keydown', handleChromeActivity, true)
+  })
+
+  onUnmounted(() => {
+    clearHideTimer()
+    document.removeEventListener('pointerdown', handleChromePointerDown, true)
+    document.removeEventListener('pointerup', handleChromePointerUp, true)
+    document.removeEventListener('pointercancel', handleChromePointerUp, true)
+    document.removeEventListener('input', handleChromeActivity, true)
+    document.removeEventListener('keydown', handleChromeActivity, true)
+  })
 
   return { headerVisible, footerVisible, isPinned, handleMiddleTap, togglePinned, showHeader, showFooter, hideOverlays, setVisibilityLock }
 }

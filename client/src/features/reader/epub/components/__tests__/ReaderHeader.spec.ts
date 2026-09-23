@@ -1,7 +1,8 @@
 import { mount } from '@vue/test-utils'
-import { defineComponent } from 'vue'
-import { describe, expect, it, vi } from 'vitest'
+import { computed, defineComponent, nextTick, ref } from 'vue'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import ReaderHeader from '../ReaderHeader.vue'
+import { READER_PAGE_CONTEXT } from '../../composables/readerPageContext'
 
 const viewport = vi.hoisted(() => ({ isCompact: false }))
 
@@ -36,6 +37,15 @@ const global = {
   },
 }
 
+function stubFullscreenSupport(supported: boolean) {
+  Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: supported })
+  Object.defineProperty(document, 'exitFullscreen', { configurable: true, value: supported ? vi.fn<() => Promise<void>>() : undefined })
+  Object.defineProperty(document.documentElement, 'requestFullscreen', {
+    configurable: true,
+    value: supported ? vi.fn<() => Promise<void>>() : undefined,
+  })
+}
+
 function mountHeader(props: Record<string, unknown> = {}) {
   return mount(ReaderHeader, {
     props: {
@@ -51,8 +61,16 @@ function mountHeader(props: Record<string, unknown> = {}) {
 }
 
 describe('ReaderHeader', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(document, 'fullscreenEnabled')
+    Reflect.deleteProperty(document, 'exitFullscreen')
+    Reflect.deleteProperty(document.documentElement, 'requestFullscreen')
+  })
+
   it('emits main toolbar actions', async () => {
+    stubFullscreenSupport(true)
     const wrapper = mountHeader()
+    await nextTick()
 
     await wrapper.get('button[aria-label="Go back"]').trigger('click')
     await wrapper.get('button[aria-label="Table of contents"]').trigger('click')
@@ -151,5 +169,54 @@ describe('ReaderHeader', () => {
     })
 
     expect(wrapper.find('button[aria-label="Listen with TTS"]').exists()).toBe(false)
+  })
+
+  it('hides the fullscreen control where the browser cannot go fullscreen', async () => {
+    stubFullscreenSupport(false)
+    const wrapper = mountHeader()
+    await nextTick()
+
+    expect(wrapper.find('button[aria-label="Enter fullscreen"]').exists()).toBe(false)
+  })
+
+  it('keeps the chapter title in the bar on phones', () => {
+    viewport.isCompact = true
+    const wrapper = mountHeader({ chapterTitle: 'Chapter 1287: The Tower' })
+
+    const title = wrapper.findAll('p').find((p) => p.text() === 'Chapter 1287: The Tower')
+    expect(title?.exists()).toBe(true)
+    expect(title?.element.parentElement?.className).not.toMatch(/(^|\s)hidden(\s|$)/)
+
+    viewport.isCompact = false
+  })
+
+  it('takes its colors from the page theme when the reader provides one', () => {
+    const mode = ref({ fg: '#5b4636', bg: '#f1e8d0', link: '#008b8b' })
+    const wrapper = mount(ReaderHeader, {
+      props: { chapterTitle: 'Chapter 4', isBookmarked: false, settingsOpen: false, footerMode: 0 },
+      slots: { settingsPanel: '<p />' },
+      global: {
+        ...global,
+        provide: { [READER_PAGE_CONTEXT as symbol]: { mode: computed(() => mode.value), flow: ref('paginated') } },
+      },
+    })
+
+    const style = wrapper.get('header').attributes('style') ?? ''
+    expect(style).toContain('--background: #f1e8d0')
+    expect(style).toContain('--foreground: #5b4636')
+  })
+
+  it('marks itself as reader chrome so auto-hide can pause while it is in use', () => {
+    const wrapper = mountHeader()
+
+    expect(wrapper.get('header').attributes()).toHaveProperty('data-reader-chrome')
+  })
+
+  it('labels the tap-zone and pin buttons through i18n', () => {
+    const pinned = mountHeader({ isPinned: true })
+
+    expect(pinned.find('[aria-label="Toggle tap zones"]').exists()).toBe(true)
+    expect(pinned.find('[aria-label="Unpin menu"]').exists()).toBe(true)
+    expect(mountHeader({ isPinned: false }).find('[aria-label="Pin menu"]').exists()).toBe(true)
   })
 })

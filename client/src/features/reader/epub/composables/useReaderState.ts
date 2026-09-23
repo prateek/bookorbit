@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, getCurrentInstance, provide, ref } from 'vue'
 import {
   EPUB_FONT_SIZE_MAX,
   EPUB_FONT_SIZE_MIN,
@@ -18,6 +18,7 @@ import { themes } from '../constants/themes'
 import type { Theme, ThemeMode } from '../constants/themes'
 import { MEDIA_OVERLAY_HIGHLIGHT_CSS_VARIABLE } from '../../media-overlay/lib/media-overlay-highlight'
 import type { FoliateRenderer } from './useFoliate'
+import { READER_PAGE_CONTEXT } from './readerPageContext'
 
 export interface ReaderState {
   fontSize: number
@@ -44,6 +45,22 @@ export interface ReaderState {
 export interface ApplyReaderStateOptions {
   flow?: ReaderState['flow']
 }
+
+// Publisher backgrounds cannot survive a page theme, but flattening them all to the page color
+// erased the status boxes and tables web serials lean on. Elements that plausibly carry their
+// own background get a theme-derived tint instead, so the box stays visible in every theme.
+// The tint goes through :where() to add no specificity: it beats `body *` by coming later, and
+// the read-aloud highlight's class rule still beats it.
+const TINTED_BOX_SELECTORS = [
+  'table',
+  'pre',
+  'fieldset',
+  '[bgcolor]',
+  '[style*="background" i]',
+  '[class*="box" i]',
+  '[class*="status" i]',
+  '[class*="system" i]',
+].join(', ')
 
 const defaults: ReaderState = {
   fontSize: 16,
@@ -118,6 +135,8 @@ export function useReaderState() {
     const theme = currentTheme.value
     return isDark.value ? theme.dark : theme.light
   })
+
+  if (getCurrentInstance()) provide(READER_PAGE_CONTEXT, { mode: activeMode, flow })
 
   function generateCSS(): string {
     const {
@@ -260,8 +279,14 @@ export function useReaderState() {
       }
       body * {
           color: inherit !important;
-          border-color: currentColor !important;
-          background-color: ${mode.bg} !important;
+          border-color: color-mix(in srgb, currentColor 45%, transparent) !important;
+          background-color: transparent !important;
+      }
+      body :where(${TINTED_BOX_SELECTORS}) {
+          background-color: color-mix(in srgb, ${mode.fg} ${dark ? '10%' : '7%'}, ${mode.bg}) !important;
+      }
+      body th {
+          background-color: color-mix(in srgb, ${mode.fg} ${dark ? '16%' : '12%'}, ${mode.bg}) !important;
       }
       a:any-link {
           color: ${mode.link} !important;
@@ -269,7 +294,6 @@ export function useReaderState() {
       svg, img {
           background-color: transparent !important;
           ${!dark ? 'mix-blend-mode: multiply;' : ''}
-      }
       }`
           : ''
       }

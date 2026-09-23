@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import ReaderSettingsSheet from '../ReaderSettingsSheet.vue'
 
 const SheetStub = defineComponent({
@@ -14,6 +14,24 @@ const SheetContentStub = defineComponent({
   name: 'SheetContentStub',
   template: '<div data-testid="sheet-content"><slot /></div>',
 })
+
+beforeAll(() => {
+  Object.defineProperty(Element.prototype, 'setPointerCapture', { configurable: true, value: () => {} })
+})
+
+function pointer(type: string, clientY: number) {
+  const event = new MouseEvent(type, { bubbles: true, clientY })
+  Object.defineProperties(event, { pointerId: { value: 1 }, isPrimary: { value: true } })
+  return event
+}
+
+async function dragGrabber(wrapper: ReturnType<typeof mountSheet>, deltaY: number) {
+  const grabber = wrapper.get('[data-sheet-grabber]').element
+  grabber.dispatchEvent(pointer('pointerdown', 400))
+  grabber.dispatchEvent(pointer('pointermove', 400 + deltaY))
+  grabber.dispatchEvent(pointer('pointerup', 400 + deltaY))
+  await wrapper.vm.$nextTick()
+}
 
 function mountSheet(props: Record<string, unknown> = {}) {
   return mount(ReaderSettingsSheet, {
@@ -80,27 +98,49 @@ describe('ReaderSettingsSheet', () => {
       expect(buttons[0].attributes('aria-label')).toBe('Close settings')
     })
 
-    it('leaves the grab handle decorative rather than passing it off as a control', () => {
-      // The reporter tried to drag this and it did nothing. There is no swipe-to-dismiss, so the
-      // handle must stay hidden from assistive tech instead of advertising an exit that is not there.
-      const wrapper = mountSheet()
-      const handle = wrapper.get('[data-testid="sheet-content"] .rounded-full')
+    it('turns the grab handle into a real control', () => {
+      const grabber = mountSheet().get('[data-sheet-grabber]')
 
-      expect(handle.element.tagName).toBe('DIV')
-      expect(handle.attributes('aria-hidden')).toBe('true')
+      expect(grabber.attributes('role')).toBe('button')
+      expect(grabber.attributes('aria-label')).toBe('Expand panel')
+    })
+
+    it('dismisses when the grab handle is swiped down', async () => {
+      const wrapper = mountSheet()
+
+      await dragGrabber(wrapper, 300)
+
+      expect(wrapper.emitted('update:open')).toEqual([[false]])
     })
   })
 
   describe('sheet geometry', () => {
-    it('caps its height against the dynamic viewport, not the large viewport', () => {
-      // `vh` resolves against the toolbar-retracted viewport. On a phone browser with its chrome
-      // showing, `max-h-[85vh]` covered essentially the whole visible area and left no overlay to
-      // tap, which is why the panel could only be dismissed in fullscreen. Asserting the class is
-      // crude, but jsdom has no layout, and this is the exact token that regressed.
+    it('opens at half height so the page stays visible, measured against the dynamic viewport', () => {
+      // `vh` resolves against the toolbar-retracted viewport, so on a phone with browser chrome
+      // showing a vh-sized sheet covered everything. jsdom has no layout, so the tokens are the check.
       const content = mountSheet().get('[data-testid="sheet-content"]')
 
-      expect(content.classes()).toContain('max-h-[85dvh]')
-      expect(content.classes()).not.toContain('max-h-[85vh]')
+      expect(content.attributes('style')).toContain('height: 56dvh')
+      expect(content.classes()).toContain('max-h-[92dvh]')
+    })
+
+    it('expands to full height when the grab handle is swiped up', async () => {
+      const wrapper = mountSheet()
+
+      await dragGrabber(wrapper, -300)
+
+      expect(wrapper.get('[data-testid="sheet-content"]').attributes('style')).toContain('height: 92dvh')
+      expect(wrapper.emitted('update:open')).toBeUndefined()
+    })
+
+    it('reopens at half height after being expanded', async () => {
+      const wrapper = mountSheet()
+      await dragGrabber(wrapper, -300)
+
+      await wrapper.setProps({ open: false })
+      await wrapper.setProps({ open: true })
+
+      expect(wrapper.get('[data-testid="sheet-content"]').attributes('style')).toContain('height: 56dvh')
     })
 
     it('suppresses the built-in corner close so it cannot collide with the panel header', () => {

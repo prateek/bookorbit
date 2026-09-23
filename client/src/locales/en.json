@@ -9222,6 +9222,10 @@
       "listen": "Listen",
       "listenWithNarration": "Listen with narration",
       "listenWithTts": "Listen with TTS",
+      "toggleTapZones": "Toggle tap zones",
+      "showTapZones": "Show tap zones",
+      "pinMenu": "Pin menu",
+      "unpinMenu": "Unpin menu",
       "footerMode": {
         "pageProgress": "Footer info: page + progress",
         "sessionTimeLeft": "Footer info: reading session + time left",
@@ -9234,7 +9238,8 @@
       "goToPlaceholder": "45 or p123",
       "jumpToLocation": "Jump to location",
       "jumpTooltip": "Jump to % or page (e.g. 45 or p123)",
-      "go": "Go"
+      "go": "Go",
+      "progress": "Reading progress"
     },
     "settings": {
       "title": "Settings",
@@ -9291,6 +9296,11 @@
       "columnGap": "Column gap",
       "justifyText": "Justify text",
       "hyphenation": "Hyphenation",
+      "applyTo": {
+        "label": "Apply changes to",
+        "allBooks": "All books",
+        "thisBook": "This book"
+      },
       "themes": {
         "default": "Default",
         "gray": "Gray",
@@ -9349,6 +9359,8 @@
       "notesOnly": "Notes only",
       "deleteBookmark": "Delete bookmark",
       "deleteHighlight": "Delete highlight",
+      "confirmDelete": "Tap again to delete",
+      "confirmDeleteShort": "Delete?",
       "approximatePosition": "Synced from device; exact position unavailable, jumps to the chapter",
       "sort": {
         "readingOrder": "Reading order",
@@ -9500,6 +9512,20 @@
     "sheet": {
       "expand": "Expand panel",
       "collapse": "Collapse panel"
+    },
+    "tapGuide": {
+      "mobile": {
+        "title": "Mobile Interactions",
+        "subtitle": "Optimized for handheld touch reading",
+        "edgesTitle": "Tap the Left or Right Edge",
+        "edgesBody": "Left goes back a page, right goes forward. Right-to-left books swap the sides.",
+        "centerTitle": "Tap the Center",
+        "centerBody": "Shows or hides the header and footer",
+        "swipeTitle": "Swipe Left / Right",
+        "swipeBody": "Turns the page forward or backward",
+        "scrolledTitle": "In Scrolled Mode",
+        "scrolledBody": "Tap anywhere to show or hide the controls. Scroll to read; taps and swipes do not turn pages."
+      }
     },
     "narration": {
       "fallbackTitle": "Narration",

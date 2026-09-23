@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronLeft, ChevronRight, ChevronsUpDown } from '@lucide/vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { readerChromeThemeStyle, useReaderPageContext } from '../composables/readerPageContext'
 
 const { t } = useI18n()
 
@@ -23,6 +24,15 @@ const emit = defineEmits<{
   seek: [fraction: number]
 }>()
 
+const pageContext = useReaderPageContext()
+const chromeStyle = computed(() => readerChromeThemeStyle(pageContext?.mode.value))
+const showScrollProgress = computed(() => pageContext?.flow.value === 'scrolled')
+const progressPercent = computed(() => Math.round(Math.min(Math.max(props.fraction, 0), 1) * 1000) / 10)
+const scrollProgressStyle = computed(() => ({
+  width: `${progressPercent.value}%`,
+  background: pageContext ? `color-mix(in srgb, ${pageContext.mode.value.fg} 45%, transparent)` : 'var(--primary)',
+}))
+
 const showGoToInput = ref(false)
 const goToValue = ref('')
 const goToInputRef = ref<HTMLInputElement | null>(null)
@@ -37,7 +47,8 @@ function handlePercentageClick() {
   if (props.navigationLocked) return
   showGoToInput.value = true
   goToValue.value = ''
-  setTimeout(() => goToInputRef.value?.focus(), 0)
+  // Focus as soon as the input renders so the focus stays tied to the tap; iOS only raises the keyboard for that.
+  void nextTick(() => goToInputRef.value?.focus())
 }
 
 function handleGoToSubmit() {
@@ -87,8 +98,25 @@ watch(
 
 <template>
   <footer
-    class="fixed bottom-0 left-0 right-0 h-10 sm:h-11 z-50 flex items-center gap-2 px-2 sm:gap-3 sm:px-4 bg-background/90 backdrop-blur-md border-t border-border"
+    data-reader-chrome
+    class="reader-bar fixed bottom-0 left-0 right-0 z-50 flex h-[calc(2.75rem+env(safe-area-inset-bottom))] items-center gap-1 border-t border-border bg-background/95 px-1 pb-[env(safe-area-inset-bottom)] text-foreground backdrop-blur-md sm:gap-3 sm:px-4"
+    :style="chromeStyle"
   >
+    <Teleport to="body">
+      <div
+        v-if="showScrollProgress"
+        class="pointer-events-none fixed inset-x-0 bottom-0 z-40 h-0.5"
+        data-testid="scroll-progress"
+        role="progressbar"
+        :aria-valuenow="progressPercent"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-label="t('reader.footer.progress')"
+      >
+        <div class="h-full" :style="scrollProgressStyle" />
+      </div>
+    </Teleport>
+
     <Tooltip>
       <TooltipTrigger as-child>
         <button
@@ -104,7 +132,7 @@ watch(
       <TooltipContent>{{ t('reader.footer.previousSection') }}</TooltipContent>
     </Tooltip>
 
-    <div class="relative flex-1 flex items-center h-6">
+    <div class="relative flex h-11 flex-1 items-center">
       <!-- Chapter highlight segment -->
       <div
         v-if="chapterStartFraction < chapterEndFraction"
@@ -123,12 +151,10 @@ watch(
         step="0.001"
         :value="fraction"
         :disabled="!!props.navigationLocked"
+        :aria-label="t('reader.footer.progress')"
         @input="onSeek"
-        class="w-full h-1 rounded-full appearance-none relative z-10 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
-        :style="{
-          accentColor: 'var(--primary)',
-          background: `linear-gradient(to right, var(--primary) ${fraction * 100}%, var(--border) ${fraction * 100}%)`,
-        }"
+        class="reader-progress-range relative z-10 h-full w-full cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+        :style="{ '--reader-progress-fill': `${fraction * 100}%` }"
       />
       <template v-for="(sf, idx) in sectionFractions" :key="idx">
         <div
@@ -144,8 +170,11 @@ watch(
         ref="goToInputRef"
         v-model="goToValue"
         type="text"
+        inputmode="decimal"
+        enterkeyhint="go"
+        :aria-label="t('reader.footer.jumpToLocation')"
         :placeholder="t('reader.footer.goToPlaceholder')"
-        class="w-24 h-8 text-sm tabular-nums text-center bg-muted border border-border rounded px-2 py-1 text-foreground outline-none focus:ring-1 focus:ring-primary"
+        class="h-9 w-24 rounded border border-border bg-muted px-2 py-1 text-center text-base tabular-nums text-foreground outline-none focus:ring-1 focus:ring-primary sm:h-8 sm:text-sm"
         @keydown.enter="handleGoToSubmit"
         @keydown="handleGoToKeydown"
         @blur="handleGoToBlur"
@@ -158,7 +187,7 @@ watch(
             type="button"
             :aria-label="t('reader.footer.jumpToLocation')"
             :disabled="!!props.navigationLocked"
-            class="h-8 px-2 rounded-md border border-transparent hover:border-border text-xs tabular-nums shrink-0 min-w-18 text-center text-muted-foreground hover:text-foreground transition-colors inline-flex items-center justify-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:text-muted-foreground"
+            class="h-11 px-2 sm:h-8 rounded-md border border-transparent hover:border-border text-xs tabular-nums shrink-0 min-w-18 text-center text-muted-foreground hover:text-foreground transition-colors inline-flex items-center justify-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:text-muted-foreground"
             @click="handlePercentageClick"
           >
             <span class="text-[11px] uppercase tracking-wide">{{ t('reader.footer.go') }}</span>
@@ -186,3 +215,66 @@ watch(
     </Tooltip>
   </footer>
 </template>
+
+<style scoped>
+@media (pointer: coarse) {
+  .reader-bar :deep(.viewer-btn) {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+}
+
+.reader-progress-range {
+  appearance: none;
+  background: transparent;
+}
+
+.reader-progress-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--primary) var(--reader-progress-fill), var(--border) var(--reader-progress-fill));
+}
+
+.reader-progress-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.reader-progress-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.reader-progress-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border: 2px solid var(--background);
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.reader-progress-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--background);
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+@media (pointer: coarse) {
+  .reader-progress-range::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+    margin-top: -12px;
+  }
+
+  .reader-progress-range::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+  }
+}
+</style>
