@@ -104,6 +104,13 @@ function handleToggleTheme() {
   transition: color 0.15s ease;
 }
 
+@media (max-width: 767px), (pointer: coarse) {
+  .auth-appearance-button {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+}
+
 .auth-appearance-button:hover,
 .auth-appearance-button:focus-visible {
   color: var(--foreground);

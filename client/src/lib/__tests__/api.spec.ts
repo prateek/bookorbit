@@ -4,9 +4,11 @@ import {
   api,
   fetchWithAuthProxyRecovery,
   getValidToken,
+  isServerUnreachable,
   NetworkError,
   onAuthRecovered,
   refreshAccessToken,
+  ServerUnavailableError,
   setAccessToken,
   setOnAuthFailure,
 } from '@/lib/api'
@@ -106,6 +108,23 @@ describe('api wrapper', () => {
     setOnAuthFailure(onFail)
     await expect(api('/api/v1/books/1')).rejects.toThrow('Session expired')
     expect(onFail).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['the network is down', () => Promise.reject(new TypeError('Load failed')), NetworkError],
+    ['the gateway reports the server down', () => Promise.resolve(new Response('', { status: 503 })), ServerUnavailableError],
+  ])('keeps the session when the refresh fails because %s', async (_label, refresh, expected) => {
+    globalThis.fetch = vi.fn<typeof fetch>((input: RequestInfo | URL) => {
+      if (urlOf(input).endsWith('/api/v1/auth/refresh')) return refresh()
+      return Promise.resolve(new Response('', { status: 401 }))
+    }) as never
+
+    const onFail = vi.fn<() => void>()
+    setOnAuthFailure(onFail)
+    const reason = await api('/api/v1/books/1').catch((e: unknown) => e)
+    expect(reason).toBeInstanceOf(expected)
+    expect(isServerUnreachable(reason)).toBe(true)
+    expect(onFail).not.toHaveBeenCalled()
   })
 
   describe('expiry awareness', () => {

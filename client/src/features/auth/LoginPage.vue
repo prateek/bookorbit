@@ -105,8 +105,11 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
             v-model="username"
             type="text"
             autocomplete="username"
+            autocapitalize="none"
+            autocorrect="off"
+            spellcheck="false"
             required
-            class="w-full rounded-md border border-input bg-background/60 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 backdrop-blur-sm"
+            class="w-full min-h-11 rounded-md border border-input bg-background/60 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 backdrop-blur-sm md:min-h-0 md:text-sm"
           />
         </div>
 
@@ -118,7 +121,7 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
             type="password"
             autocomplete="current-password"
             required
-            class="w-full rounded-md border border-input bg-background/60 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 backdrop-blur-sm"
+            class="w-full min-h-11 rounded-md border border-input bg-background/60 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 backdrop-blur-sm md:min-h-0 md:text-sm"
           />
         </div>
 
@@ -130,7 +133,7 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
         <button
           type="submit"
           :disabled="loading"
-          class="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors animate-fade-up"
+          class="w-full min-h-11 rounded-md bg-primary px-4 py-2 text-sm font-medium md:min-h-0 text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors animate-fade-up"
           style="animation-delay: 240ms"
         >
           {{ loading ? t('auth.login.signingIn') : t('auth.login.signIn') }}
