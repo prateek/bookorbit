@@ -24,9 +24,12 @@ import {
   type BookProgressChangedPayload,
 } from '../achievement/achievement-events.service';
 import { ScanJobStore } from './scan-job-store.service';
+import { ScannerRepository } from './scanner.repository';
 import { rejectSocketConnection } from '../../common/utils/ws-auth.utils';
 import { appConfig } from '../../config/config';
 import { BOOK_COVER_CHANGED, BookCoverEventsService } from '../book-cover-store/book-cover-events.service';
+
+type SocketUser = { id: number; isSuperuser: boolean };
 
 @WebSocketGateway({ namespace: '/scan', cors: { credentials: true } })
 export class ScanGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy {
@@ -39,12 +42,16 @@ export class ScanGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   private readonly handleCoverChanged = (event: CoverRefreshedEvent): void => {
     this.emitCoverRefreshed(event);
   };
+  // Socket.IO delivers messages while handleConnection is still verifying the token, so a
+  // subscription waits on the same verification instead of reading a user that is not set yet.
+  private readonly socketUsers = new WeakMap<Socket, Promise<SocketUser | null>>();
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly authService: AuthService,
     private readonly scanJobStore: ScanJobStore,
     private readonly achievementEvents: AchievementEventsService,
+    private readonly scannerRepo: ScannerRepository,
     @Inject(appConfig.KEY) app: ConfigType<typeof appConfig>,
     @Optional() private readonly coverEvents?: BookCoverEventsService,
   ) {
@@ -71,15 +78,16 @@ export class ScanGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   async handleConnection(client: Socket): Promise<void> {
+    const authentication = this.authenticate(client);
+    this.socketUsers.set(
+      client,
+      authentication.then(
+        (user) => user,
+        () => null,
+      ),
+    );
     try {
-      const token = client.handshake.auth?.token as string | undefined;
-      if (!token) throw new UnauthorizedException('No token provided');
-      const payload = this.jwtService.verify<{ sub: number; ver: number; sid?: number; amr?: AuthenticationMethod }>(token, {
-        algorithms: ['HS256'],
-      });
-      const user = await this.authService.validateSessionUser(payload.sub, payload.ver, payload.amr ?? 'legacy', payload.sid);
-      if (!user) throw new UnauthorizedException('User not found or token revoked');
-      (client.data as Record<string, unknown>).user = user;
+      const user = await authentication;
       await client.join(`user:${user.id}`);
       this.logger.debug(`[scanner.ws_connection] [start] userId=${user.id} socketId=${client.id} - websocket connected`);
     } catch (err) {
@@ -90,13 +98,54 @@ export class ScanGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     }
   }
 
+  private async authenticate(client: Socket) {
+    const token = client.handshake.auth?.token as string | undefined;
+    if (!token) throw new UnauthorizedException('No token provided');
+    const payload = this.jwtService.verify<{ sub: number; ver: number; sid?: number; amr?: AuthenticationMethod }>(token, {
+      algorithms: ['HS256'],
+    });
+    const user = await this.authService.validateSessionUser(payload.sub, payload.ver, payload.amr ?? 'legacy', payload.sid);
+    if (!user) throw new UnauthorizedException('User not found or token revoked');
+    (client.data as Record<string, unknown>).user = user;
+    return user;
+  }
+
+  private async canAccessLibrary(user: SocketUser, libraryId: number): Promise<boolean> {
+    if (user.isSuperuser) return true;
+    const userIds = await this.scannerRepo.findLibraryAccessibleUserIds(libraryId);
+    return userIds.includes(user.id);
+  }
+
   handleDisconnect(client: Socket): void {
     this.logger.debug(`[scanner.ws_connection] [end] socketId=${client.id} - websocket disconnected`);
   }
 
+  /**
+   * Library rooms carry book titles and scan progress, so joining one takes the same library
+   * access a controller would demand. A refused subscription is logged and dropped.
+   */
   @SubscribeMessage('subscribe:library')
-  handleSubscribeLibrary(client: Socket, libraryId: number): void {
-    void client.join(`library:${libraryId}`);
+  async handleSubscribeLibrary(client: Socket, rawLibraryId: unknown): Promise<void> {
+    const startedAt = Date.now();
+    const libraryId = typeof rawLibraryId === 'number' || typeof rawLibraryId === 'string' ? Number(rawLibraryId) : Number.NaN;
+    const user = await this.socketUsers.get(client);
+    let allowed: boolean;
+    try {
+      allowed = !!user && Number.isSafeInteger(libraryId) && libraryId > 0 && (await this.canAccessLibrary(user, libraryId));
+    } catch (err) {
+      this.logger.warn(
+        `[scanner.ws_subscribe] [fail] userId=${user?.id ?? 0} libraryId=${libraryId} socketId=${client.id} durationMs=${Date.now() - startedAt} errorClass=${err instanceof Error ? err.name : 'Error'} error="${sanitizeLogValue(err instanceof Error ? err.message : String(err))}" - library access check failed`,
+      );
+      return;
+    }
+    if (!allowed) {
+      this.logger.warn(
+        `[scanner.ws_subscribe] [fail] userId=${user?.id ?? 0} libraryId=${libraryId} socketId=${client.id} durationMs=${Date.now() - startedAt} errorClass=ForbiddenException error="library access denied" - library subscription rejected`,
+      );
+      return;
+    }
+
+    await client.join(`library:${libraryId}`);
     // Send current snapshot immediately so reconnecting clients catch up.
     const entry = this.scanJobStore.get(libraryId);
     if (entry) {
