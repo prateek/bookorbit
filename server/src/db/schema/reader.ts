@@ -240,8 +240,9 @@ export const readingSessions = pgTable(
     userId: integer('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    // Nullable: manual sessions are book-level and have no file.
-    bookFileId: integer('book_file_id').references(() => bookFiles.id, { onDelete: 'cascade' }),
+    // Nullable: manual sessions are book-level and have no file. Set null on file delete so
+    // retiring a replaced file keeps the book's reading history, which stats rebuild from.
+    bookFileId: integer('book_file_id').references(() => bookFiles.id, { onDelete: 'set null' }),
     bookId: integer('book_id')
       .notNull()
       .references(() => books.id, { onDelete: 'cascade' }),

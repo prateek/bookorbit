@@ -1172,6 +1172,27 @@ describe('UploadService', () => {
       expect(processor.extractAudioDurationAsync).toHaveBeenCalledWith(10, '/library/Book Title/book.epub', 'epub');
     });
 
+    it('refreshes book metadata from an added file that becomes primary', async () => {
+      db.select.mockReturnValueOnce(selectJoinChain([makeBookRow()])).mockReturnValueOnce(noHashConflict());
+      mockElection({ primaryFileId: 99, status: 'present', formatPriority: ['epub', 'm4b'] }, [
+        { id: 55, format: 'epub', sizeBytes: 456 },
+        { id: 99, format: 'm4b', sizeBytes: 1000 },
+      ]);
+
+      await service.addFileToBook(10, 'book.epub', {} as any, user);
+
+      expect(processor.extractMetadataAsync).toHaveBeenCalledWith(10, '/library/Book Title/book.epub', 'epub');
+      expect(processor.extractAudioDurationAsync).not.toHaveBeenCalled();
+    });
+
+    it('does not refresh book metadata from an added file that stays secondary', async () => {
+      db.select.mockReturnValueOnce(selectJoinChain([makeBookRow()])).mockReturnValueOnce(noHashConflict());
+
+      await service.addFileToBook(10, 'book.epub', {} as any, user);
+
+      expect(processor.extractMetadataAsync).not.toHaveBeenCalled();
+    });
+
     it('promotes new file to primary when book has no primary file', async () => {
       db.select.mockReturnValueOnce(selectJoinChain([makeBookRow({ primaryFileId: null })])).mockReturnValueOnce(noHashConflict());
       mockElection({ primaryFileId: null, status: 'present', formatPriority: ['epub', 'm4b'] }, [{ id: 55, format: 'epub', sizeBytes: 456 }]);
@@ -1310,6 +1331,7 @@ describe('UploadService', () => {
 
       expect(processor.extractAudioDurationAsync).not.toHaveBeenCalled();
       expect(processor.extractAddedAudioChaptersAsync).not.toHaveBeenCalled();
+      expect(processor.extractMetadataAsync).not.toHaveBeenCalled();
       expect(storage.cleanup).toHaveBeenCalledWith('/tmp/upload.bin');
       expect(storage.cleanup).not.toHaveBeenCalledWith('/library/Book Title/book.epub');
     });

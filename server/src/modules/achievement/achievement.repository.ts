@@ -1086,8 +1086,7 @@ export class AchievementRepository {
         value: sql<number>`coalesce(max(${bookMetadata.pageCount} * least(greatest(${readingSessions.progressDelta}, 0), 100) / 100.0), 0)::float`,
       })
       .from(readingSessions)
-      .innerJoin(bookFiles, eq(bookFiles.id, readingSessions.bookFileId))
-      .innerJoin(bookMetadata, eq(bookMetadata.bookId, bookFiles.bookId))
+      .innerJoin(bookMetadata, eq(bookMetadata.bookId, readingSessions.bookId))
       .where(
         and(
           eq(readingSessions.userId, userId),
@@ -1111,8 +1110,7 @@ export class AchievementRepository {
         value: sql<number>`coalesce(sum(${bookMetadata.pageCount} * least(greatest(${readingSessions.progressDelta}, 0), 100) / 100.0), 0)::float`,
       })
       .from(readingSessions)
-      .innerJoin(bookFiles, eq(bookFiles.id, readingSessions.bookFileId))
-      .innerJoin(bookMetadata, eq(bookMetadata.bookId, bookFiles.bookId))
+      .innerJoin(bookMetadata, eq(bookMetadata.bookId, readingSessions.bookId))
       .where(
         and(
           eq(readingSessions.userId, userId),
@@ -1134,8 +1132,7 @@ export class AchievementRepository {
       SELECT COALESCE(MAX(day_pages), 0)::float AS max_pages FROM (
         SELECT SUM(bm.page_count * LEAST(GREATEST(rs.progress_delta, 0), 100) / 100.0) AS day_pages
         FROM reading_sessions rs
-        JOIN book_files bf ON bf.id = rs.book_file_id
-        JOIN book_metadata bm ON bm.book_id = bf.book_id
+        JOIN book_metadata bm ON bm.book_id = rs.book_id
         WHERE rs.user_id = ${userId}
           AND bm.page_count IS NOT NULL AND bm.page_count > 0
           AND rs.progress_delta IS NOT NULL AND rs.progress_delta > 0 AND rs.progress_delta <= 100
