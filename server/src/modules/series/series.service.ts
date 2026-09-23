@@ -1,17 +1,29 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 
-import type { BooksPage, SeriesBooksPage, SeriesDetail, SeriesNextBookResponse, SeriesPage, SeriesSummary } from '@bookorbit/types';
+import type {
+  BooksPage,
+  SeriesBooksPage,
+  SeriesContinueTarget,
+  SeriesDetail,
+  SeriesMarkReadResponse,
+  SeriesNextBookResponse,
+  SeriesPage,
+  SeriesSummary,
+} from '@bookorbit/types';
 import { READER_OPENABLE_FORMATS, SERIES_GAP_PREVIEW_LIMIT, getOpenableFormatsForGroup } from '@bookorbit/types';
 import { MAX_OFFSET_ROWS, isOffsetWithinLimit } from '../../common/constants/pagination.constants';
 import type { RequestUser } from '../../common/types/request-user';
 import { normalizeSeriesTotalBooks } from '../../common/utils/series-total-books.utils';
+import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import { assembleBookCards } from '../book/utils/assemble-book-cards';
 import { BookReadService } from '../book/book-read.service';
+import { BookService } from '../book/book.service';
 import { LibraryService } from '../library/library.service';
 import { FindNextSeriesBookDto } from './dto/find-next-series-book.dto';
 import { ListSeriesBooksDto } from './dto/list-series-books.dto';
 import { ListSeriesDto } from './dto/list-series.dto';
-import { SeriesRepository } from './series.repository';
+import { MarkSeriesReadDto } from './dto/mark-series-read.dto';
+import { SeriesRepository, type SeriesContinueRow } from './series.repository';
 import { computeSeriesGaps } from './utils/series-gaps.utils';
 import { buildVolumeLadder } from './utils/series-ladder.utils';
 
@@ -23,6 +35,7 @@ export class SeriesService {
     private readonly seriesRepo: SeriesRepository,
     private readonly bookReadService: BookReadService,
     private readonly libraryService: LibraryService,
+    private readonly bookService: BookService,
   ) {}
 
   private assertPaginationWindow(page: number, size: number): void {
@@ -77,9 +90,10 @@ export class SeriesService {
         volumesTruncated: ladder.truncated,
         gaps: ladder.gaps.slice(0, SERIES_GAP_PREVIEW_LIMIT),
         gapCount: ladder.gaps.length,
-        nextBookId: ladder.next?.bookId ?? null,
-        nextIndex: ladder.next?.index ?? null,
-        nextTitle: ladder.next?.title ?? null,
+        nextBookId: row.next?.bookId ?? null,
+        nextIndex: row.next?.seriesIndex ?? null,
+        nextTitle: row.next?.title ?? null,
+        nextStatus: row.next ? toNextStatus(row.next.status) : null,
       };
     });
 
@@ -103,13 +117,9 @@ export class SeriesService {
       throw new NotFoundException('Series not found');
     }
 
-    const [detail, bookPage] = await Promise.all([
-      this.seriesRepo.findDetail({
-        seriesId,
-        userId: user.id,
-        libraryIds,
-        contentFilters: user.isSuperuser ? undefined : user.contentFilters,
-      }),
+    const contentFilters = user.isSuperuser ? undefined : user.contentFilters;
+    const [detail, bookPage, continueRow] = await Promise.all([
+      this.seriesRepo.findDetail({ seriesId, userId: user.id, libraryIds, contentFilters }),
       this.seriesRepo.findBookIds({
         seriesId,
         page,
@@ -117,8 +127,12 @@ export class SeriesService {
         sort: dto.sort ?? 'seriesIndex',
         order: dto.order ?? 'asc',
         libraryIds,
-        contentFilters: user.isSuperuser ? undefined : user.contentFilters,
+        userId: user.id,
+        readState: dto.readState,
+        anchorBookId: dto.anchorBookId,
+        contentFilters,
       }),
+      this.seriesRepo.findContinueTarget({ seriesId, userId: user.id, libraryIds, formats: [...READER_OPENABLE_FORMATS], contentFilters }),
     ]);
 
     if (!detail) {
@@ -136,9 +150,11 @@ export class SeriesService {
             name: existsInAnyLibrary.name,
             bookCount: 0,
             readCount: 0,
+            readingCount: 0,
             authors: existsInAnyLibrary.authors,
             possibleGaps: [],
             expectedBookCount: existsInAnyLibrary.expectedBookCount ?? null,
+            next: null,
           };
           return { items: [], total: 0, page, size, seriesInfo: emptyInfo };
         }
@@ -183,12 +199,14 @@ export class SeriesService {
       name: detail.name,
       bookCount: detail.bookCount,
       readCount: detail.readCount,
+      readingCount: detail.readingCount,
       authors: detail.authors,
       possibleGaps,
       expectedBookCount: detail.expectedBookCount ?? null,
+      next: toContinueTarget(continueRow),
     };
 
-    return { items, total: bookPage.total, page, size, seriesInfo };
+    return { items, total: bookPage.total, page: bookPage.page, size, seriesInfo };
   }
 
   /**
@@ -221,6 +239,45 @@ export class SeriesService {
     };
   }
 
+  /**
+   * Marks a series read, or only its books numbered up to `upToIndex`, so a reader catching up on
+   * a long serial does not tick chapters one by one. Books already read are left alone, which keeps
+   * their finish dates.
+   */
+  async markRead(user: RequestUser, seriesId: number, dto: MarkSeriesReadDto): Promise<SeriesMarkReadResponse> {
+    const event = 'series.mark_read';
+    const startedAt = Date.now();
+    const upToIndex = dto.upToIndex ?? 'all';
+    this.logger.log(
+      `[${event}] [start] seriesId=${seriesId} userId=${user.id} upToIndex=${upToIndex} libraryId=${dto.libraryId ?? 'all'} - mark series read started`,
+    );
+    try {
+      const libraryIds = await this.resolveLibraryIds(user, dto.libraryId);
+      if (libraryIds.length === 0) throw new NotFoundException('Series not found');
+
+      const bookIds = await this.seriesRepo.findUnreadBookIds({
+        seriesId,
+        userId: user.id,
+        libraryIds,
+        upToIndex: dto.upToIndex,
+        contentFilters: user.isSuperuser ? undefined : user.contentFilters,
+      });
+      if (bookIds.length > 0) await this.bookService.bulkSetStatus(bookIds, 'read', user);
+
+      this.logger.log(
+        `[${event}] [end] seriesId=${seriesId} userId=${user.id} upToIndex=${upToIndex} durationMs=${Date.now() - startedAt} updated=${bookIds.length} - mark series read completed`,
+      );
+      return { updated: bookIds.length };
+    } catch (err) {
+      const errorClass = err instanceof Error ? err.constructor.name : 'UnknownError';
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `[${event}] [fail] seriesId=${seriesId} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${sanitizeLogValue(message)}" - mark series read failed`,
+      );
+      throw err;
+    }
+  }
+
   private async resolveLibraryIds(user: RequestUser, scopedLibraryId?: number): Promise<number[]> {
     const libraries = await this.libraryService.findAll(user);
     const accessibleIds = libraries.map((library) => library.id);
@@ -228,4 +285,20 @@ export class SeriesService {
     if (!scopedLibraryId) return accessibleIds;
     return accessibleIds.includes(scopedLibraryId) ? [scopedLibraryId] : [];
   }
+}
+
+function toNextStatus(status: string | null): 'reading' | 'unread' {
+  return status === 'reading' ? 'reading' : 'unread';
+}
+
+function toContinueTarget(row: SeriesContinueRow | null): SeriesContinueTarget | null {
+  if (!row) return null;
+  return {
+    bookId: row.bookId,
+    title: row.title,
+    seriesIndex: row.seriesIndex,
+    status: toNextStatus(row.status),
+    fileId: row.fileId,
+    format: row.format,
+  };
 }

@@ -1201,6 +1201,18 @@
     "useGuards": []
   },
   {
+    "file": "server/src/modules/series/series.controller.ts",
+    "className": "SeriesController",
+    "methodName": "markRead",
+    "httpMethod": "POST",
+    "path": "/series/:seriesId/mark-read",
+    "permissions": [],
+    "libraryAccess": [],
+    "isPublic": false,
+    "allowDefault": false,
+    "useGuards": []
+  },
+  {
     "file": "server/src/modules/book-dock/book-dock.controller.ts",
     "className": "BookDockController",
     "methodName": "refetchMetadata",

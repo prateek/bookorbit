@@ -2,7 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EMPTY_CONTENT_FILTER_RULES } from '@bookorbit/types';
 
 import { SeriesService } from './series.service';
-import type { SeriesMemberRow } from './series.repository';
+import type { SeriesMemberRow, SeriesNextMemberRow } from './series.repository';
 
 const EMPTY_FACETS = { all: 0, notStarted: 0, inProgress: 0, complete: 0, hasGaps: 0 };
 
@@ -20,6 +20,7 @@ function summaryRow(
     members: SeriesMemberRow[];
     membersTruncated: boolean;
     libraryNames: string[];
+    next: SeriesNextMemberRow | null;
   }>,
 ) {
   return {
@@ -35,6 +36,7 @@ function summaryRow(
     members: [],
     membersTruncated: false,
     libraryNames: [],
+    next: null,
     ...overrides,
   };
 }
@@ -49,7 +51,13 @@ describe('SeriesService', () => {
     findDetail: vi.fn(),
     findBookIds: vi.fn(),
     findNextReadableBook: vi.fn(),
+    findContinueTarget: vi.fn(),
+    findUnreadBookIds: vi.fn(),
     countSeries: vi.fn(),
+  };
+
+  const bookService = {
+    bulkSetStatus: vi.fn(),
   };
 
   const bookReadService = {
@@ -65,7 +73,7 @@ describe('SeriesService', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    service = new SeriesService(seriesRepo as any, bookReadService as any, libraryService as any);
+    service = new SeriesService(seriesRepo as any, bookReadService as any, libraryService as any, bookService as any);
     libraryService.findAll.mockResolvedValue([{ id: 1 }, { id: 2 }]);
     libraryService.findAccessibleLibraryIds.mockResolvedValue([1, 2]);
   });
@@ -150,6 +158,7 @@ describe('SeriesService', () => {
               { bookId: 12, seriesIndex: '2', title: 'Two', status: 'read' },
               { bookId: 13, seriesIndex: '5', title: 'Five', status: null },
             ],
+            next: { bookId: 13, seriesIndex: '5', title: 'Five', status: null },
           }),
         ],
         total: 1,
@@ -165,6 +174,7 @@ describe('SeriesService', () => {
       expect(item.gapCount).toBe(2);
       expect(item.nextBookId).toBe(13);
       expect(item.nextIndex).toBe('5');
+      expect(item.nextStatus).toBe('unread');
     });
 
     it('collapses two copies of one volume onto a single rung, keeping the furthest read', async () => {
@@ -206,6 +216,7 @@ describe('SeriesService', () => {
             readCount: 0,
             membersTruncated: true,
             members: [{ bookId: 31, seriesIndex: '1', title: 'One', status: null }],
+            next: { bookId: 870, seriesIndex: '870', title: 'Eight seventy', status: null },
           }),
         ],
         total: 1,
@@ -219,7 +230,8 @@ describe('SeriesService', () => {
       expect(item.volumes).toEqual([]);
       expect(item.volumesTruncated).toBe(true);
       expect(item.gapCount).toBe(0);
-      expect(item.nextBookId).toBe(31);
+      expect(item.nextBookId).toBe(870);
+      expect(item.nextIndex).toBe('870');
     });
 
     it('scopes to specific library when libraryId provided', async () => {
@@ -392,6 +404,38 @@ describe('SeriesService', () => {
 
     it('rejects deep pagination', async () => {
       await expect(service.findBooks(reqUser(), 42, { page: 10000, size: 100 })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('forwards the unread filter and anchor, and reports the page the anchor landed on', async () => {
+      seriesRepo.findDetail.mockResolvedValue({ id: 42, name: 'Serial', bookCount: 1700, readCount: 500, readingCount: 0, authors: [], indices: [] });
+      seriesRepo.findBookIds.mockResolvedValue({ bookIds: [], total: 1200, page: 10 });
+
+      const result = await service.findBooks(reqUser(), 42, { readState: 'unread', anchorBookId: 501, size: 50 });
+
+      expect(seriesRepo.findBookIds).toHaveBeenCalledWith(expect.objectContaining({ userId: 7, readState: 'unread', anchorBookId: 501 }));
+      expect(result.page).toBe(10);
+    });
+
+    it('returns where to continue the series, resolved to a readable file', async () => {
+      seriesRepo.findDetail.mockResolvedValue({ id: 42, name: 'Serial', bookCount: 3, readCount: 1, readingCount: 1, authors: [], indices: [] });
+      seriesRepo.findBookIds.mockResolvedValue({ bookIds: [], total: 3, page: 0 });
+      seriesRepo.findContinueTarget.mockResolvedValue({ bookId: 2, seriesIndex: '2', title: 'Two', status: 'reading', fileId: 90, format: 'epub' });
+
+      const result = await service.findBooks(reqUser(), 42, {});
+
+      expect(seriesRepo.findContinueTarget).toHaveBeenCalledWith(expect.objectContaining({ seriesId: 42, userId: 7, libraryIds: [1, 2] }));
+      expect(result.seriesInfo.readingCount).toBe(1);
+      expect(result.seriesInfo.next).toEqual({ bookId: 2, title: 'Two', seriesIndex: '2', status: 'reading', fileId: 90, format: 'epub' });
+    });
+
+    it('reports no continue target once the series is fully read', async () => {
+      seriesRepo.findDetail.mockResolvedValue({ id: 42, name: 'Done', bookCount: 1, readCount: 1, readingCount: 0, authors: [], indices: [] });
+      seriesRepo.findBookIds.mockResolvedValue({ bookIds: [], total: 1, page: 0 });
+      seriesRepo.findContinueTarget.mockResolvedValue(null);
+
+      const result = await service.findBooks(reqUser(), 42, {});
+
+      expect(result.seriesInfo.next).toBeNull();
     });
   });
 
@@ -590,6 +634,37 @@ describe('SeriesService', () => {
       expect(await gapsFor(['1', '1', '3'], 3, 4)).toEqual([2, 4]);
     });
   });
+  describe('markRead', () => {
+    it('marks the unread books up to an index in this series as read', async () => {
+      seriesRepo.findUnreadBookIds.mockResolvedValue([11, 12, 13]);
+
+      await expect(service.markRead(reqUser(), 42, { upToIndex: '12.5' })).resolves.toEqual({ updated: 3 });
+
+      expect(seriesRepo.findUnreadBookIds).toHaveBeenCalledWith({
+        seriesId: 42,
+        userId: 7,
+        libraryIds: [1, 2],
+        upToIndex: '12.5',
+        contentFilters: undefined,
+      });
+      expect(bookService.bulkSetStatus).toHaveBeenCalledWith([11, 12, 13], 'read', expect.objectContaining({ id: 7 }));
+    });
+
+    it('scopes to the chosen library and skips the write when nothing is left unread', async () => {
+      seriesRepo.findUnreadBookIds.mockResolvedValue([]);
+
+      await expect(service.markRead(reqUser(), 42, { libraryId: 2 })).resolves.toEqual({ updated: 0 });
+
+      expect(seriesRepo.findUnreadBookIds).toHaveBeenCalledWith(expect.objectContaining({ libraryIds: [2], upToIndex: undefined }));
+      expect(bookService.bulkSetStatus).not.toHaveBeenCalled();
+    });
+
+    it('rejects a library the user cannot access', async () => {
+      await expect(service.markRead(reqUser(), 42, { libraryId: 99 })).rejects.toBeInstanceOf(NotFoundException);
+      expect(seriesRepo.findUnreadBookIds).not.toHaveBeenCalled();
+    });
+  });
+
   describe('findNextBook', () => {
     const row = { bookId: 91, title: 'Issue 10', seriesIndex: '10', fileId: 501, format: 'cbr' };
 

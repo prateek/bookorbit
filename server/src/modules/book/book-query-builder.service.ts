@@ -883,6 +883,7 @@ export class BookQueryBuilder {
           b.library_id as library_id,
           m.series_id as series_id,
           m.series_index as series_index,
+          m.published_date as published_date,
           b.added_at as added_at,
           ${mergedProgress} as current_progress,
           case when ${isCompleted} then true else false end as is_completed
@@ -900,13 +901,14 @@ export class BookQueryBuilder {
           s.library_id,
           s.series_id,
           s.series_index,
+          s.published_date,
           s.added_at,
           s.is_completed,
           s.current_progress,
           lag(s.is_completed) over (
             partition by s.library_id, s.series_id
             order by ${seriesIndexSortKey(sql.raw('s.series_index'))} asc,
-              s.series_index collate "C" asc, s.added_at asc, s.id asc
+              s.series_index collate "C" asc, s.published_date asc nulls last, s.added_at asc, s.id asc
           ) as previous_is_completed
         from scoped s
       )
@@ -914,7 +916,7 @@ export class BookQueryBuilder {
       from ordered o
       where o.previous_is_completed = true and o.is_completed = false and o.current_progress = 0
       order by o.library_id, o.series_id, ${seriesIndexSortKey(sql.raw('o.series_index'))} asc,
-        o.series_index collate "C" asc, o.added_at asc, o.id asc
+        o.series_index collate "C" asc, o.published_date asc nulls last, o.added_at asc, o.id asc
     )`;
   }
 
@@ -1128,6 +1130,7 @@ export class BookQueryBuilder {
           if (!sort.some((s) => s.field === 'series')) {
             parts.push(`sort_title ${D} NULLS LAST`);
           }
+          parts.push(`published_date ${D} NULLS LAST`);
           break;
         case 'publishedYear':
           parts.push(`published_year ${D} NULLS LAST`);

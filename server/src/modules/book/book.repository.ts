@@ -150,6 +150,7 @@ const COLLAPSE_GROUP_KEY_SQL = `base.library_id, COALESCE(base.series_id::text, 
 const COLLAPSE_REPRESENTATIVE_PICK_SQL = `${COLLAPSE_GROUP_KEY_SQL},
           ${seriesIndexSortKeySql('base.series_index')} ASC NULLS LAST,
           base.series_index COLLATE "C" ASC NULLS LAST,
+          base.published_date ASC NULLS LAST,
           base.added_at ASC,
           base.id ASC`;
 
@@ -933,11 +934,12 @@ export class BookRepository {
           base.library_id,
           base.id,
           base.series_index,
+          base.published_date,
           base.added_at,
           ROW_NUMBER() OVER (
             PARTITION BY base.series_id, base.library_id
             ORDER BY ${sql.raw(seriesIndexSortKeySql('base.series_index'))} ASC NULLS LAST,
-              base.series_index COLLATE "C" ASC NULLS LAST, base.added_at ASC, base.id ASC
+              base.series_index COLLATE "C" ASC NULLS LAST, base.published_date ASC NULLS LAST, base.added_at ASC, base.id ASC
           ) AS rn
         FROM base_rows base
         WHERE base.series_id IS NOT NULL
@@ -948,7 +950,7 @@ export class BookRepository {
           scc.library_id,
           COALESCE(
             ARRAY_AGG(scc.id ORDER BY ${sql.raw(seriesIndexSortKeySql('scc.series_index'))} ASC NULLS LAST,
-              scc.series_index COLLATE "C" ASC NULLS LAST, scc.added_at ASC, scc.id ASC) FILTER (WHERE scc.rn <= 4),
+              scc.series_index COLLATE "C" ASC NULLS LAST, scc.published_date ASC NULLS LAST, scc.added_at ASC, scc.id ASC) FILTER (WHERE scc.rn <= 4),
             ARRAY[]::int[]
           ) AS cover_book_ids
         FROM series_cover_candidates scc
@@ -969,7 +971,7 @@ export class BookRepository {
             ROW_NUMBER() OVER (
               PARTITION BY base.series_id, base.library_id
               ORDER BY ${sql.raw(seriesIndexSortKeySql('base.series_index'))} DESC NULLS LAST,
-                base.series_index COLLATE "C" DESC NULLS LAST, base.added_at DESC, base.id DESC
+                base.series_index COLLATE "C" DESC NULLS LAST, base.published_date DESC NULLS LAST, base.added_at DESC, base.id DESC
             ) AS rn
           FROM base_rows base
           WHERE base.series_id IS NOT NULL
@@ -986,7 +988,7 @@ export class BookRepository {
             ROW_NUMBER() OVER (
               PARTITION BY base.series_id, base.library_id
               ORDER BY ${sql.raw(seriesIndexSortKeySql('base.series_index'))} ASC NULLS LAST,
-                base.series_index COLLATE "C" ASC NULLS LAST, base.added_at ASC, base.id ASC
+                base.series_index COLLATE "C" ASC NULLS LAST, base.published_date ASC NULLS LAST, base.added_at ASC, base.id ASC
             ) AS rn
           FROM base_rows base
           LEFT JOIN user_book_status ubs ON ubs.book_id = base.id AND ubs.user_id = ${userId}

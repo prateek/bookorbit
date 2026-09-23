@@ -34,6 +34,7 @@ async function seedBook(
     formats: string[];
     status?: 'present' | 'missing';
     primaryFormat?: string;
+    publishedDate?: string;
   },
 ): Promise<SeededBook> {
   const slug = `${options.title.toLowerCase().replaceAll(' ', '-')}-${randomUUID()}`;
@@ -50,7 +51,7 @@ async function seedBook(
 
   const bookId = book!.id;
 
-  await ctx.db.insert(schema.bookMetadata).values({ bookId, title: options.title });
+  await ctx.db.insert(schema.bookMetadata).values({ bookId, title: options.title, publishedDate: options.publishedDate });
 
   const fileIdsByFormat = new Map<string, number>();
   for (const format of options.formats) {
@@ -219,5 +220,119 @@ describe('Series next readable book (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, ()
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ next: null });
+  });
+});
+
+describe('Series reading order for unnumbered and duplicate chapters (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, () => {
+  let ctx!: AuthorizationMatrixE2EContext;
+  let reader!: TestUserSession;
+  let seriesId!: number;
+
+  let prologue!: SeededBook;
+  let dupEarly!: SeededBook;
+  let dupLate!: SeededBook;
+  let book2Chapter1!: SeededBook;
+  let book6Chapter1!: SeededBook;
+  let undated!: SeededBook;
+
+  async function requestNext(bookId: number) {
+    const response = await ctx.app.inject({
+      method: 'GET',
+      url: `/api/v1/series/${seriesId}/books/${bookId}/next?formatGroup=epub`,
+      headers: authHeader(reader.accessToken),
+    });
+    expect(response.statusCode).toBe(200);
+    return (response.json() as { next: { bookId: number } | null }).next?.bookId ?? null;
+  }
+
+  async function listSeries(query: string) {
+    const response = await ctx.app.inject({
+      method: 'GET',
+      url: `/api/v1/series/${seriesId}/books?${query}`,
+      headers: authHeader(reader.accessToken),
+    });
+    expect(response.statusCode).toBe(200);
+    return response.json() as { items: { id: number }[]; page: number; seriesInfo: { next: { bookId: number } | null } };
+  }
+
+  beforeAll(async () => {
+    ctx = await createAuthorizationMatrixE2EContext();
+
+    const library = await createLibraryWithFolder(ctx, { name: `series-release-order-${randomUUID()}` });
+    reader = await createUserAndLogin(ctx);
+    await grantLibraryAccess(ctx, reader.userId, library.libraryId);
+
+    const [series] = await ctx.db
+      .insert(schema.bookSeries)
+      .values({ name: 'Backfilled Serial', normalizedName: `backfilled serial ${randomUUID()}` })
+      .returning({ id: schema.bookSeries.id });
+    seriesId = series!.id;
+
+    // Seeded in import order, which deliberately disagrees with release order.
+    undated = await seedBook(ctx, library, seriesId, { title: 'Side Story', seriesIndex: null, formats: ['epub'] });
+    book6Chapter1 = await seedBook(ctx, library, seriesId, {
+      title: 'Book 6 - Chapter 1',
+      seriesIndex: null,
+      formats: ['epub'],
+      publishedDate: '2024-06-01',
+    });
+    dupLate = await seedBook(ctx, library, seriesId, { title: 'Interlude B', seriesIndex: '5', formats: ['epub'], publishedDate: '2024-03-01' });
+    book2Chapter1 = await seedBook(ctx, library, seriesId, {
+      title: 'Book 2 - Chapter 1',
+      seriesIndex: null,
+      formats: ['epub'],
+      publishedDate: '2023-01-10',
+    });
+    dupEarly = await seedBook(ctx, library, seriesId, { title: 'Interlude A', seriesIndex: '5', formats: ['epub'], publishedDate: '2024-01-01' });
+    prologue = await seedBook(ctx, library, seriesId, { title: 'Prologue', seriesIndex: '1', formats: ['epub'], publishedDate: '2025-01-01' });
+  });
+
+  afterAll(async () => {
+    await closeAuthorizationMatrixE2EContext(ctx);
+  });
+
+  it('lists shared and missing indexes by release date, undated chapters last', async () => {
+    const page = await listSeries('sort=seriesIndex&order=asc&size=50');
+
+    expect(page.items.map((item) => item.id)).toEqual([
+      prologue.bookId,
+      dupEarly.bookId,
+      dupLate.bookId,
+      book2Chapter1.bookId,
+      book6Chapter1.bookId,
+      undated.bookId,
+    ]);
+    expect(page.seriesInfo.next?.bookId).toBe(prologue.bookId);
+  });
+
+  it('reverses release dates with the listing but keeps undated chapters last', async () => {
+    const page = await listSeries('sort=seriesIndex&order=desc&size=50');
+
+    expect(page.items.map((item) => item.id)).toEqual([
+      dupLate.bookId,
+      dupEarly.bookId,
+      prologue.bookId,
+      book6Chapter1.bookId,
+      book2Chapter1.bookId,
+      undated.bookId,
+    ]);
+  });
+
+  it('opens the anchored page that holds a chapter placed by its release date', async () => {
+    expect((await listSeries(`sort=seriesIndex&order=asc&size=2&anchorBookId=${book6Chapter1.bookId}`)).page).toBe(2);
+    expect((await listSeries(`sort=seriesIndex&order=asc&size=1&anchorBookId=${dupLate.bookId}`)).page).toBe(2);
+    expect((await listSeries(`sort=seriesIndex&order=desc&size=1&anchorBookId=${book2Chapter1.bookId}`)).page).toBe(4);
+    expect((await listSeries(`sort=seriesIndex&order=desc&size=1&anchorBookId=${undated.bookId}`)).page).toBe(5);
+  });
+
+  it('walks next chapter in the same release order as the listing', async () => {
+    const walked: number[] = [prologue.bookId];
+    let current: number | null = prologue.bookId;
+    while (current !== null && walked.length < 10) {
+      current = await requestNext(current);
+      if (current !== null) walked.push(current);
+    }
+
+    expect(walked).toEqual([prologue.bookId, dupEarly.bookId, dupLate.bookId, book2Chapter1.bookId, book6Chapter1.bookId, undated.bookId]);
   });
 });
