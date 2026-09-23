@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { check, index, integer, pgTable, primaryKey, serial, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 
+import { users } from './auth';
 import { books } from './books';
 
 export const bookSeries = pgTable(
@@ -69,3 +70,23 @@ export const bookSeriesMemberships = pgTable(
 
 export type BookSeriesMembership = typeof bookSeriesMemberships.$inferSelect;
 export type NewBookSeriesMembership = typeof bookSeriesMemberships.$inferInsert;
+
+/**
+ * Series a user has stopped following. Following is the default, so only the exception is
+ * stored: a missing row means followed. Shelves and new-chapter pushes skip these series.
+ */
+export const userUnfollowedSeries = pgTable(
+  'user_unfollowed_series',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    seriesId: integer('series_id')
+      .notNull()
+      .references(() => bookSeries.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.seriesId] }), index('user_unfollowed_series_series_idx').on(t.seriesId)],
+);
+
+export type UserUnfollowedSeries = typeof userUnfollowedSeries.$inferSelect;

@@ -45,7 +45,7 @@ import {
 } from '@bookorbit/types';
 
 import { accentInsensitiveIlike } from '../../common/utils/accent-insensitive-search.utils';
-import { bookCustomMetadataValues, books } from '../../db/schema';
+import { bookCustomMetadataValues, bookSeriesMemberships, books, userUnfollowedSeries } from '../../db/schema';
 import { BookQueryBuilder } from './book-query-builder.service';
 import { BookSortBuilder } from './book-sort-builder.service';
 
@@ -1777,6 +1777,44 @@ describe('seriesStatusRuleToSql', () => {
   it('rejects an invalid operator for seriesStatus', () => {
     const { builder } = makeBuilder();
     expect(() => builder.buildWhere(wrapRule({ type: 'rule', field: 'seriesStatus', operator: 'isFinished' }) as never, USER_CTX)).toThrow(
+      BadRequestException,
+    );
+  });
+});
+
+describe('seriesFollowingRuleToSql', () => {
+  it('isFalse matches books with a membership in a series this user unfollowed', () => {
+    const { builder, db } = makeBuilder();
+    const where = builder.buildWhere(wrapRule({ type: 'rule', field: 'seriesFollowing', operator: 'isFalse' }) as never, USER_CTX) as any;
+    const clause = getRuleSql(where);
+
+    expect(clause).toMatchObject({ type: 'sql', text: 'exists ()' });
+    const from = db.select.mock.results[0]!.value.from as ReturnType<typeof vi.fn>;
+    expect(from).toHaveBeenCalledWith(bookSeriesMemberships);
+    const innerJoin = from.mock.results[0]!.value.innerJoin as ReturnType<typeof vi.fn>;
+    expect(innerJoin).toHaveBeenCalledWith(userUnfollowedSeries, {
+      type: 'and',
+      clauses: [
+        { type: 'eq', left: userUnfollowedSeries.seriesId, right: bookSeriesMemberships.seriesId },
+        { type: 'eq', left: userUnfollowedSeries.userId, right: 10 },
+      ],
+    });
+    expect(clause.values).toEqual([{ type: 'subquery', whereClause: { type: 'eq', left: bookSeriesMemberships.bookId, right: books.id } }]);
+  });
+
+  it('isTrue is the exact complement, so books outside any series still match', () => {
+    const { builder } = makeBuilder();
+    const where = builder.buildWhere(wrapRule({ type: 'rule', field: 'seriesFollowing', operator: 'isTrue' }) as never, USER_CTX) as any;
+
+    expect(getRuleSql(where)).toMatchObject({ type: 'not', value: { type: 'sql', text: 'exists ()' } });
+  });
+
+  it('requires an authenticated user and a boolean operator', () => {
+    const { builder } = makeBuilder();
+    expect(() => builder.buildWhere(wrapRule({ type: 'rule', field: 'seriesFollowing', operator: 'isTrue' }) as never, BASE_CTX)).toThrow(
+      'Series following filter requires an authenticated user',
+    );
+    expect(() => builder.buildWhere(wrapRule({ type: 'rule', field: 'seriesFollowing', operator: 'isUpNext' }) as never, USER_CTX)).toThrow(
       BadRequestException,
     );
   });

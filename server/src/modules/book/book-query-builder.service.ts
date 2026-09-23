@@ -39,6 +39,7 @@ import {
   readingProgress,
   userBookRatings,
   userBookStatus,
+  userUnfollowedSeries,
   genres,
   libraries,
   narrators,
@@ -232,6 +233,8 @@ export class BookQueryBuilder {
         return this.lockStatusRuleToSql(operator);
       case 'seriesStatus':
         return this.seriesStatusRuleToSql(operator, userId);
+      case 'seriesFollowing':
+        return this.seriesFollowingRuleToSql(operator, userId);
       default:
         throw new BadRequestException(`Unknown filter field: ${String(field)}`);
     }
@@ -855,13 +858,35 @@ export class BookQueryBuilder {
     }
   }
 
+  /** Unfollows are stored as exceptions, so `isTrue` also matches books outside any series. */
+  private seriesFollowingRuleToSql(operator: string, userId?: number): SQL {
+    if (userId === undefined) throw new BadRequestException('Series following filter requires an authenticated user');
+    const inUnfollowedSeries = sql`exists (${this.db
+      .select({ one: sql`1` })
+      .from(bookSeriesMemberships)
+      .innerJoin(
+        userUnfollowedSeries,
+        and(eq(userUnfollowedSeries.seriesId, bookSeriesMemberships.seriesId), eq(userUnfollowedSeries.userId, userId)),
+      )
+      .where(eq(bookSeriesMemberships.bookId, books.id))})`;
+    switch (operator) {
+      case 'isTrue':
+        return not(inUnfollowedSeries);
+      case 'isFalse':
+        return inUnfollowedSeries;
+      default:
+        throw new BadRequestException(`Invalid operator '${operator}' for seriesFollowing field`);
+    }
+  }
+
   /**
    * Set membership against the same window-function pipeline as the "Up Next in Series" shelf
    * (DashboardRepository.findUpNextInSeriesBookIds): per (library, series), the next unstarted book
    * whose immediately preceding entry is finished. Implemented as a subquery (not a per-row predicate)
    * so results match the shelf exactly. Keep the merged-progress / completion definitions in sync with
    * that repository. Library scoping is omitted here because the window partitions by library already;
-   * the surrounding query restricts to the user's accessible libraries.
+   * the surrounding query restricts to the user's accessible libraries. Unlike the shelf, this rule keeps
+   * unfollowed series; combine it with `seriesFollowing` to drop them.
    */
   private upNextInSeriesSql(userId: number): SQL {
     const mergedProgress = sql`coalesce(

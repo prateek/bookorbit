@@ -9,7 +9,18 @@ import { MAX_SERIES_TOTAL_BOOKS } from '../../common/utils/series-total-books.ut
 import { compareSeriesIndexSql, seriesReadingOrderBy } from '../../common/utils/series-index-sql.utils';
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
-import { authors, bookAuthors, bookFiles, bookMetadata, books, bookSeries, bookSeriesMemberships, libraries, userBookStatus } from '../../db/schema';
+import {
+  authors,
+  bookAuthors,
+  bookFiles,
+  bookMetadata,
+  books,
+  bookSeries,
+  bookSeriesMemberships,
+  libraries,
+  userBookStatus,
+  userUnfollowedSeries,
+} from '../../db/schema';
 import type { SeriesListSort, SortDirection } from './dto/list-series.dto';
 import type { SeriesBookReadState, SeriesBookSort } from './dto/list-series-books.dto';
 
@@ -29,6 +40,7 @@ type SeriesSummaryRow = {
   membersTruncated: boolean;
   libraryNames: string[];
   next: SeriesNextMemberRow | null;
+  following: boolean;
 };
 
 /** One book of a series, as the list needs it to draw the volume ladder. */
@@ -213,11 +225,12 @@ export class SeriesRepository {
     }
 
     const seriesIds = seriesRows.map((row) => row.id);
-    const [authorData, coverData, memberData, nextData] = await Promise.all([
+    const [authorData, coverData, memberData, nextData, unfollowedIds] = await Promise.all([
       this.fetchAuthorsForSeries(seriesIds, params.libraryIds, params.contentFilters),
       this.fetchCoverBookIds(seriesIds, params.libraryIds, params.contentFilters),
       this.fetchSeriesMembers(seriesIds, params.libraryIds, params.userId, params.contentFilters),
       this.fetchNextMembers(seriesIds, params.libraryIds, params.userId, params.contentFilters),
+      this.findUnfollowedSeriesIds(params.userId, seriesIds),
     ]);
 
     const items: SeriesSummaryRow[] = seriesRows.map((row) => {
@@ -236,6 +249,7 @@ export class SeriesRepository {
         membersTruncated: members?.truncated ?? false,
         libraryNames: members?.libraryNames ?? [],
         next: nextData.get(row.id) ?? null,
+        following: !unfollowedIds.has(row.id),
       };
     });
 
@@ -269,6 +283,37 @@ export class SeriesRepository {
       .where(and(this.buildLibraryFilter(params.libraryIds), ...filterClauses));
 
     return Number(row?.total ?? 0);
+  }
+
+  /** Whether the series has at least one book the user can see; one indexed probe, however long the series. */
+  async isSeriesVisible(params: { seriesId: number; libraryIds: number[]; contentFilters?: ContentFilterRules }): Promise<boolean> {
+    if (params.libraryIds.length === 0) return false;
+    const filterClauses = params.contentFilters ? buildContentFilterClauses(params.contentFilters, this.db) : [];
+    const [row] = await this.db
+      .select({ one: sql<number>`1` })
+      .from(bookSeriesMemberships)
+      .innerJoin(books, eq(books.id, bookSeriesMemberships.bookId))
+      .where(and(eq(bookSeriesMemberships.seriesId, params.seriesId), this.buildLibraryFilter(params.libraryIds), ...filterClauses))
+      .limit(1);
+    return row != null;
+  }
+
+  async findUnfollowedSeriesIds(userId: number, seriesIds: number[]): Promise<Set<number>> {
+    if (seriesIds.length === 0) return new Set();
+    const rows = await this.db
+      .select({ seriesId: userUnfollowedSeries.seriesId })
+      .from(userUnfollowedSeries)
+      .where(and(eq(userUnfollowedSeries.userId, userId), inArray(userUnfollowedSeries.seriesId, seriesIds)));
+    return new Set(rows.map((row) => row.seriesId));
+  }
+
+  /** Idempotent: following a followed series or unfollowing an unfollowed one changes nothing. */
+  async setFollowing(userId: number, seriesId: number, following: boolean): Promise<void> {
+    if (following) {
+      await this.db.delete(userUnfollowedSeries).where(and(eq(userUnfollowedSeries.userId, userId), eq(userUnfollowedSeries.seriesId, seriesId)));
+      return;
+    }
+    await this.db.insert(userUnfollowedSeries).values({ userId, seriesId }).onConflictDoNothing();
   }
 
   async findDetail(params: {

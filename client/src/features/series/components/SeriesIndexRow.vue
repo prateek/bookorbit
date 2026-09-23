@@ -109,6 +109,9 @@ function handleOpen() {
       <div class="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">{{ series.name }}</div>
       <div class="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
         <SeriesLibraryChip :library-names="series.libraryNames" dot-only />
+        <span v-if="!series.following" class="shrink-0 rounded border border-border px-1 text-[11px]" data-testid="series-row-unfollowed">
+          {{ t('series.unfollowed') }}
+        </span>
         <span v-if="authorLine" class="min-w-0 truncate">
           {{ extraAuthors > 0 ? t('series.authorsPlus', { authors: authorLine, count: extraAuthors }) : authorLine }}
         </span>

@@ -4908,7 +4908,8 @@
         "metadataScore": "Metadata Score",
         "cover": "Cover",
         "lockStatus": "Lock Status",
-        "seriesStatus": "Series Status"
+        "seriesStatus": "Series Status",
+        "seriesFollowing": "Series Followed"
       },
       "operators": {
         "contains": "contains",
@@ -9546,6 +9547,7 @@
     "booksFound": "{count, plural, =0 {no books found} one {# book found} other {# books found}}"
   },
   "series": {
+    "unfollowed": "Unfollowed",
     "completion": {
       "readOfTotal": "{read} of {total} read ({percentage}%)"
     },
@@ -9633,6 +9635,11 @@
       "markAllReadConfirm": "{count, plural, one {Mark the # book in this series as read?} other {Mark all # books in this series as read?}}",
       "markedRead": "Marked as read",
       "markReadError": "Could not mark the series as read",
+      "follow": "Follow series",
+      "unfollow": "Unfollow series",
+      "unfollowedToast": "Unfollowed. New chapters stay off your shelves and out of your push notifications.",
+      "followedToast": "Following this series again",
+      "followError": "Could not update whether you follow this series",
       "allChaptersRead": "Everything in this series is read",
       "jumpToNextUnread": "Jump to next unread",
       "sortAndFilter": "Sort and filter",

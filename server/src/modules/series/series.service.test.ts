@@ -21,6 +21,7 @@ function summaryRow(
     membersTruncated: boolean;
     libraryNames: string[];
     next: SeriesNextMemberRow | null;
+    following: boolean;
   }>,
 ) {
   return {
@@ -37,6 +38,7 @@ function summaryRow(
     membersTruncated: false,
     libraryNames: [],
     next: null,
+    following: true,
     ...overrides,
   };
 }
@@ -54,6 +56,9 @@ describe('SeriesService', () => {
     findContinueTarget: vi.fn(),
     findUnreadBookIds: vi.fn(),
     countSeries: vi.fn(),
+    findUnfollowedSeriesIds: vi.fn(),
+    isSeriesVisible: vi.fn(),
+    setFollowing: vi.fn(),
   };
 
   const bookService = {
@@ -76,6 +81,7 @@ describe('SeriesService', () => {
     service = new SeriesService(seriesRepo as any, bookReadService as any, libraryService as any, bookService as any);
     libraryService.findAll.mockResolvedValue([{ id: 1 }, { id: 2 }]);
     libraryService.findAccessibleLibraryIds.mockResolvedValue([1, 2]);
+    seriesRepo.findUnfollowedSeriesIds.mockResolvedValue(new Set());
   });
 
   describe('countAll', () => {
@@ -474,6 +480,61 @@ describe('SeriesService', () => {
 
       expect(seriesRepo.findDetail).toHaveBeenCalledWith(expect.objectContaining({ contentFilters: undefined }));
       expect(seriesRepo.findBookIds).toHaveBeenCalledWith(expect.objectContaining({ contentFilters: undefined }));
+    });
+  });
+
+  describe('follow state', () => {
+    it('reports whether the user follows the series on its detail', async () => {
+      seriesRepo.findDetail.mockResolvedValue({ id: 42, name: 'Dune', bookCount: 1, readCount: 0, authors: [], indices: ['1'] });
+      seriesRepo.findBookIds.mockResolvedValue({ bookIds: [], total: 0 });
+      seriesRepo.findUnfollowedSeriesIds.mockResolvedValue(new Set([42]));
+
+      const result = await service.findBooks(reqUser(), 42, {});
+
+      expect(seriesRepo.findUnfollowedSeriesIds).toHaveBeenCalledWith(7, [42]);
+      expect(result.seriesInfo.following).toBe(false);
+    });
+
+    it('carries the follow state onto each series summary', async () => {
+      seriesRepo.findPage.mockResolvedValue({
+        items: [summaryRow({ id: 1 }), summaryRow({ id: 2, following: false })],
+        total: 2,
+        facets: { ...EMPTY_FACETS, all: 2 },
+        page: 0,
+        size: 50,
+      });
+
+      const result = await service.findAll(reqUser(), {});
+
+      expect(result.items.map((item) => [item.id, item.following])).toEqual([
+        [1, true],
+        [2, false],
+      ]);
+    });
+
+    it('unfollows a series the user can see', async () => {
+      seriesRepo.isSeriesVisible.mockResolvedValue(true);
+
+      await expect(service.setFollowing(reqUser(), 42, false)).resolves.toEqual({ seriesId: 42, following: false });
+
+      expect(seriesRepo.isSeriesVisible).toHaveBeenCalledWith({ seriesId: 42, libraryIds: [1, 2], contentFilters: undefined });
+      expect(seriesRepo.setFollowing).toHaveBeenCalledWith(7, 42, false);
+    });
+
+    it('refuses a series the user cannot see without writing anything', async () => {
+      seriesRepo.isSeriesVisible.mockResolvedValue(false);
+
+      await expect(service.setFollowing(reqUser(), 42, true)).rejects.toBeInstanceOf(NotFoundException);
+      expect(seriesRepo.setFollowing).not.toHaveBeenCalled();
+    });
+
+    it('checks visibility through the user content filters', async () => {
+      seriesRepo.isSeriesVisible.mockResolvedValue(true);
+      const user = { ...reqUser(), contentFilters: EMPTY_CONTENT_FILTER_RULES };
+
+      await service.setFollowing(user, 42, true);
+
+      expect(seriesRepo.isSeriesVisible).toHaveBeenCalledWith(expect.objectContaining({ contentFilters: EMPTY_CONTENT_FILTER_RULES }));
     });
   });
 

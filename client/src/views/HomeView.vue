@@ -69,6 +69,7 @@ import { useInfiniteScrollSentinel } from '@/composables/useInfiniteScrollSentin
 import { useSavedViews, type SavedView } from '@/features/book/composables/useSavedViews'
 import type { GroupRule, Rule, SortSpec } from '@bookorbit/types'
 import EntityNotFound from '@/components/EntityNotFound.vue'
+import { filterUsesSeriesFollowing, onSeriesFollowChangedWhileAway } from '@/features/series/composables/useSeriesFollowChanges'
 import { type QuerySelectionState } from '@/features/book/composables/useBookBulkActions'
 
 const { t } = useI18n()
@@ -373,6 +374,12 @@ const stopUploadCompletedListener = onLibraryUploadCompleted((event) => {
 })
 
 onUnmounted(() => stopUploadCompletedListener())
+
+onSeriesFollowChangedWhileAway(() => {
+  if (!filterUsesSeriesFollowing(filter.value)) return
+  resetBooks()
+  refreshBuckets()
+})
 
 watch(libraryId, () => {
   clearSearch()

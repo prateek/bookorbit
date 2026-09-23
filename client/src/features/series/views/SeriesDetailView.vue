@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { formatNumber } from '@/i18n/formatters'
 import { useRoute, useRouter } from 'vue-router'
 import { useMediaQuery } from '@vueuse/core'
-import { ArrowDownToLine, CheckCheck, ChevronLeft, ChevronUp, MoreHorizontal, Pencil, Play, SlidersHorizontal } from '@lucide/vue'
+import { ArrowDownToLine, Bell, BellOff, CheckCheck, ChevronLeft, ChevronUp, MoreHorizontal, Pencil, Play, SlidersHorizontal } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type { BookCard, BookDetail } from '@bookorbit/types'
@@ -25,6 +25,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { api } from '@/lib/api'
 import { onAppResumed } from '@/components/sidebar/useAppResume'
+import { notifySeriesFollowChanged } from '../composables/useSeriesFollowChanges'
 import EntityNotFound from '@/components/EntityNotFound.vue'
 import AddToCollectionSheet from '@/features/collection/components/AddToCollectionSheet.vue'
 import BookQuickView from '@/features/book/components/BookQuickView.vue'
@@ -34,7 +35,7 @@ import SeriesCompletionBar from '../components/SeriesCompletionBar.vue'
 import SeriesOwnershipBar from '../components/SeriesOwnershipBar.vue'
 import SeriesGapBanner from '../components/SeriesGapBanner.vue'
 import SeriesChapterList from '../components/SeriesChapterList.vue'
-import { fetchSeriesBooks, markSeriesRead } from '../api/series'
+import { fetchSeriesBooks, markSeriesRead, setSeriesFollowing } from '../api/series'
 import { chapterReaderFile } from '../lib/series-chapter'
 import type { SeriesBookReadFilter } from '../types/series'
 import { groupSeriesBooksByMedia } from '../composables/useSeriesBookMediaGroups'
@@ -129,10 +130,11 @@ const leadDetailsOpen = ref(false)
 const jumping = ref(false)
 const markingRead = ref(false)
 const pendingMarkRead = ref<{ upToIndex: string | null; description: string } | null>(null)
+const updatingFollow = ref(false)
 
 const continueTarget = computed(() => seriesInfo.value?.next ?? null)
 const canMarkAllRead = computed(() => canMarkRead.value && seriesInfo.value != null && seriesInfo.value.readCount < seriesInfo.value.bookCount)
-const showSeriesMenu = computed(() => (canEditMetadata.value && books.value.length > 0) || canMarkAllRead.value)
+const isFollowing = computed(() => seriesInfo.value?.following !== false)
 const continueLabel = computed(() => {
   const target = continueTarget.value
   if (!target) return null
@@ -560,6 +562,23 @@ async function confirmMarkRead() {
   }
 }
 
+async function toggleFollowing() {
+  const id = seriesId.value
+  if (id == null || updatingFollow.value) return
+  const following = !isFollowing.value
+  updatingFollow.value = true
+  try {
+    const result = await setSeriesFollowing(id, following)
+    if (seriesInfo.value?.id === result.seriesId) seriesInfo.value = { ...seriesInfo.value, following: result.following }
+    notifySeriesFollowChanged()
+    toast.success(result.following ? t('series.detail.followedToast') : t('series.detail.unfollowedToast'))
+  } catch {
+    toast.error(t('series.detail.followError'))
+  } finally {
+    updatingFollow.value = false
+  }
+}
+
 onMounted(async () => {
   await fetchLibraries()
   await loadBooks({ reset: true })
@@ -712,6 +731,14 @@ defineOptions({ name: 'SeriesDetailView' })
                   <h1 class="text-xl font-bold text-foreground">{{ seriesInfo.name }}</h1>
                   <div class="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                     <span>{{ t('series.detail.bookCount', { count: seriesInfo.bookCount }) }}</span>
+                    <span
+                      v-if="!isFollowing"
+                      data-testid="series-unfollowed-badge"
+                      class="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs"
+                    >
+                      <BellOff :size="12" />
+                      {{ t('series.unfollowed') }}
+                    </span>
                     <span v-if="visibleSeriesAuthors.length > 0">
                       {{ t('series.detail.byAuthors', { authors: visibleSeriesAuthors.join(', ') }) }}
                       <span v-if="hiddenSeriesAuthorsCount > 0"> {{ t('series.detail.moreAuthors', { count: hiddenSeriesAuthorsCount }) }}</span>
@@ -743,7 +770,7 @@ defineOptions({ name: 'SeriesDetailView' })
                     {{ openingSeriesEditor ? t('series.detail.preparingEditor') : t('series.detail.editMetadata') }}
                   </button>
 
-                  <DropdownMenu v-if="showSeriesMenu">
+                  <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                       <button
                         type="button"
@@ -767,6 +794,11 @@ defineOptions({ name: 'SeriesDetailView' })
                       <DropdownMenuItem v-if="canMarkAllRead" data-testid="series-mark-all-read" @select="promptMarkAllRead">
                         <CheckCheck :size="14" />
                         {{ t('series.detail.markAllRead') }}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem data-testid="series-follow-toggle" :disabled="updatingFollow" @select="toggleFollowing">
+                        <Bell v-if="!isFollowing" :size="14" />
+                        <BellOff v-else :size="14" />
+                        {{ isFollowing ? t('series.detail.unfollow') : t('series.detail.follow') }}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

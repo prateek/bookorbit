@@ -258,6 +258,24 @@ describe('SeriesStrategy', () => {
     const statements = execute.mock.calls.map((call) => flattenSql(call[0]).replace(/\s+/g, ' '));
     expect(statements.some((statement) => statement.includes('UPDATE book_series_memberships'))).toBe(true);
     expect(statements.some((statement) => statement.includes('UPDATE book_metadata bm'))).toBe(true);
+    expect(statements.some((statement) => statement.includes('INSERT INTO user_unfollowed_series'))).toBe(true);
+  });
+
+  it('carries unfollows from merged source series to the target', async () => {
+    const { transaction, execute } = makeUpdateTx();
+    const strategy = makeStrategy({ transaction });
+    vi.spyOn(strategy, 'findEntityById').mockResolvedValue({ id: 1, name: 'Target' });
+    vi.spyOn(strategy as never, 'findAffectedBookIdsInLibraries').mockResolvedValue([10]);
+    vi.spyOn(strategy as never, 'deleteUnusedSeriesRows').mockResolvedValue(undefined);
+
+    await strategy.merge({ targetId: 1, sourceIds: [2, 3], userId: 9, libraryIds: [5] });
+
+    const carry = execute.mock.calls.map((call) => call[0]).find((query) => flattenSql(query).includes('INSERT INTO user_unfollowed_series'));
+    expect(carry).toBeDefined();
+    const carrySql = flattenSql(carry).replace(/\s+/g, ' ');
+    expect(carrySql).toContain('WHERE uus.series_id IN');
+    expect(extractSqlParams(carry)).toEqual(expect.arrayContaining([1, 2, 3]));
+    expect(carrySql).toContain('ON CONFLICT DO NOTHING');
   });
 
   it('renames a series without reporting a merge when the identity is unchanged', async () => {

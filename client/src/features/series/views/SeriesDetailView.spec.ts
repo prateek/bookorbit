@@ -42,7 +42,9 @@ const mocks = vi.hoisted(() => ({
   loadEarlier: vi.fn<() => Promise<number>>(),
   refresh: vi.fn<() => Promise<void>>(),
   markSeriesRead: vi.fn<(seriesId: number, params: unknown) => Promise<unknown>>(),
+  setSeriesFollowing: vi.fn<(seriesId: number, following: boolean) => Promise<{ seriesId: number; following: boolean }>>(),
   fetchSeriesBooks: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  notifySeriesFollowChanged: vi.fn<() => void>(),
   api: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }))
 
@@ -100,10 +102,15 @@ vi.mock('@/features/book/composables/useSafeHtml', () => ({
 vi.mock('../api/series', () => ({
   fetchSeriesBooks: (...args: unknown[]) => mocks.fetchSeriesBooks(...args),
   markSeriesRead: (seriesId: number, params: unknown) => mocks.markSeriesRead(seriesId, params),
+  setSeriesFollowing: (seriesId: number, following: boolean) => mocks.setSeriesFollowing(seriesId, following),
 }))
 
 vi.mock('@/lib/api', () => ({
   api: (...args: unknown[]) => mocks.api(...args),
+}))
+
+vi.mock('../composables/useSeriesFollowChanges', () => ({
+  notifySeriesFollowChanged: () => mocks.notifySeriesFollowChanged(),
 }))
 
 vi.mock('../composables/useSeriesDetail', () => ({
@@ -175,6 +182,7 @@ function makeSeriesInfo(overrides: Partial<SeriesDetail> = {}): SeriesDetail {
     expectedBookCount: null,
     readingCount: 0,
     next: null,
+    following: true,
     ...overrides,
   }
 }
@@ -746,5 +754,83 @@ describe('SeriesDetailView', () => {
 
     expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(mocks.loadBooks).not.toHaveBeenCalled()
+  })
+
+  describe('following', () => {
+    const passthrough = defineComponent({ template: '<div><slot /></div>' })
+    const MenuItemStub = defineComponent({
+      name: 'DropdownMenuItem',
+      emits: ['select'],
+      template: '<button type="button" v-bind="$attrs" @click="$emit(\'select\')"><slot /></button>',
+    })
+
+    function mountWithMenu() {
+      return mount(SeriesDetailView, {
+        global: {
+          stubs: {
+            VirtualBookGrid: VirtualBookGridStub,
+            AddToCollectionSheet: AddToCollectionSheetStub,
+            BookCoverArtwork: BookCoverArtworkStub,
+            BookQuickView: BookQuickViewStub,
+            EntityNotFound: true,
+            SeriesCompletionBar: true,
+            SeriesGapBanner: true,
+            ConfirmDialog: ConfirmDialogStub,
+            DropdownMenu: passthrough,
+            DropdownMenuTrigger: passthrough,
+            DropdownMenuContent: passthrough,
+            DropdownMenuItem: MenuItemStub,
+          },
+        },
+      })
+    }
+
+    beforeEach(() => {
+      mocks.setSeriesFollowing.mockReset()
+      mocks.setSeriesFollowing.mockImplementation((seriesId, following) => Promise.resolve({ seriesId, following }))
+      mocks.notifySeriesFollowChanged.mockReset()
+    })
+
+    it('unfollows from the series menu and marks the header', async () => {
+      const wrapper = mountWithMenu()
+      await flushPromises()
+      expect(wrapper.find('[data-testid="series-unfollowed-badge"]').exists()).toBe(false)
+
+      const toggle = wrapper.get('[data-testid="series-follow-toggle"]')
+      expect(toggle.text()).toContain('Unfollow series')
+      await toggle.trigger('click')
+      await flushPromises()
+
+      expect(mocks.setSeriesFollowing).toHaveBeenCalledWith(42, false)
+      expect(mocks.seriesInfo.value?.following).toBe(false)
+      expect(mocks.notifySeriesFollowChanged).toHaveBeenCalledOnce()
+      expect(wrapper.find('[data-testid="series-unfollowed-badge"]').exists()).toBe(true)
+      expect(wrapper.get('[data-testid="series-follow-toggle"]').text()).toContain('Follow series')
+    })
+
+    it('follows an unfollowed series again', async () => {
+      mocks.seriesInfo.value = makeSeriesInfo({ following: false })
+      const wrapper = mountWithMenu()
+      await flushPromises()
+
+      await wrapper.get('[data-testid="series-follow-toggle"]').trigger('click')
+      await flushPromises()
+
+      expect(mocks.setSeriesFollowing).toHaveBeenCalledWith(42, true)
+      expect(wrapper.find('[data-testid="series-unfollowed-badge"]').exists()).toBe(false)
+    })
+
+    it('keeps the current state when the request fails', async () => {
+      mocks.setSeriesFollowing.mockRejectedValue(new Error('500'))
+      const wrapper = mountWithMenu()
+      await flushPromises()
+
+      await wrapper.get('[data-testid="series-follow-toggle"]').trigger('click')
+      await flushPromises()
+
+      expect(mocks.seriesInfo.value?.following).toBe(true)
+      expect(mocks.notifySeriesFollowChanged).not.toHaveBeenCalled()
+      expect(wrapper.find('[data-testid="series-unfollowed-badge"]').exists()).toBe(false)
+    })
   })
 })
