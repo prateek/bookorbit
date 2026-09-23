@@ -25,7 +25,7 @@ import { isAudioFormat, type ContentFilterRules, type GroupRule } from '@bookorb
 import { rankFileRowsByBook, rankFilesByFormatPriority } from '../../common/utils/primary-file-selection.utils';
 import { buildContentFilterClauses } from '../../common/utils/content-filter-sql.utils';
 import { excludeAudioOnlyBooks } from '../../common/utils/audio-only-book-sql.utils';
-import { seriesIndexOrderBy } from '../../common/utils/series-index-sql.utils';
+import { seriesReadingOrderBy } from '../../common/utils/series-index-sql.utils';
 import { OpdsCollectionRepository } from './opds-collection.repository';
 
 type Db = NodePgDatabase<typeof schema>;
@@ -94,8 +94,16 @@ const OPDS_SORT_MAP: Record<Exclude<OpdsSortOrder, LastReadSortOrder>, SQL[]> = 
   title_desc: [sql`${bookMetadata.title} DESC NULLS LAST`, sql`${books.id} ASC`],
   author_asc: [sql`${books.primaryAuthorSortName} ASC NULLS LAST`, sql`${bookMetadata.title} ASC NULLS LAST`, sql`${books.id} ASC`],
   author_desc: [sql`${books.primaryAuthorSortName} DESC NULLS LAST`, sql`${bookMetadata.title} ASC NULLS LAST`, sql`${books.id} ASC`],
-  series_asc: [sql`${bookMetadata.seriesName} ASC NULLS LAST`, ...seriesIndexOrderBy(bookMetadata.seriesIndex, 'ASC'), sql`${books.id} ASC`],
-  series_desc: [sql`${bookMetadata.seriesName} DESC NULLS LAST`, ...seriesIndexOrderBy(bookMetadata.seriesIndex, 'DESC'), sql`${books.id} ASC`],
+  series_asc: [
+    sql`${bookMetadata.seriesName} ASC NULLS LAST`,
+    ...seriesReadingOrderBy(bookMetadata.seriesIndex, bookMetadata.publishedDate, 'ASC'),
+    sql`${books.id} ASC`,
+  ],
+  series_desc: [
+    sql`${bookMetadata.seriesName} DESC NULLS LAST`,
+    ...seriesReadingOrderBy(bookMetadata.seriesIndex, bookMetadata.publishedDate, 'DESC'),
+    sql`${books.id} ASC`,
+  ],
 };
 
 const READ_STATUS_BUCKETS = {
@@ -961,7 +969,7 @@ export class OpdsBookService {
   ): Promise<Map<number, { authorNames: string[]; memberStates: CatalogReadBucket[]; previews: OpdsPreviewBookRow[] }>> {
     if (seriesIds.length === 0) return new Map();
     const memberOrder = [
-      ...seriesIndexOrderBy(bookSeriesMemberships.seriesIndex, 'ASC'),
+      ...seriesReadingOrderBy(bookSeriesMemberships.seriesIndex, bookMetadata.publishedDate, 'ASC'),
       sql`${bookMetadata.title} ASC NULLS LAST`,
       sql`${books.id} ASC`,
     ];
@@ -1625,7 +1633,11 @@ export class OpdsBookService {
 
   private buildContextSeriesOrder(sortOrder: OpdsSortOrder): SQL[] {
     const direction = sortOrder === 'series_desc' ? 'DESC' : 'ASC';
-    return [...seriesIndexOrderBy(bookSeriesMemberships.seriesIndex, direction), sql`${bookMetadata.title} ASC NULLS LAST`, sql`${books.id} ASC`];
+    return [
+      ...seriesReadingOrderBy(bookSeriesMemberships.seriesIndex, bookMetadata.publishedDate, direction),
+      sql`${bookMetadata.title} ASC NULLS LAST`,
+      sql`${books.id} ASC`,
+    ];
   }
 
   private fetchContextSeriesRows(bookIds: number[], filter: SeriesFilter): Promise<ContextSeriesRow[]> {

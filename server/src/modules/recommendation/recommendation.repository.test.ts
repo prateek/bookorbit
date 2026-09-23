@@ -1,7 +1,7 @@
-import { RecommendationRepository } from './recommendation.repository';
+import { RecommendationRepository, seriesWindowOffset } from './recommendation.repository';
 
 type SelectStep = {
-  terminal: 'where' | 'limit' | 'groupBy';
+  terminal: 'where' | 'limit' | 'groupBy' | 'as';
   result: unknown;
 };
 
@@ -20,9 +20,13 @@ function makeDb(steps: SelectStep[]) {
       leftJoin: vi.fn(),
       orderBy: vi.fn(),
       groupBy: vi.fn(),
+      offset: vi.fn(),
+      as: vi.fn(),
     };
 
     chain.from.mockReturnValue(chain);
+    chain.offset.mockReturnValue(chain);
+    chain.as.mockImplementation(() => step.result);
     chain.innerJoin.mockReturnValue(chain);
     chain.leftJoin.mockReturnValue(chain);
     chain.orderBy.mockReturnValue(chain);
@@ -275,7 +279,42 @@ describe('RecommendationRepository', () => {
     expect(chains[0].leftJoin).toHaveBeenCalledTimes(2);
     expect(chains[0].where).toHaveBeenCalledTimes(1);
     expect(chains[0].orderBy).toHaveBeenCalledTimes(1);
-    expect(chains[0].limit).toHaveBeenCalledWith(50);
+    expect(chains[0].offset).toHaveBeenCalledWith(0);
+    expect(chains[0].limit).toHaveBeenCalledWith(51);
+  });
+
+  it('windows series books around the anchor book', async () => {
+    const ranked = { bookId: 'ranked.id', position: 'ranked.position', total: 'ranked.total' };
+    const { db, select, chains } = makeDb([
+      { terminal: 'as', result: ranked },
+      { terminal: 'limit', result: [{ position: 600, total: 1700 }] },
+      {
+        terminal: 'limit',
+        result: [{ bookId: 600, title: 'Chapter 600', coverAspectRatio: '2/3', seriesIndex: '600', coverSource: null, primaryFormat: 'epub' }],
+      },
+      { terminal: 'where', result: [] },
+    ]);
+    const repo = new RecommendationRepository(db);
+
+    const result = await repo.findSeriesBooks(88, [3], undefined, 600);
+
+    expect(result.map((row) => row.bookId)).toEqual([600]);
+    expect(select).toHaveBeenCalledTimes(4);
+    expect(chains[1].from).toHaveBeenCalledWith(ranked);
+    expect(chains[2].offset).toHaveBeenCalledWith(589);
+    expect(chains[2].limit).toHaveBeenCalledWith(51);
+  });
+
+  it('falls back to the start of the series when the anchor is not visible', async () => {
+    const { db, chains } = makeDb([
+      { terminal: 'as', result: {} },
+      { terminal: 'limit', result: [] },
+      { terminal: 'limit', result: [] },
+    ]);
+    const repo = new RecommendationRepository(db);
+
+    await expect(repo.findSeriesBooks(88, [3], undefined, 600)).resolves.toEqual([]);
+    expect(chains[2].offset).toHaveBeenCalledWith(0);
   });
 
   it('returns series books with empty authorNames when no authors exist', async () => {
@@ -391,5 +430,24 @@ describe('RecommendationRepository', () => {
         isComic: true,
       },
     ]);
+  });
+});
+
+describe('seriesWindowOffset', () => {
+  it('keeps ten entries before the anchor in the middle of a long series', () => {
+    expect(seriesWindowOffset(600, 1700)).toBe(589);
+  });
+
+  it('starts at the beginning when the anchor is near the start', () => {
+    expect(seriesWindowOffset(1, 1700)).toBe(0);
+    expect(seriesWindowOffset(5, 1700)).toBe(0);
+  });
+
+  it('shifts back so the window stays full near the end', () => {
+    expect(seriesWindowOffset(1700, 1700)).toBe(1649);
+  });
+
+  it('returns zero for series shorter than one window', () => {
+    expect(seriesWindowOffset(30, 40)).toBe(0);
   });
 });

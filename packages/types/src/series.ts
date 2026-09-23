@@ -43,10 +43,15 @@ export type SeriesSummary = {
   /** Missing numbers, capped at {@link SERIES_GAP_PREVIEW_LIMIT}. */
   gaps: number[];
   gapCount: number;
-  /** The volume to open next: the one in progress, else the first unread. */
+  /**
+   * The volume to open next: the furthest one in progress, else the first unread after the
+   * furthest read one, else the first unread anywhere. Covers the whole series, however long.
+   */
   nextBookId: number | null;
   nextIndex: SeriesIndex | null;
   nextTitle: string | null;
+  /** Whether the up-next volume is already in progress; absent or null when there is none. */
+  nextStatus?: "reading" | "unread" | null;
 };
 
 /** Counts for the whole result set, ignoring the active completion filter. */
@@ -66,15 +71,32 @@ export type SeriesPage = {
   facets: SeriesFacets;
 };
 
+/**
+ * Where to pick a series back up, by the same rule as {@link SeriesSummary.nextBookId}. `fileId`
+ * is the file the reader should open, or null when the book has no file the reader can open.
+ */
+export type SeriesContinueTarget = {
+  bookId: number;
+  title: string | null;
+  seriesIndex: SeriesIndex | null;
+  status: "reading" | "unread";
+  fileId: number | null;
+  format: string | null;
+};
+
 export type SeriesDetail = {
   id: number;
   name: string;
   bookCount: number;
   readCount: number;
+  /** Books the user has in progress. */
+  readingCount: number;
   authors: string[];
   possibleGaps: number[];
   /** Total books a metadata provider reports for the series, or null when no provider has told us. */
   expectedBookCount: number | null;
+  /** Null once every book is read. */
+  next: SeriesContinueTarget | null;
 };
 
 export type SeriesBooksPage = BooksPage & {
@@ -92,4 +114,10 @@ export type SeriesNextBook = {
 
 export type SeriesNextBookResponse = {
   next: SeriesNextBook | null;
+};
+
+/** Result of marking a series, or its books up to a number, as read. */
+export type SeriesMarkReadResponse = {
+  /** Books that were not read before and now are. */
+  updated: number;
 };
