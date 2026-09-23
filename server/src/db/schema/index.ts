@@ -31,6 +31,7 @@ export * from './email-recipients';
 export * from './email-preferences';
 export * from './email-send-log';
 export * from './notifications';
+export * from './push';
 export * from './tools';
 export * from './fonts';
 export * from './koreader';
