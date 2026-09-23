@@ -18,6 +18,13 @@ const accentOpen = ref(false)
 const radiusOpen = ref(false)
 const backgroundOpen = ref(false)
 const currentAccent = computed(() => ACCENT_OPTIONS.find((o) => o.id === themeStore.accent))
+const themeToggleLabel = computed(() =>
+  themeStore.resolvedTheme === 'dark' ? t('auth.themePicker.switchToLight') : t('auth.themePicker.switchToDark'),
+)
+
+function handleToggleTheme() {
+  themeStore.toggleTheme()
+}
 
 function radiusPreview(id: string): string {
   const map: Record<string, string> = {
@@ -132,14 +139,12 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
       <!-- Dark / light toggle -->
       <Tooltip>
         <TooltipTrigger as-child>
-          <button class="theme-btn" @click="themeStore.toggleTheme()">
+          <button type="button" class="theme-btn" :aria-label="themeToggleLabel" @click="handleToggleTheme">
             <Sun v-if="themeStore.resolvedTheme === 'dark'" :size="14" />
             <Moon v-else :size="14" />
           </button>
         </TooltipTrigger>
-        <TooltipContent>{{
-          themeStore.resolvedTheme === 'dark' ? t('auth.themePicker.switchToLight') : t('auth.themePicker.switchToDark')
-        }}</TooltipContent>
+        <TooltipContent>{{ themeToggleLabel }}</TooltipContent>
       </Tooltip>
 
       <!-- Radius picker -->
@@ -150,12 +155,15 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
               <Tooltip v-for="opt in RADIUS_OPTIONS" :key="opt.id">
                 <TooltipTrigger as-child>
                   <button
-                    class="flex items-center justify-center w-8 h-8 rounded-lg transition-all focus:outline-none"
+                    type="button"
+                    class="flex items-center justify-center size-11 md:size-8 rounded-lg transition-all focus:outline-none"
                     :class="
                       themeStore.radius === opt.id
                         ? 'text-primary bg-primary/10'
                         : 'text-muted-foreground hover:text-foreground hover:bg-foreground/5'
                     "
+                    :aria-label="opt.label"
+                    :aria-pressed="themeStore.radius === opt.id"
                     @click="themeStore.setRadius(opt.id)"
                   >
                     <span class="w-4 h-4 border-2 border-current block" :style="{ borderRadius: radiusPreview(opt.id) }" />
@@ -168,7 +176,7 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
         </Transition>
         <Tooltip>
           <TooltipTrigger as-child>
-            <button class="theme-btn" @click="openRadius()">
+            <button type="button" class="theme-btn" :aria-label="t('auth.themePicker.changeRadius')" :aria-expanded="radiusOpen" @click="openRadius">
               <span class="w-3.5 h-3.5 border-2 border-current block" :style="{ borderRadius: radiusPreview(themeStore.radius) }" />
             </button>
           </TooltipTrigger>
@@ -179,15 +187,18 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
       <!-- Background picker -->
       <div class="relative">
         <Transition name="popover">
-          <div v-if="backgroundOpen" class="accent-popover absolute top-full right-0 mt-2 p-2.5 rounded-lg w-64 max-h-72 overflow-y-auto">
+          <div v-if="backgroundOpen" class="accent-popover absolute top-full right-0 mt-2 p-2.5 rounded-lg w-72 md:w-64 max-h-72 overflow-y-auto">
             <div class="grid grid-cols-5 gap-1.5">
               <Tooltip v-for="opt in BACKGROUND_OPTIONS" :key="opt.id">
                 <TooltipTrigger as-child>
                   <button
-                    class="w-full h-9 rounded overflow-hidden ring-2 transition-all focus:outline-none shrink-0"
+                    type="button"
+                    class="w-full h-11 md:h-9 rounded overflow-hidden ring-2 transition-all focus:outline-none shrink-0"
                     :class="
                       themeStore.background === opt.id ? 'ring-primary shadow-sm shadow-primary/20' : 'ring-border hover:ring-muted-foreground/40'
                     "
+                    :aria-label="opt.label"
+                    :aria-pressed="themeStore.background === opt.id"
                     @click="themeStore.setBackground(opt.id)"
                   >
                     <div class="w-full h-full bg-background pattern-preview" :class="opt.cssClass" />
@@ -200,7 +211,13 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
         </Transition>
         <Tooltip>
           <TooltipTrigger as-child>
-            <button class="theme-btn" @click="openBackground()">
+            <button
+              type="button"
+              class="theme-btn"
+              :aria-label="t('auth.themePicker.changeBackground')"
+              :aria-expanded="backgroundOpen"
+              @click="openBackground"
+            >
               <Wallpaper :size="14" />
             </button>
           </TooltipTrigger>
@@ -242,7 +259,7 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
         <!-- Swatch button showing current accent -->
         <Tooltip>
           <TooltipTrigger as-child>
-            <button class="theme-btn" @click="openAccent()">
+            <button type="button" class="theme-btn" :aria-label="t('auth.themePicker.changeAccent')" :aria-expanded="accentOpen" @click="openAccent">
               <span class="w-3.5 h-3.5 rounded-full block" :class="currentAccent?.swatchClass" :style="{ backgroundColor: currentAccent?.color }" />
             </button>
           </TooltipTrigger>
@@ -252,7 +269,7 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
     </div>
 
     <!-- Click-outside backdrop -->
-    <div v-if="accentOpen || radiusOpen || backgroundOpen" class="fixed inset-0 z-10" @click="closeAll()" />
+    <div v-if="accentOpen || radiusOpen || backgroundOpen" class="fixed inset-0 z-10" @click="closeAll" />
 
     <div class="login-card relative z-10 w-full max-w-sm rounded-2xl p-8">
       <div class="text-center mb-8 animate-fade-up">
@@ -272,8 +289,11 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
             v-model="username"
             type="text"
             autocomplete="username"
+            autocapitalize="none"
+            autocorrect="off"
+            spellcheck="false"
             required
-            class="w-full rounded-md border border-input bg-background/60 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 backdrop-blur-sm"
+            class="w-full min-h-11 rounded-md border border-input bg-background/60 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 backdrop-blur-sm md:min-h-0 md:text-sm"
           />
         </div>
 
@@ -285,7 +305,7 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
             type="password"
             autocomplete="current-password"
             required
-            class="w-full rounded-md border border-input bg-background/60 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 backdrop-blur-sm"
+            class="w-full min-h-11 rounded-md border border-input bg-background/60 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 backdrop-blur-sm md:min-h-0 md:text-sm"
           />
         </div>
 
@@ -297,7 +317,7 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
         <button
           type="submit"
           :disabled="loading"
-          class="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors animate-fade-up"
+          class="w-full min-h-11 rounded-md bg-primary px-4 py-2 text-sm font-medium md:min-h-0 text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors animate-fade-up"
           style="animation-delay: 240ms"
         >
           {{ loading ? t('auth.login.signingIn') : t('auth.login.signIn') }}
@@ -358,6 +378,13 @@ async function handleOidcLogin(provider: OidcProviderPublic) {
   box-shadow: var(--elevation-md);
   color: var(--muted-foreground);
   transition: color 0.15s ease;
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  .theme-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
 }
 
 .theme-btn:hover {

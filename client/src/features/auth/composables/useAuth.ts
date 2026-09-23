@@ -1,11 +1,20 @@
 import { ref } from 'vue'
 import type { AuthUser, AuthResponse } from '@bookorbit/types'
-import { api, refreshAccessToken, setAccessToken, setOnAuthFailure } from '@/lib/api'
+import {
+  api,
+  isServerUnavailableStatus,
+  isServerUnreachable,
+  refreshAccessToken,
+  ServerUnavailableError,
+  setAccessToken,
+  setOnAuthFailure,
+} from '@/lib/api'
 import router from '@/router'
 import { cancelPendingDisplaySettingsSync, initDisplaySettingsSync, loadDisplaySettingsFromServer } from '@/composables/useDisplaySettingsSync'
 import { cancelPendingThemeSync, initThemeSync, loadFromServer } from '@/composables/useThemeSync'
 import { cancelPendingLocaleSync, hydrateLocalePreference, initLocaleSync } from '@/composables/useLocaleSync'
 import { useSetupStatus } from './useSetupStatus'
+import { captureRedirectTarget, loginLocation, sanitizeRedirect } from '../lib/auth-redirect'
 import { disconnectAuthorEnrichmentSocket } from '@/features/settings/composables/useAuthorEnrichmentStatus'
 import { disconnectBookMetadataFetchSocket } from '@/features/book-metadata-fetch/composables/useBookMetadataFetchStatus'
 import { resetWhatsNew } from '@/features/whats-new/composables/useWhatsNew'
@@ -20,6 +29,8 @@ const SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
 const user = ref<AuthUser | null>(null)
 const isLoading = ref(false)
+/** The last session check could not reach the server, so whether the user is signed in is unknown. */
+const sessionUnavailable = ref(false)
 let sessionRefreshTimer: number | null = null
 
 function canRefreshSession() {
@@ -70,16 +81,18 @@ function clearAuth() {
 }
 
 setOnAuthFailure(() => {
+  const redirect = captureRedirectTarget(router)
   clearAuth()
   // Public pages are reached without a session, so a rejected request there is not a reason to
   // leave. Moving on would strand a reset or magic link, or drop the sign-in redirect.
   if (router.currentRoute.value.meta.public) return
   const { needsSetup } = useSetupStatus()
-  router.push(needsSetup.value ? '/setup' : '/login')
+  void router.replace(needsSetup.value ? '/setup' : loginLocation(redirect))
 })
 
 async function me(): Promise<void> {
   const res = await api('/api/v1/auth/me')
+  if (isServerUnavailableStatus(res.status)) throw new ServerUnavailableError(res.status)
   if (!res.ok) throw new Error('Failed to load user')
   user.value = await res.json()
 }
@@ -122,13 +135,16 @@ export class LoginError extends Error {
 export function useAuth() {
   async function init(): Promise<void> {
     isLoading.value = true
+    sessionUnavailable.value = false
     try {
       await refreshAccessToken()
       await me()
       await hydratePreferences()
       startSessionRefresh()
-    } catch {
-      // no valid session
+    } catch (reason) {
+      if (isServerUnreachable(reason) && !user.value) {
+        sessionUnavailable.value = true
+      }
     } finally {
       initThemeSync()
       initDisplaySettingsSync()
@@ -156,12 +172,8 @@ export function useAuth() {
     await hydratePreferences({ refreshUser: true })
     startSessionRefresh()
 
-    if (user.value?.isDefaultPassword) {
-      router.push('/')
-    } else {
-      const redirect = router.currentRoute.value.query.redirect as string | undefined
-      router.push(redirect ?? '/')
-    }
+    const redirect = user.value?.isDefaultPassword ? null : sanitizeRedirect(router.currentRoute.value.query.redirect)
+    void router.replace(redirect ?? '/')
   }
 
   async function setup(payload: { username: string; name: string; email: string; password: string; setupToken?: string }): Promise<void> {
@@ -244,5 +256,5 @@ export function useAuth() {
     router.push('/')
   }
 
-  return { user, isLoading, init, login, loginWithMagicLink, logout, me, register, setup }
+  return { user, isLoading, sessionUnavailable, init, login, loginWithMagicLink, logout, me, register, setup }
 }

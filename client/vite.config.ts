@@ -89,11 +89,27 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // Foliate ships under stable, unhashed URLs, and precaching them once served a stale engine
+        // on Firefox (#575). Network-first keeps updates immediate and still reads EPUBs offline.
         globIgnores: ['**/assets/foliate/**'],
         importScripts: ['push-sw.js'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
+          {
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/assets/foliate/'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'foliate-engine',
+              networkTimeoutSeconds: 4,
+              expiration: {
+                maxEntries: 60,
+              },
+              cacheableResponse: {
+                statuses: [200],
+              },
+            },
+          },
           {
             urlPattern: /^.*\/api\/v1\/books\/\d+\/cover(\?.*)?$/,
             handler: 'CacheFirst',

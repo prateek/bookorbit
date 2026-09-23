@@ -801,6 +801,14 @@ describe('UserRepository', () => {
     );
   });
 
+  it('findByUsername matches regardless of case, like the lower(username) unique index', async () => {
+    await repo.findByUsername('Alice');
+
+    expect(db.query.users.findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({ op: 'sql', text: 'lower() = lower()', values: [schema.users.username, 'Alice'] }),
+    });
+  });
+
   it('findAvatarStateById selects avatar state columns only', async () => {
     await repo.findAvatarStateById(9);
 
