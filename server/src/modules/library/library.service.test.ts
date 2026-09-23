@@ -74,6 +74,7 @@ describe('LibraryService', () => {
     grantAccess: vi.fn(),
     updateAccess: vi.fn(),
     revokeAccess: vi.fn(),
+    findAccessibleUserIds: vi.fn(),
   };
 
   const config = { get: vi.fn().mockReturnValue('/books') };
@@ -94,6 +95,9 @@ describe('LibraryService', () => {
     syncSchedule: vi.fn(),
     removeSchedule: vi.fn(),
   };
+  const userStatistics = {
+    invalidateUser: vi.fn(),
+  };
 
   let service: LibraryService;
 
@@ -109,6 +113,7 @@ describe('LibraryService', () => {
       achievementEvents as any,
       pathPolicy as any,
       scanScheduler as any,
+      userStatistics as any,
     );
 
     libraryRepo.findPodcastIds.mockResolvedValue([]);
@@ -475,6 +480,32 @@ describe('LibraryService', () => {
 
     expect(scanScheduler.syncSchedule).toHaveBeenNthCalledWith(1, 10, '0 6 * * *');
     expect(scanScheduler.syncSchedule).toHaveBeenNthCalledWith(2, 10, null);
+  });
+
+  it('update clears stats caches for every user of the library when countSeriesAsOneBook changes', async () => {
+    libraryRepo.findById.mockResolvedValue([{ id: 10, type: 'books', name: 'Serials', icon: 'BookOpen', countSeriesAsOneBook: false }]);
+    libraryRepo.update.mockResolvedValue([{ id: 10, name: 'Serials', icon: 'BookOpen', countSeriesAsOneBook: true }]);
+    libraryRepo.findFoldersByLibrary.mockResolvedValue([]);
+    libraryRepo.findAccessibleUserIds.mockResolvedValue([1, 4]);
+    const listener = vi.fn();
+    service.onBookCountingChanged(listener);
+
+    await service.update(10, { countSeriesAsOneBook: true } as any);
+
+    expect(libraryRepo.findAccessibleUserIds).toHaveBeenCalledWith(10);
+    expect(userStatistics.invalidateUser.mock.calls).toEqual([[1], [4]]);
+    expect(listener).toHaveBeenCalledWith([1, 4]);
+  });
+
+  it('update leaves stats caches alone when countSeriesAsOneBook is unchanged', async () => {
+    libraryRepo.findById.mockResolvedValue([{ id: 10, type: 'books', name: 'Serials', icon: 'BookOpen', countSeriesAsOneBook: true }]);
+    libraryRepo.update.mockResolvedValue([{ id: 10, name: 'Serials', icon: 'BookOpen', countSeriesAsOneBook: true }]);
+    libraryRepo.findFoldersByLibrary.mockResolvedValue([]);
+
+    await service.update(10, { countSeriesAsOneBook: true, name: 'Serials' } as any);
+
+    expect(libraryRepo.findAccessibleUserIds).not.toHaveBeenCalled();
+    expect(userStatistics.invalidateUser).not.toHaveBeenCalled();
   });
 
   it('update rejects book-only settings for podcast libraries', async () => {

@@ -42,6 +42,7 @@ function makeService() {
   };
   const libraryService = {
     findAccessibleLibraryIds: vi.fn(),
+    onBookCountingChanged: vi.fn(),
   };
 
   const service = new DashboardWidgetService(widgetRepo as never, libraryService as never);
@@ -526,6 +527,24 @@ describe('DashboardWidgetService', () => {
 
       expect(widgetRepo.getReadingStreak).toHaveBeenCalledTimes(2);
       expect(widgetRepo.getLibraryOverview).toHaveBeenCalledTimes(2);
+    });
+
+    it('drops cached widgets for the affected users when a library changes how it counts books', async () => {
+      const { service, widgetRepo, libraryService } = makeService();
+      const affected = makeUser({ id: 7 });
+      const other = makeUser({ id: 8 });
+      libraryService.findAccessibleLibraryIds.mockResolvedValue([1]);
+      widgetRepo.getReadingStreak.mockResolvedValue({ currentStreak: 5, longestStreak: 10, lastSevenDays: [] });
+      service.onModuleInit();
+      const [listener] = libraryService.onBookCountingChanged.mock.calls[0] as [(userIds: readonly number[]) => void];
+
+      await service.getReadingStreak(affected);
+      await service.getReadingStreak(other);
+      listener([7]);
+      await service.getReadingStreak(affected);
+      await service.getReadingStreak(other);
+
+      expect(widgetRepo.getReadingStreak).toHaveBeenCalledTimes(3);
     });
   });
 

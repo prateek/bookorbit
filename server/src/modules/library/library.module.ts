@@ -7,6 +7,7 @@ import { FileWriteModule } from '../file-write/file-write.module';
 import { NotificationModule } from '../notification/notification.module';
 import { PathModule } from '../path/path.module';
 import { ScannerModule } from '../scanner/scanner.module';
+import { UserStatisticsModule } from '../user-statistics/user-statistics.module';
 import { BulkRenameService } from './bulk-rename.service';
 import { LibraryController } from './library.controller';
 import { LibraryRepository } from './library.repository';
@@ -23,6 +24,7 @@ import { LibraryAddedAtService } from './library-added-at.service';
     forwardRef(() => NotificationModule),
     AppSettingsModule,
     PathModule,
+    UserStatisticsModule,
   ],
   controllers: [LibraryController],
   providers: [LibraryService, LibraryRepository, LibraryScanSchedulerService, BulkRenameService, LibraryAddedAtService],

@@ -481,6 +481,19 @@ export class LibraryRepository {
     });
   }
 
+  /** Users with a grant plus every superuser, who reaches all libraries without one. */
+  async findAccessibleUserIds(libraryId: number): Promise<number[]> {
+    const rows = await this.db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .leftJoin(
+        schema.userLibraryAccess,
+        and(eq(schema.userLibraryAccess.userId, schema.users.id), eq(schema.userLibraryAccess.libraryId, libraryId)),
+      )
+      .where(or(eq(schema.users.isSuperuser, true), isNotNull(schema.userLibraryAccess.userId)));
+    return rows.map((row) => row.id);
+  }
+
   async grantAccess(libraryId: number, userId: number, accessLevel: AccessLevel) {
     await this.db
       .insert(schema.userLibraryAccess)

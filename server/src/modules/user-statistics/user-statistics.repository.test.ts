@@ -91,6 +91,7 @@ describe('UserStatisticsRepository', () => {
       [{ hour: 9, format: 'EPUB', source: 'koreader', readingSeconds: 500, eventsCount: 3 }],
       [{ dayOfWeek: 2, source: 'manual', format: 'EPUB', readingSeconds: 900, eventsCount: 4 }],
       [{ year: 2026, month: 4, count: 2 }],
+      [],
       [{ year: 2026, month: 4, count: 2 }],
     ]);
     const repo = new UserStatisticsRepository(db as never);
@@ -107,6 +108,24 @@ describe('UserStatisticsRepository', () => {
     ]);
     await expect(repo.getCompletionTimeline(5, false, [2], 365)).resolves.toEqual([{ year: 2026, month: 4, count: 2 }]);
     await expect(repo.getMonthlyCompletions(5, false, [2], 365)).resolves.toEqual([{ year: 2026, month: 4, count: 2 }]);
+  });
+
+  it('places each series unit once in the goal line, in the month of its first finished book', async () => {
+    const calls: string[] = [];
+    const fakeClient = {
+      query: vi.fn().mockImplementation((cfg: { text: string }) => {
+        calls.push(cfg.text);
+        return Promise.resolve({ rows: [[2026, 3, 2]] });
+      }),
+    };
+    const db = drizzle({ client: fakeClient as never, schema });
+    const repo = new UserStatisticsRepository(db as never);
+
+    await expect(repo.getMonthlyCompletions(5, true, undefined, 365)).resolves.toEqual([{ year: 2026, month: 3, count: 2 }]);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('min("reading_attempts"."ended_on")');
+    expect(calls[0]).toMatch(/group by case when "libraries"\."count_series_as_one_book"/);
   });
 
   it('counts completed reading attempts when their sessions finish below 99 percent', async () => {

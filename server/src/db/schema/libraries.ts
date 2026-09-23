@@ -50,6 +50,8 @@ export const libraries = pgTable(
     // Reading progress thresholds
     readingThreshold: doublePrecision('reading_threshold').notNull().default(0.25),
     markAsFinishedPercentComplete: integer('mark_as_finished_percent_complete').notNull().default(98),
+    /** Reading goals, statistics and achievements count every finished book of one series as a single book. */
+    countSeriesAsOneBook: boolean('count_series_as_one_book').notNull().default(false),
 
     // File write-back settings
     fileWriteEnabled: boolean('file_write_enabled').notNull().default(false),

@@ -185,6 +185,7 @@ const sectionProps = computed(() => ({
   reading: {
     readingThreshold: form.readingThreshold,
     markAsFinishedPercentComplete: form.markAsFinishedPercentComplete,
+    countSeriesAsOneBook: form.countSeriesAsOneBook,
   },
   schedule: {
     watch: form.type === 'podcasts' ? form.watchLocalFolders : form.watch,
@@ -335,6 +336,7 @@ const sectionListeners = {
   'update:excludePatterns': (value: string[]) => (form.excludePatterns = value),
   'update:readingThreshold': (value: number) => (form.readingThreshold = value),
   'update:markAsFinishedPercentComplete': (value: number) => (form.markAsFinishedPercentComplete = value),
+  'update:countSeriesAsOneBook': (value: boolean) => (form.countSeriesAsOneBook = value),
   'update:watch': (value: boolean) => {
     if (form.type === 'podcasts') form.watchLocalFolders = value
     else form.watch = value

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 
 import type {
   CurrentlyReadingWidgetData,
@@ -46,7 +46,7 @@ const DASHBOARD_CACHE_MAX_ENTRIES = 200;
 const WIDGET_QUERY_CONCURRENCY = 3;
 
 @Injectable()
-export class DashboardWidgetService {
+export class DashboardWidgetService implements OnModuleInit {
   private readonly logger = new Logger(DashboardWidgetService.name);
   private readonly liveCache = new StatsCache({ ttlMs: DASHBOARD_LIVE_TTL_MS, maxEntries: DASHBOARD_CACHE_MAX_ENTRIES });
   private readonly staleCache = new StatsCache({ ttlMs: DASHBOARD_STALE_TTL_MS, maxEntries: DASHBOARD_CACHE_MAX_ENTRIES });
@@ -66,6 +66,12 @@ export class DashboardWidgetService {
 
   private async getLibraryIds(user: RequestUser): Promise<number[]> {
     return resolveDashboardLibraryIds(await this.libraryService.findAccessibleLibraryIds(user), user);
+  }
+
+  onModuleInit(): void {
+    this.libraryService.onBookCountingChanged((userIds) => {
+      for (const userId of userIds) this.clearCacheForUser(userId);
+    });
   }
 
   clearCacheForUser(userId: number): void {

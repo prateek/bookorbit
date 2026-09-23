@@ -1,17 +1,24 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 
 const { t } = useI18n()
 
-defineProps<{
+const props = defineProps<{
   readingThreshold: number
   markAsFinishedPercentComplete: number
+  countSeriesAsOneBook: boolean
 }>()
 
 const emit = defineEmits<{
   'update:readingThreshold': [value: number]
   'update:markAsFinishedPercentComplete': [value: number]
+  'update:countSeriesAsOneBook': [value: boolean]
 }>()
+
+function handleCountSeriesAsOneBookToggle() {
+  emit('update:countSeriesAsOneBook', !props.countSeriesAsOneBook)
+}
 
 function onReadingThresholdInput(e: Event) {
   const val = parseFloat((e.target as HTMLInputElement).value)
@@ -80,6 +87,20 @@ function onFinishPercentInput(e: Event) {
         <span>90%</span>
         <span>100%</span>
       </div>
+    </div>
+
+    <div class="flex items-start justify-between gap-4 rounded-lg border border-border bg-card p-4">
+      <div>
+        <p class="text-sm font-medium text-foreground">{{ t('library.creator.reading.countSeriesAsOneBook.title') }}</p>
+        <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {{ t('library.creator.reading.countSeriesAsOneBook.hint') }}
+        </p>
+      </div>
+      <ToggleSwitch
+        :model-value="countSeriesAsOneBook"
+        :aria-label="t('library.creator.reading.countSeriesAsOneBook.title')"
+        @update:model-value="handleCountSeriesAsOneBookToggle"
+      />
     </div>
   </div>
 </template>

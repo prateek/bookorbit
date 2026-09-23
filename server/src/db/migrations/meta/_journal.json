@@ -694,6 +694,13 @@
       "when": 1790119788882,
       "tag": "0098_add_user_unfollowed_series",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1790119788883,
+      "tag": "0099_count_series_as_one_book",
+      "breakpoints": true
     }
   ]
 }

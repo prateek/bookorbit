@@ -22,6 +22,7 @@ import type { LibraryFolder } from '../../db/schema/libraries';
 import { AchievementEventsService, ACHIEVEMENT_EVENT_LIBRARY_CATALOG_CHANGED } from '../achievement/achievement-events.service';
 import { FileWriteService } from '../file-write/file-write.service';
 import { PathPolicyService } from '../path/path-policy.service';
+import { UserStatisticsService } from '../user-statistics/user-statistics.service';
 import { isPrimaryFormat } from '../scanner/lib/classify';
 import { FileWatcherService } from '../scanner/file-watcher.service';
 import { ScannerService } from '../scanner/scanner.service';
@@ -63,6 +64,7 @@ const BOOK_ONLY_LIBRARY_FIELDS = [
   'excludePatterns',
   'readingThreshold',
   'markAsFinishedPercentComplete',
+  'countSeriesAsOneBook',
   'fileNamingPattern',
   'fileWriteEnabled',
   'fileWriteWriteCover',
@@ -87,6 +89,7 @@ const PODCAST_ONLY_LIBRARY_FIELDS = ['localFolders', 'watchLocalFolders'] as con
 export class LibraryService {
   private readonly logger = new Logger(LibraryService.name);
   private readonly appDataPath: string;
+  private readonly bookCountingListeners: Array<(userIds: readonly number[]) => void> = [];
 
   constructor(
     private readonly libraryRepo: LibraryRepository,
@@ -97,8 +100,14 @@ export class LibraryService {
     private readonly achievementEvents: AchievementEventsService,
     private readonly pathPolicy: PathPolicyService,
     private readonly scanScheduler: LibraryScanSchedulerService,
+    private readonly userStatistics: UserStatisticsService,
   ) {
     this.appDataPath = this.config.get<string>('storage.appDataPath')!;
+  }
+
+  /** Lets modules that depend on this one drop caches built on a library's book-counting rules. */
+  onBookCountingChanged(listener: (userIds: readonly number[]) => void): void {
+    this.bookCountingListeners.push(listener);
   }
 
   async verifyUserAccess(userId: number, libraryId: number, isSuperuser: boolean): Promise<void> {
@@ -195,6 +204,7 @@ export class LibraryService {
       coverAspectRatio: dto.coverAspectRatio ?? (libraryType === 'podcasts' ? '1/1' : DEFAULT_LIBRARY_COVER_ASPECT_RATIO),
       readingThreshold: libraryType === 'books' ? (dto.readingThreshold ?? 0.25) : 0.25,
       markAsFinishedPercentComplete: libraryType === 'books' ? (dto.markAsFinishedPercentComplete ?? 98) : 98,
+      countSeriesAsOneBook: libraryType === 'books' ? (dto.countSeriesAsOneBook ?? false) : false,
       fileNamingPattern: libraryType === 'books' ? (dto.fileNamingPattern ?? null) : null,
       fileWriteEnabled: libraryType === 'books' ? (dto.fileWriteEnabled ?? false) : false,
       fileWriteWriteCover: libraryType === 'books' ? (dto.fileWriteWriteCover ?? true) : false,
@@ -289,6 +299,9 @@ export class LibraryService {
 
     const [updated] = await this.libraryRepo.update(id, fields);
     if (dto.autoScanCronExpression !== undefined) this.scanScheduler.syncSchedule(id, dto.autoScanCronExpression);
+    if (dto.countSeriesAsOneBook !== undefined && dto.countSeriesAsOneBook !== existing.countSeriesAsOneBook) {
+      await this.clearBookCountingCaches(id);
+    }
 
     if (folderInputs !== undefined) {
       existingFolders ??= await this.libraryRepo.findFoldersByLibrary(id);
@@ -330,6 +343,12 @@ export class LibraryService {
     if (shouldRescan && existing.type === 'books') this.scannerService.startScanAsync(id);
 
     return { ...normalizeLibraryOrganizationMode(updated), folders };
+  }
+
+  private async clearBookCountingCaches(libraryId: number): Promise<void> {
+    const userIds = await this.libraryRepo.findAccessibleUserIds(libraryId);
+    for (const userId of userIds) this.userStatistics.invalidateUser(userId);
+    for (const listener of this.bookCountingListeners) listener(userIds);
   }
 
   async remove(id: number) {

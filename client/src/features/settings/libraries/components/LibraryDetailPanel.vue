@@ -40,6 +40,11 @@ const formatsLabel = computed(() =>
     ? t('settings.admin.libraries.detail.allSupported')
     : formatList(props.library.allowedFormats.map((format) => FORMAT_LABELS[format] ?? format.toUpperCase())),
 )
+const seriesCountLabel = computed(() =>
+  props.library.countSeriesAsOneBook
+    ? t('settings.admin.libraries.detail.seriesCountAsValue.one')
+    : t('settings.admin.libraries.detail.seriesCountAsValue.each'),
+)
 const accessLabel = computed(() => (props.accessCount === null ? '' : t('settings.admin.libraries.detail.peopleCount', { count: props.accessCount })))
 
 function requestEdit() {
@@ -122,6 +127,10 @@ function requestEdit() {
             <dd class="ms-auto text-[12.5px] font-medium tabular-nums text-foreground">
               {{ formatPercent(library.markAsFinishedPercentComplete / 100) }}
             </dd>
+          </div>
+          <div class="flex items-center gap-3 border-t border-border py-1.5">
+            <dt class="shrink-0 text-[12.5px] text-muted-foreground">{{ t('settings.admin.libraries.detail.seriesCountAs') }}</dt>
+            <dd class="ms-auto text-[12.5px] font-medium text-foreground">{{ seriesCountLabel }}</dd>
           </div>
         </dl>
       </section>

@@ -1196,6 +1196,11 @@
           "allowedFormats": "Allowed formats",
           "countsAsStarted": "Counts as started",
           "countsAsFinished": "Counts as finished",
+          "seriesCountAs": "A series counts as",
+          "seriesCountAsValue": {
+            "one": "One book",
+            "each": "Each of its books"
+          },
           "peopleWithAccess": "People with access",
           "added": "Added",
           "coverShape": "Cover shape",
@@ -8542,6 +8547,10 @@
         "markAsFinished": {
           "title": "Mark as finished",
           "hint": "A book is automatically marked as \"read\" when this percentage of progress is reached."
+        },
+        "countSeriesAsOneBook": {
+          "title": "Count each series as one book",
+          "hint": "Reading goals, statistics and achievements count a series as a single book: however many of its books you finish in a year, a month or overall, the series adds one. Useful for serials published one chapter per book. Reading time, pages and streaks still count every book."
         }
       },
       "schedule": {
