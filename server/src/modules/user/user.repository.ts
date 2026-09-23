@@ -301,7 +301,7 @@ export class UserRepository {
   }
 
   async findByUsername(username: string) {
-    return this.db.query.users.findFirst({ where: eq(schema.users.username, username) });
+    return this.db.query.users.findFirst({ where: sql`lower(${schema.users.username}) = lower(${username})` });
   }
 
   async findByIdWithPermissions(id: number): Promise<RequestUser | null> {
