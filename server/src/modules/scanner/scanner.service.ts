@@ -27,6 +27,7 @@ import { selectEmbeddedCoverSources } from '../book-cover-store/cover-sources';
 import { CoverSlotReconciler } from '../metadata/cover-slot-reconciler.service';
 import { MetadataService } from '../metadata/metadata.service';
 import { NotificationService, type NotificationContent } from '../notification/notification.service';
+import { NewBooksPushNotifier } from '../push/new-books-push.notifier';
 import type { BookFile } from '../../db/schema';
 import { ScanGateway } from './scan.gateway';
 import { ScanJobStore } from './scan-job-store.service';
@@ -349,6 +350,7 @@ export class ScannerService implements OnApplicationBootstrap {
     @Optional() private readonly autoFetchOrchestrator?: BookMetadataFetchOrchestratorService,
     @Optional() private readonly achievementEvents?: AchievementEventsService,
     @Optional() private readonly coverReconciler?: CoverSlotReconciler,
+    @Optional() private readonly newBooksPush?: NewBooksPushNotifier,
   ) {}
 
   /**
@@ -525,7 +527,8 @@ export class ScannerService implements OnApplicationBootstrap {
     });
   }
 
-  private bufferBookForEmit(libraryId: number, bookId: number): void {
+  private bufferBookForEmit(libraryId: number, bookId: number, options: { push?: boolean } = {}): void {
+    if (options.push !== false) this.newBooksPush?.enqueue(libraryId, [bookId]);
     let ids = this.bookEmitBuffer.get(libraryId);
     if (!ids) {
       ids = [];
@@ -1717,7 +1720,8 @@ export class ScannerService implements OnApplicationBootstrap {
         counts.addedCount += result.added;
         counts.updatedCount += result.updated;
         if (result.becameVisible) {
-          this.bufferBookForEmit(libraryId, result.bookId);
+          // A folder's first scan is a bulk import; pushing every few minutes while it runs is noise.
+          this.bufferBookForEmit(libraryId, result.bookId, { push: !isFirstScan });
           this.flushBookEmitBuffer(libraryId);
         }
 

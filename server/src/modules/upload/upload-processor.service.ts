@@ -18,6 +18,7 @@ import { BookCoverStore } from '../book-cover-store/book-cover-store.service';
 import { CoverSlotReconciler } from '../metadata/cover-slot-reconciler.service';
 import { MetadataService } from '../metadata/metadata.service';
 import { METADATA_AUDIO_FORMATS } from '../metadata/metadata-extraction.service';
+import { NewBooksPushNotifier } from '../push/new-books-push.notifier';
 import { computeFileHash } from '../scanner/lib/hash';
 import { inspectEpubMediaOverlayFields } from '../reader/epub/epub-media-overlay-capability';
 
@@ -101,6 +102,7 @@ export class UploadProcessorService {
     private readonly coverStore: BookCoverStore,
     @Optional() private readonly autoFetchOrchestrator?: BookMetadataFetchOrchestratorService,
     @Optional() private readonly coverReconciler?: CoverSlotReconciler,
+    @Optional() private readonly newBooksPush?: NewBooksPushNotifier,
   ) {}
 
   /** A file joined or left these books, so their cover slots are brought back in line with it. */
@@ -171,7 +173,7 @@ export class UploadProcessorService {
     const measured: MeasuredFile[] = [];
     for (const file of files) measured.push(await this.measureFile(file.absolutePath, file.format));
 
-    return this.db.transaction(async (tx) => {
+    const records = await this.db.transaction(async (tx) => {
       const bookIds: number[] = [];
       const createdBookIds: number[] = [];
       const attachedFileIds: number[] = [];
@@ -201,6 +203,9 @@ export class UploadProcessorService {
 
       return { bookIds, createdBookIds, attachedFileIds, replacedPrimaries };
     });
+    // Safe even if the caller rolls the unit back: the push batch only counts books still present when it flushes.
+    this.newBooksPush?.enqueue(libraryId, records.createdBookIds);
+    return records;
   }
 
   /**
@@ -419,6 +424,7 @@ export class UploadProcessorService {
     if (METADATA_FORMATS.has(format)) {
       await this.runMetadataExtraction(bookId, absolutePath, format, 'upload.extract_metadata', startedAt);
     }
+    this.newBooksPush?.enqueue(libraryId, [bookId]);
 
     if (!this.autoFetchOrchestrator) {
       this.logger.debug(

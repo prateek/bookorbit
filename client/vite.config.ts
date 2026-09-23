@@ -91,6 +91,7 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         globIgnores: ['**/assets/foliate/**'],
+        importScripts: ['push-sw.js'],
         // Keep the offline shell at a separate path. Workbox maps '/' and its query variants to
         // precached index.html before the NetworkFirst route can contact the auth proxy.
         manifestTransforms: [

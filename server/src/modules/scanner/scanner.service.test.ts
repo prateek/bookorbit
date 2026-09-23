@@ -164,6 +164,7 @@ function makeService(
   autoFetchOrchestrator?: { scheduleImportedBooksIfEligible: (...args: unknown[]) => Promise<number> },
   coverStore: { enrichCardVersions: (cards: unknown[]) => Promise<void> } = { enrichCardVersions: vi.fn().mockResolvedValue(undefined) },
   coverReconciler?: { enqueue: (...args: unknown[]) => Promise<void>; enqueueExpiredDormant?: (libraryId: number) => Promise<void> },
+  newBooksPush?: { enqueue: (libraryId: number, bookIds: readonly number[]) => void },
 ) {
   const jobStore = new ScanJobStore();
   const notificationService = { notify: vi.fn().mockResolvedValue(undefined) };
@@ -180,6 +181,7 @@ function makeService(
     autoFetchOrchestrator as any,
     achievementEvents as any,
     coverReconciler as any,
+    newBooksPush as any,
   );
   return { service, jobStore, notificationService, achievementEvents, selfWriteRegistry };
 }
@@ -670,6 +672,43 @@ describe('scan completed notification significance', () => {
       meta: { summary: { libraryId: 1, addedCount: 3, changedCount: 0, highlights: [{ label: 'Chrysalis', count: 3 }], singleBookId: null } },
     });
     expect(folded).toMatchObject({ message: 'Added 4 books: Chrysalis (4).', actionUrl: '/library/1' });
+  });
+});
+
+describe('new book push', () => {
+  function scanWithNewBook(existingBooks: unknown[]) {
+    mockFindCandidates.mockResolvedValue({
+      candidates: [makeCandidate('/library/Author/New Book', [makeFileStat({ absolutePath: '/library/Author/New Book/book.epub' })])],
+      skippedDirs: new Set(),
+      unchangedDirs: new Set(),
+      dirMtimes: new Map(),
+    });
+    return makeRepo({ findBooksByLibraryFolder: vi.fn().mockResolvedValue(existingBooks) });
+  }
+
+  it('queues a book that appears in an already-scanned folder', async () => {
+    const repo = scanWithNewBook([{ id: 5, libraryId: 1, libraryFolderId: 1, folderPath: '/library/Author/Old Book', status: 'present' }]);
+    const newBooksPush = { enqueue: vi.fn<(libraryId: number, bookIds: readonly number[]) => void>() };
+    const done = awaitScan(repo);
+    const { service } = makeService(repo, undefined, undefined, undefined, newBooksPush);
+
+    await service.startScan(1, 'schedule');
+    await done;
+
+    expect(newBooksPush.enqueue).toHaveBeenCalledWith(1, [1]);
+  });
+
+  it('does not push while a folder is imported for the first time', async () => {
+    const repo = scanWithNewBook([]);
+    const newBooksPush = { enqueue: vi.fn<(libraryId: number, bookIds: readonly number[]) => void>() };
+    const done = awaitScan(repo);
+    const { service } = makeService(repo, undefined, undefined, undefined, newBooksPush);
+
+    await service.startScan(1, 'manual');
+    await done;
+
+    expect(repo.createBook).toHaveBeenCalled();
+    expect(newBooksPush.enqueue).not.toHaveBeenCalled();
   });
 });
 
