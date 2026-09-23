@@ -5,6 +5,7 @@ import { Bell, BellOff, CheckCheck, Trash2 } from '@lucide/vue'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import { useNotifications } from '../composables/useNotifications'
 import NotificationItemVue from './NotificationItem.vue'
 
@@ -15,6 +16,7 @@ const { t } = useI18n()
 const { notifications, unreadCount, loading, hasMore, fetchNotifications, markAsRead, markAllAsRead, dismiss, clearAll } = useNotifications()
 
 const sheetOpen = ref(false)
+const confirmClearOpen = ref(false)
 
 watch(sheetOpen, (open) => {
   if (open) {
@@ -34,8 +36,21 @@ function handleMarkAllRead() {
   markAllAsRead()
 }
 
+function handleNavigate() {
+  sheetOpen.value = false
+}
+
 function handleClearAll() {
+  confirmClearOpen.value = true
+}
+
+function handleConfirmClearAll() {
+  confirmClearOpen.value = false
   clearAll()
+}
+
+function handleCancelClearAll() {
+  confirmClearOpen.value = false
 }
 
 function handleLoadMore() {
@@ -51,7 +66,7 @@ function handleLoadMore() {
           <Button
             variant="ghost"
             size="icon"
-            class="relative h-8 w-8 border border-(--shell-accent-line) text-foreground transition-colors duration-150 hover:bg-(--shell-accent-wash)"
+            class="touch-target relative h-8 w-8 max-md:size-9 border border-(--shell-accent-line) text-foreground transition-colors duration-150 hover:bg-(--shell-accent-wash)"
             :class="iconRadiusClass"
             :aria-label="t('notifications.title')"
           >
@@ -73,7 +88,13 @@ function handleLoadMore() {
             <SheetDescription class="sr-only">{{ t('notifications.description') }}</SheetDescription>
           </div>
           <div class="flex items-center gap-1 pr-8">
-            <Button v-if="unreadCount > 0" variant="ghost" size="sm" class="h-7 gap-1.5 text-xs text-muted-foreground" @click="handleMarkAllRead">
+            <Button
+              v-if="unreadCount > 0"
+              variant="ghost"
+              size="sm"
+              class="h-7 gap-1.5 text-xs text-muted-foreground pointer-coarse:h-11"
+              @click="handleMarkAllRead"
+            >
               <CheckCheck :size="14" />
               {{ t('notifications.markAllRead') }}
             </Button>
@@ -81,7 +102,7 @@ function handleLoadMore() {
               v-if="notifications.length > 0"
               variant="ghost"
               size="sm"
-              class="h-7 gap-1.5 text-xs text-muted-foreground"
+              class="h-7 gap-1.5 text-xs text-muted-foreground pointer-coarse:h-11"
               @click="handleClearAll"
             >
               <Trash2 :size="14" />
@@ -103,6 +124,7 @@ function handleLoadMore() {
               :notification="item"
               @read="handleMarkAsRead"
               @dismiss="handleDismiss"
+              @navigate="handleNavigate"
             />
           </div>
 
@@ -116,6 +138,15 @@ function handleLoadMore() {
             </Button>
           </div>
         </div>
+
+        <ConfirmDialog
+          :open="confirmClearOpen"
+          :title="t('notifications.clearConfirm.title')"
+          :description="t('notifications.clearConfirm.description')"
+          :confirm-label="t('notifications.clearConfirm.confirm')"
+          @confirm="handleConfirmClearAll"
+          @cancel="handleCancelClearAll"
+        />
       </SheetContent>
     </Sheet>
     <TooltipContent>{{ t('notifications.title') }}</TooltipContent>
