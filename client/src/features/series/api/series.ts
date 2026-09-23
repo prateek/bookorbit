@@ -1,5 +1,5 @@
 import { api } from '@/lib/api'
-import type { SeriesBooksPage, SeriesPage } from '@bookorbit/types'
+import type { SeriesBooksPage, SeriesIndex, SeriesMarkReadResponse, SeriesPage } from '@bookorbit/types'
 import type { CompletionStatus, SeriesBookSort, SeriesListSort, SortDirection } from '../types/series'
 
 type ListSeriesParams = {
@@ -19,6 +19,9 @@ type ListSeriesBooksParams = {
   sort: SeriesBookSort
   order: SortDirection
   libraryId?: number | null
+  readState?: 'unread' | null
+  /** Opens the listing on the page holding this book; series order only. */
+  anchorBookId?: number | null
 }
 
 function toQuery(params: Record<string, unknown>): string {
@@ -37,5 +40,29 @@ export async function fetchSeriesBooks(seriesId: number, params: ListSeriesBooks
   const qs = toQuery(params)
   const res = await api(`/api/v1/series/${seriesId}/books?${qs}`)
   if (!res.ok) throw new Error(`Failed to fetch series books: ${res.status}`)
+  return res.json()
+}
+
+type MarkSeriesReadParams = {
+  /** Marks every book numbered at or below this index; omitted marks the whole series. */
+  upToIndex?: SeriesIndex | null
+  libraryId?: number | null
+}
+
+/**
+ * Marks a series, or its books up to a number, as read in one request. The server resolves the
+ * books by this series' own numbering, so a serial of thousands of chapters is one call.
+ */
+export async function markSeriesRead(seriesId: number, params: MarkSeriesReadParams = {}): Promise<SeriesMarkReadResponse> {
+  const body: { upToIndex?: SeriesIndex; libraryId?: number } = {}
+  if (params.upToIndex != null) body.upToIndex = params.upToIndex
+  if (params.libraryId != null) body.libraryId = params.libraryId
+
+  const res = await api(`/api/v1/series/${seriesId}/mark-read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`Failed to mark series read: ${res.status}`)
   return res.json()
 }
