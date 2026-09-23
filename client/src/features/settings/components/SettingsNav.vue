@@ -165,7 +165,7 @@ defineExpose({ focusSearch })
     <div class="flex shrink-0 items-center gap-1.5 border-b border-border/70 px-3 py-3">
       <RouterLink
         to="/"
-        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        class="touch-target flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         :title="t('settings.nav.backToApp')"
         :aria-label="t('settings.nav.backToApp')"
         data-testid="settings-nav-back"

@@ -393,7 +393,7 @@ async function retryEpisode() {
 <template>
   <main class="min-h-full px-3 pb-20 sm:px-5 lg:px-8">
     <div class="mx-auto w-full max-w-[86rem]">
-      <Button variant="ghost" size="sm" class="-ml-2 mt-5 gap-1.5 text-muted-foreground hover:text-foreground" @click="goBack">
+      <Button variant="ghost" size="sm" class="touch-target -ml-2 mt-5 gap-1.5 text-muted-foreground hover:text-foreground" @click="goBack">
         <ArrowLeft :size="15" /> {{ t('podcast.fullPlayer.backToPodcast') }}
       </Button>
 

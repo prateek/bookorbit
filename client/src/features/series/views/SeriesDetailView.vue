@@ -656,8 +656,12 @@ defineOptions({ name: 'SeriesDetailView' })
 <template>
   <div class="flex h-full flex-col">
     <main ref="mainRef" class="flex-1 min-h-0 overflow-y-auto py-2">
-      <div class="mb-4">
-        <button class="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground" @click="goBack">
+      <!-- Grown in layout rather than with touch-target: the scroller clips an overlay reaching above it. -->
+      <div class="mb-4 pointer-coarse:mb-1">
+        <button
+          class="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground pointer-coarse:min-h-11 pointer-coarse:pr-4"
+          @click="goBack"
+        >
           <ChevronLeft :size="16" />
           {{ t('common.back') }}
         </button>
