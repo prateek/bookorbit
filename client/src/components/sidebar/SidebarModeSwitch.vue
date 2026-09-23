@@ -37,7 +37,7 @@ function handleSelect(target: LibraryType) {
       <TooltipTrigger as-child>
         <button
           type="button"
-          class="flex h-8 w-8 items-center justify-center rounded-md outline-hidden transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          class="flex h-8 w-8 pointer-coarse:size-11 items-center justify-center rounded-md outline-hidden transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           :class="option.id === mode ? 'bg-(--shell-accent-tint) text-primary' : 'text-sidebar-foreground hover:bg-(--shell-accent-wash)'"
           :aria-pressed="option.id === mode"
           @click="handleSelect(option.id)"
@@ -54,7 +54,7 @@ function handleSelect(target: LibraryType) {
     v-else
     role="group"
     :aria-label="t('components.sidebar.mode.switcherAria')"
-    class="flex h-8 items-center gap-0.5 rounded-md border border-(--shell-accent-line) p-0.5"
+    class="flex h-8 pointer-coarse:h-[50px] items-center gap-0.5 rounded-md border border-(--shell-accent-line) p-0.5"
   >
     <button
       v-for="option in options"

@@ -30,7 +30,7 @@ const actionLabel = computed(() => {
         data-slot="sidebar-trigger"
         variant="ghost"
         size="icon"
-        :class="cn('h-7 w-7', props.class)"
+        :class="cn('touch-target h-7 w-7', props.class)"
         :aria-label="actionLabel"
         @click="toggleSidebar"
       >

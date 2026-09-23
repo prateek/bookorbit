@@ -26,7 +26,7 @@ import { resolveRouteViewKey } from '@/router/view-key'
 import LegalNotices from '@/components/legal/LegalNotices.vue'
 
 // Bottom-edge media and download surfaces publish their measured heights, so the toaster clears
-// whichever one currently sits highest.
+// whichever one currently sits highest. The phone tab bar publishes its height the same way.
 const TOASTER_OFFSET = {
   right: '16px',
   bottom:
@@ -36,7 +36,7 @@ const TOASTER_MOBILE_OFFSET = {
   left: '16px',
   right: '16px',
   bottom:
-    'max(16px, var(--podcast-mini-player-clearance, 0px), var(--tts-mini-player-clearance, 0px), var(--podcast-download-widget-clearance, 0px))',
+    'max(calc(16px + var(--app-bottom-nav-height, 0px)), var(--podcast-mini-player-clearance, 0px), var(--tts-mini-player-clearance, 0px), var(--podcast-download-widget-clearance, 0px))',
 }
 
 const { isOpen } = useChangePasswordDialog()
@@ -77,6 +77,31 @@ watch(
 watch(
   () => route.name,
   (name) => syncPopup(name as string | undefined),
+)
+
+/** Canvas normalizes any CSS color (including oklch) to sRGB, which every browser accepts in theme-color. */
+function toSrgb(color: string): string | null {
+  const context = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+  if (!context) return null
+  context.fillStyle = color
+  context.fillRect(0, 0, 1, 1)
+  const [r, g, b, a] = context.getImageData(0, 0, 1, 1).data
+  // A transparent background would read back as black; keep the pre-paint value instead.
+  if (!a) return null
+  return `rgb(${r}, ${g}, ${b})`
+}
+
+function syncThemeColorMeta() {
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (!meta) return
+  const color = toSrgb(getComputedStyle(document.body).backgroundColor)
+  if (color) meta.setAttribute('content', color)
+}
+
+watch(
+  () => [themeStore.resolvedTheme, themeStore.accent, themeStore.brightness],
+  () => requestAnimationFrame(syncThemeColorMeta),
+  { immediate: true, flush: 'post' },
 )
 
 initChartThemes()

@@ -64,11 +64,11 @@ const showCount = computed(() => !props.isOpen && typeof props.count === 'number
 </script>
 
 <template>
-  <div class="flex h-8 items-center gap-0.5 group-data-[collapsible=icon]:hidden">
+  <div class="flex h-8 items-center gap-0.5 pointer-coarse:h-11 group-data-[collapsible=icon]:hidden">
     <button
       v-if="collapsible"
       type="button"
-      class="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+      class="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 pointer-coarse:h-11 text-left outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) focus-visible:ring-2 focus-visible:ring-sidebar-ring"
       :aria-expanded="isOpen"
       :aria-controls="contentId"
       @click="handleToggle"
@@ -93,7 +93,7 @@ const showCount = computed(() => !props.isOpen && typeof props.count === 'number
     <button
       v-if="canAdd"
       type="button"
-      class="flex h-6 w-6 shrink-0 items-center justify-center text-primary outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+      class="flex h-6 w-6 shrink-0 items-center justify-center pointer-coarse:size-11 text-primary outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) focus-visible:ring-2 focus-visible:ring-sidebar-ring"
       :class="iconRadiusClass"
       :aria-label="addLabel ?? t('components.sidebar.sectionHeader.add')"
       :title="addLabel ?? t('components.sidebar.sectionHeader.add')"
@@ -104,7 +104,7 @@ const showCount = computed(() => !props.isOpen && typeof props.count === 'number
 
     <DropdownMenu v-if="hasMenu">
       <DropdownMenuTrigger
-        class="flex h-6 w-6 shrink-0 items-center justify-center outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        class="flex h-6 w-6 shrink-0 items-center justify-center pointer-coarse:size-11 outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         :class="[iconRadiusClass, isReordering ? 'text-primary' : 'text-muted-foreground']"
         :aria-label="t('components.sidebar.sectionHeader.menuAria', { section: label })"
       >

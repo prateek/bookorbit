@@ -35,7 +35,7 @@ function closePopover() {
               data-tour="github-star-cta"
               variant="ghost"
               size="icon"
-              class="h-7 w-7 rounded-md text-sidebar-foreground hover:bg-(--shell-accent-wash)"
+              class="touch-target h-7 w-7 rounded-md text-sidebar-foreground hover:bg-(--shell-accent-wash)"
               :aria-label="t('components.appHeader.starOnGithub')"
               @click="togglePopover"
             >
@@ -50,7 +50,7 @@ function closePopover() {
       <Button
         variant="ghost"
         size="icon"
-        class="absolute end-2 top-2 h-6 w-6 text-muted-foreground hover:text-foreground"
+        class="touch-target absolute end-2 top-2 h-6 w-6 text-muted-foreground hover:text-foreground"
         :aria-label="t('common.close')"
         @click="closePopover"
       >

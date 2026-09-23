@@ -44,7 +44,7 @@ export const sidebarMenuButtonVariants = cva(
         outline: 'border border-(--shell-accent-line) hover:bg-(--shell-accent-wash)',
       },
       size: {
-        default: 'h-8 text-[14px]',
+        default: 'h-8 pointer-coarse:h-11 text-[14px]',
         sm: 'h-7 text-[13px]',
         lg: 'h-12 text-[14px]',
       },

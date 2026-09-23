@@ -199,7 +199,7 @@ function onGripBlur(id: number) {
 
     <SidebarSectionBody :open="isOpen" :content-id="contentId">
       <SidebarGroupContent>
-        <div v-if="showFilter" class="mb-1 flex h-8 items-center gap-1.5 rounded-md border border-(--shell-accent-line) px-2">
+        <div v-if="showFilter" class="mb-1 flex h-8 pointer-coarse:h-11 items-center gap-1.5 rounded-md border border-(--shell-accent-line) px-2">
           <Search :size="13" aria-hidden="true" class="shrink-0 text-muted-foreground" />
           <label :for="filterInputId" class="sr-only">{{ filterLabel }}</label>
           <input
@@ -213,7 +213,7 @@ function onGripBlur(id: number) {
           <button
             v-if="isFiltering"
             type="button"
-            class="shrink-0 rounded-sm text-muted-foreground transition-colors duration-150 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            class="touch-target shrink-0 rounded-sm text-muted-foreground transition-colors duration-150 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
             :aria-label="t('components.sidebar.clearFilter')"
             @click="clearQuery"
           >
@@ -253,7 +253,7 @@ function onGripBlur(id: number) {
               <template v-if="dragEnabled" #trailing>
                 <button
                   type="button"
-                  class="drag-handle flex h-8 w-4 shrink-0 cursor-grab items-center justify-center rounded-sm transition-colors duration-150 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                  class="drag-handle flex h-8 w-4 pointer-coarse:h-11 pointer-coarse:w-8 shrink-0 cursor-grab items-center justify-center rounded-sm transition-colors duration-150 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
                   :class="liftedId === item.id ? 'text-primary' : 'text-muted-foreground'"
                   :aria-label="gripLabel(item)"
                   :aria-pressed="liftedId === item.id"
@@ -277,7 +277,7 @@ function onGripBlur(id: number) {
         <RouterLink
           v-if="showSeeAll && !isFiltering"
           :to="{ name: indexRouteName as string }"
-          class="mt-0.5 flex h-8 items-center gap-1 rounded-md px-2 text-[13px] font-normal text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          class="mt-0.5 flex h-8 pointer-coarse:h-11 items-center gap-1 rounded-md px-2 text-[13px] font-normal text-muted-foreground outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           @click="handleNavigate"
         >
           <span class="min-w-0 truncate">{{ seeAllLabel }}</span>

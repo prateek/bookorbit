@@ -145,7 +145,9 @@ function handleMobileSearchOpenUpdate(value: boolean) {
 </script>
 
 <template>
-  <div class="sticky top-0 z-20 mb-2 mt-2 flex h-10 shrink-0 items-center gap-2 bg-background/80 p-2 backdrop-blur-md transition-all duration-300">
+  <div
+    class="sticky top-0 z-20 mb-1 mt-0 flex h-10 shrink-0 items-center gap-2 bg-background/80 px-1 py-2 backdrop-blur-md transition-all duration-300 md:mb-2 md:mt-2 md:p-2"
+  >
     <div class="flex min-w-0 flex-1 items-center gap-2">
       <AppIcon v-if="icon" :icon="icon" :fallback="fallbackIcon" :size="16" class="shrink-0 text-muted-foreground" />
       <span class="truncate text-[16px] font-bold tracking-tight text-foreground">{{ title }}</span>
