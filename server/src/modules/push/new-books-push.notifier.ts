@@ -125,8 +125,22 @@ export class NewBooksPushNotifier implements OnModuleDestroy {
         if (!user.recipients.some((r) => r.subscriptionId === recipient.subscriptionId)) user.recipients.push(recipient);
       }
     }
+    await this.dropUnfollowedSeries(users);
     for (const user of users.values()) user.groups = mergeGroupsBySeries(user.groups);
     return users;
+  }
+
+  /** A user who unfollowed a series hears nothing about its new chapters; one query covers the batch. */
+  private async dropUnfollowedSeries(users: Map<number, UserBatch>): Promise<void> {
+    const seriesIds = new Set<number>();
+    for (const user of users.values()) for (const group of user.groups) if (group.seriesId != null) seriesIds.add(group.seriesId);
+    const unfollowedByUser = await this.repo.findUnfollowedSeriesByUser([...users.keys()], [...seriesIds]);
+    for (const [userId, unfollowed] of unfollowedByUser) {
+      const user = users.get(userId);
+      if (!user) continue;
+      user.groups = user.groups.filter((group) => group.seriesId == null || !unfollowed.has(group.seriesId));
+      if (user.groups.length === 0) users.delete(userId);
+    }
   }
 
   private async buildDeliveries(users: Map<number, UserBatch>): Promise<Array<{ recipient: PushRecipient; payload: PushPayload }>> {

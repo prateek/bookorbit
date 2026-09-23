@@ -50,6 +50,7 @@ function makeSeries(overrides: Partial<SeriesSummary> = {}): SeriesSummary {
     nextBookId: 12,
     nextIndex: '3',
     nextTitle: 'Three',
+    following: true,
     ...overrides,
   }
 }
@@ -176,6 +177,17 @@ describe('SeriesView', () => {
 
     expect(wrapper.findComponent(SeriesIndexTable).exists()).toBe(true)
     expect(wrapper.findComponent(SeriesGridCard).exists()).toBe(false)
+  })
+
+  it('marks unfollowed series in both the card and list views', async () => {
+    mocks.items.value = [makeSeries({ id: 1 }), makeSeries({ id: 2, name: 'Dropped', following: false })]
+    const cards = await mountView()
+    expect(cards.findAll('[data-testid="series-card-unfollowed"]')).toHaveLength(1)
+    cards.unmount()
+
+    mocks.storageValues['bookorbit:seriesViewMode'] = 'list'
+    const rows = await mountView()
+    expect(rows.findAll('[data-testid="series-row-unfollowed"]')).toHaveLength(1)
   })
 
   it('shows server-side facet counts on the status tabs rather than counting the loaded page', async () => {

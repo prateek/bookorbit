@@ -162,7 +162,7 @@ export class DashboardService {
     if (type === ScrollerType.RECENTLY_ADDED) {
       if (accessibleLibraryIds.length === 0) return { bookIds: [] };
       const contentFilters = user.isSuperuser ? undefined : user.contentFilters;
-      return toSelection(await this.dashboardRepo.findRecentlyAddedGroups(accessibleLibraryIds, clampedLimit, contentFilters));
+      return toSelection(await this.dashboardRepo.findRecentlyAddedGroups(accessibleLibraryIds, user.id, clampedLimit, contentFilters));
     }
     return { bookIds: await this.findScrollerBookIdsForLibraries(type, user, clampedLimit, accessibleLibraryIds) };
   }
@@ -202,7 +202,7 @@ export class DashboardService {
       // Not the whole library, which is what this shelf could technically return. See
       // `countBooksAddedThisMonth`: a recency shelf is only interesting for how much is new.
       case ScrollerType.RECENTLY_ADDED:
-        return this.dashboardRepo.countBooksAddedThisMonth(accessibleLibraryIds, contentFilters);
+        return this.dashboardRepo.countBooksAddedThisMonth(accessibleLibraryIds, user.id, contentFilters);
       case ScrollerType.CONTINUE_READING:
         return this.dashboardRepo.countContinueReadingBooks(accessibleLibraryIds, user.id, contentFilters);
       case ScrollerType.CONTINUE_LISTENING:
@@ -260,7 +260,7 @@ export class DashboardService {
     const contentFilters = user.isSuperuser ? undefined : user.contentFilters;
     switch (type) {
       case ScrollerType.RECENTLY_ADDED:
-        return this.dashboardRepo.findRecentlyAddedBookIds(accessibleLibraryIds, clampedLimit, contentFilters);
+        return this.dashboardRepo.findRecentlyAddedBookIds(accessibleLibraryIds, user.id, clampedLimit, contentFilters);
       case ScrollerType.CONTINUE_READING:
         return this.dashboardRepo.findContinueReadingBookIds(accessibleLibraryIds, user.id, clampedLimit, contentFilters);
       case ScrollerType.CONTINUE_LISTENING:

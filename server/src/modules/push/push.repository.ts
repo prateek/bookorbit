@@ -15,6 +15,7 @@ import {
   pushVapidKeys,
   userLibraryAccess,
   userPermissions,
+  userUnfollowedSeries,
   users,
 } from '../../db/schema';
 
@@ -175,6 +176,24 @@ export class PushRepository {
       }
     }
     return [...merged.values()];
+  }
+
+  /** Series each user unfollowed, limited to the given ones; users with none are absent from the map. */
+  async findUnfollowedSeriesByUser(userIds: number[], seriesIds: number[]): Promise<Map<number, Set<number>>> {
+    const byUser = new Map<number, Set<number>>();
+    if (userIds.length === 0 || seriesIds.length === 0) return byUser;
+    for (const ids of chunk(seriesIds, BOOK_ID_BATCH_SIZE)) {
+      const rows = await this.db
+        .select({ userId: userUnfollowedSeries.userId, seriesId: userUnfollowedSeries.seriesId })
+        .from(userUnfollowedSeries)
+        .where(and(inArray(userUnfollowedSeries.userId, userIds), inArray(userUnfollowedSeries.seriesId, ids)));
+      for (const row of rows) {
+        const seriesForUser = byUser.get(row.userId) ?? new Set<number>();
+        seriesForUser.add(row.seriesId);
+        byUser.set(row.userId, seriesForUser);
+      }
+    }
+    return byUser;
   }
 
   async findLaunchTargets(bookIds: number[]): Promise<BookLaunchTarget[]> {

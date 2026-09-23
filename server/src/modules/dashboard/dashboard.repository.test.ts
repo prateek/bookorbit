@@ -63,7 +63,7 @@ describe('DashboardRepository', () => {
     const db = { select: vi.fn(), execute: vi.fn() };
     const repo = new DashboardRepository(db as never);
 
-    await expect(repo.findRecentlyAddedBookIds([], 20)).resolves.toEqual([]);
+    await expect(repo.findRecentlyAddedBookIds([], 1, 20)).resolves.toEqual([]);
     await expect(repo.findContinueReadingBookIds([], 1, 20)).resolves.toEqual([]);
     await expect(repo.findContinueListeningBookIds([], 1, 20)).resolves.toEqual([]);
     await expect(repo.findWantToReadBookIds([], 1, 20)).resolves.toEqual([]);
@@ -78,10 +78,13 @@ describe('DashboardRepository', () => {
     const db = { select: vi.fn().mockReturnValue(listChain) };
     const repo = new DashboardRepository(db as never);
 
-    const result = await repo.findRecentlyAddedBookIds([10], 2);
+    const result = await repo.findRecentlyAddedBookIds([10], 3, 2);
 
     expect(result).toEqual([5, 2]);
     expect(listChain.limit).toHaveBeenCalledWith(2);
+    const where = compileSql(listChain.where.mock.calls[0]?.[0]);
+    expect(where).toContain('not exists ( select 1 from "user_unfollowed_series"');
+    expect(collectValues(listChain.where.mock.calls[0]?.[0])).toContain(3);
   });
 
   it('groups recently added rows by series and orders each group by series index', () => {
@@ -121,7 +124,7 @@ describe('DashboardRepository', () => {
     const db = { select: vi.fn().mockReturnValueOnce(firstChain).mockReturnValueOnce(secondChain) };
     const repo = new DashboardRepository(db as never);
 
-    const groups = await repo.findRecentlyAddedGroups([10], 2);
+    const groups = await repo.findRecentlyAddedGroups([10], 3, 2);
     const secondWhere = compileSql(secondChain.where.mock.calls[0]?.[0]);
 
     expect(groups.map((group) => [group.bookId, group.bookIds.length])).toEqual([
@@ -131,6 +134,7 @@ describe('DashboardRepository', () => {
     expect(firstChain.limit).toHaveBeenCalledWith(100);
     expect(secondWhere).toContain('::timestamptz');
     expect(secondWhere).toContain('not in');
+    expect(compileSql(firstChain.where.mock.calls[0]?.[0])).toContain('"user_unfollowed_series"."series_id" = "book_metadata"."series_id"');
     expect(collectValues(secondChain.where.mock.calls[0]?.[0])).toEqual(expect.arrayContaining(['2026-01-01 00:59:00.123456+00', 4]));
   });
 
@@ -340,6 +344,11 @@ describe('DashboardRepository', () => {
 
     expect(result).toEqual([17, 4]);
     expect(db.execute).toHaveBeenCalledTimes(1);
+    const query = new PgDialect().sqlToQuery(db.execute.mock.calls[0]?.[0] as SQL);
+    expect(query.sql.replaceAll(/\s+/g, ' ')).toContain(
+      'not exists ( select 1 from "user_unfollowed_series" where "user_unfollowed_series"."user_id" = $',
+    );
+    expect(query.params).toContain(55);
   });
 
   it('returns empty up-next-in-series ids and does not query when limit is zero', async () => {

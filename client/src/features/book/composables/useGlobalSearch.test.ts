@@ -80,6 +80,7 @@ function makeSeries(id: number, name: string): SeriesSummary {
     nextBookId: 12,
     nextIndex: null,
     nextTitle: null,
+    following: true,
   }
 }
 

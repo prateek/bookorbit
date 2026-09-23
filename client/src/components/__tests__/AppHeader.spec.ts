@@ -191,6 +191,7 @@ function makeSeries(id: number, name: string): GlobalSearchSeriesResult {
     nextBookId: null,
     nextIndex: null,
     nextTitle: null,
+    following: true,
   }
 }
 

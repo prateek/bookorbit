@@ -122,7 +122,7 @@ describe('DashboardService', () => {
 
     await service.getScroller(ScrollerType.RECENTLY_ADDED, user, 20);
 
-    expect(dashboardRepo.findRecentlyAddedGroups).toHaveBeenCalledWith([200], 20, EMPTY_CONTENT_FILTER_RULES);
+    expect(dashboardRepo.findRecentlyAddedGroups).toHaveBeenCalledWith([200], 5, 20, EMPTY_CONTENT_FILTER_RULES);
   });
 
   it('returns empty list when user has no accessible libraries', async () => {
@@ -158,9 +158,9 @@ describe('DashboardService', () => {
 
     const result = await service.getScroller(ScrollerType.RECENTLY_ADDED, user, 0);
 
-    expect(dashboardRepo.findRecentlyAddedGroups).toHaveBeenCalledWith([100, 200], 1, EMPTY_CONTENT_FILTER_RULES);
+    expect(dashboardRepo.findRecentlyAddedGroups).toHaveBeenCalledWith([100, 200], 5, 1, EMPTY_CONTENT_FILTER_RULES);
     expect(bookReadService.findCardsByBookIds).toHaveBeenCalledWith([9, 3], 5);
-    expect(dashboardRepo.countBooksAddedThisMonth).toHaveBeenCalledWith([100, 200], EMPTY_CONTENT_FILTER_RULES);
+    expect(dashboardRepo.countBooksAddedThisMonth).toHaveBeenCalledWith([100, 200], 5, EMPTY_CONTENT_FILTER_RULES);
     expect(result.books.map((card) => card.id)).toEqual([9, 3]);
     expect(result.books[0]?.readStatus?.status).toBe('reading');
   });
@@ -307,7 +307,7 @@ describe('DashboardService', () => {
     );
 
     expect(libraryService.findAccessibleLibraryIds).toHaveBeenCalledOnce();
-    expect(dashboardRepo.findRecentlyAddedGroups).toHaveBeenCalledWith([11], 20, EMPTY_CONTENT_FILTER_RULES);
+    expect(dashboardRepo.findRecentlyAddedGroups).toHaveBeenCalledWith([11], 8, 20, EMPTY_CONTENT_FILTER_RULES);
     expect(smartScopeService.executeSmartScopeBookIds).toHaveBeenCalledWith(7, user, 20, [11]);
     expect(bookReadService.findCardsByBookIds).not.toHaveBeenCalled();
   });

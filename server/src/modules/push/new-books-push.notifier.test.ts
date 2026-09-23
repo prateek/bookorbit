@@ -20,6 +20,7 @@ describe('NewBooksPushNotifier', () => {
       summarizeNewBooks: vi.fn().mockResolvedValue([]),
       findRecipientsForLibrary: vi.fn().mockResolvedValue([]),
       findLaunchTargets: vi.fn().mockResolvedValue([]),
+      findUnfollowedSeriesByUser: vi.fn().mockResolvedValue(new Map()),
     };
     pushService = { deliver: vi.fn().mockResolvedValue({ sent: 0, failed: 0, expired: 0 }) };
     notifier = new NewBooksPushNotifier(repo as never, pushService as never);
@@ -89,6 +90,32 @@ describe('NewBooksPushNotifier', () => {
       body: 'Chrysalis: Chapter 12',
       url: '/read/11/40?format=epub',
     });
+  });
+
+  it('leaves out series a user unfollowed and skips users left with nothing new', async () => {
+    repo.summarizeNewBooks.mockResolvedValue([
+      { libraryId: 1, seriesId: 7, seriesName: 'Chrysalis', count: 2, sampleBookId: 11 },
+      { libraryId: 1, seriesId: 3, seriesName: 'The Sixth School', count: 1, sampleBookId: 20 },
+    ]);
+    repo.findRecipientsForLibrary.mockResolvedValue([recipient(100, 1), recipient(200, 2), recipient(300, 3)]);
+    repo.findLaunchTargets.mockResolvedValue([{ bookId: 20, title: 'Chapter 3', primaryFileId: 50, format: 'epub' }]);
+    repo.findUnfollowedSeriesByUser.mockResolvedValue(
+      new Map([
+        [1, new Set([7])],
+        [3, new Set([3, 7])],
+      ]),
+    );
+
+    notifier.enqueue(1, [11, 12, 20]);
+    await notifier.flush();
+
+    expect(repo.findUnfollowedSeriesByUser).toHaveBeenCalledWith([1, 2, 3], [7, 3]);
+    const deliveries = pushService.deliver.mock.calls[0][0] as Array<{ recipient: PushRecipient; payload: { body: string } }>;
+    expect(deliveries.map((d) => [d.recipient.userId, d.payload.body])).toEqual([
+      [1, 'The Sixth School: Chapter 3'],
+      [2, 'Chrysalis: 2 new, The Sixth School: 1 new'],
+    ]);
+    expect(repo.findLaunchTargets).toHaveBeenCalledWith([20]);
   });
 
   it('skips users who turned scanning notifications off', async () => {

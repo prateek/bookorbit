@@ -5,7 +5,7 @@ import { BOOK_FORMATS, compareSeriesIndices, isAudioFormat, parseSeriesIndex, ty
 
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
-import { audiobookProgress, bookFiles, bookMetadata, books, readingProgress, userBookStatus } from '../../db/schema';
+import { audiobookProgress, bookFiles, bookMetadata, books, readingProgress, userBookStatus, userUnfollowedSeries } from '../../db/schema';
 import { buildContentFilterClauses } from '../../common/utils/content-filter-sql.utils';
 import { seriesIndexSortKey } from '../../common/utils/series-index-sql.utils';
 
@@ -82,19 +82,33 @@ export function groupRecentlyAddedRows(rows: RecentlyAddedRow[], limit: number):
   });
 }
 
+/** Keeps books of a series the user unfollowed off a shelf. A book outside any series always passes. */
+function notInUnfollowedSeries(userId: number): SQL {
+  return sql`not exists (
+    select 1 from ${userUnfollowedSeries}
+    where ${userUnfollowedSeries.userId} = ${userId} and ${userUnfollowedSeries.seriesId} = ${bookMetadata.seriesId}
+  )`;
+}
+
 @Injectable()
 export class DashboardRepository {
   private readonly randomIdBounds = new Map<string, { minId: number; maxId: number; expiresAt: number }>();
 
   constructor(@Inject(DB) private readonly db: Db) {}
 
-  async findRecentlyAddedBookIds(accessibleLibraryIds: number[], limit: number, contentFilters?: ContentFilterRules): Promise<number[]> {
+  async findRecentlyAddedBookIds(
+    accessibleLibraryIds: number[],
+    userId: number,
+    limit: number,
+    contentFilters?: ContentFilterRules,
+  ): Promise<number[]> {
     if (accessibleLibraryIds.length === 0) return [];
     const cfClauses = contentFilters ? buildContentFilterClauses(contentFilters, this.db) : [];
     const rows = await this.db
       .select({ id: books.id })
       .from(books)
-      .where(and(inArray(books.libraryId, accessibleLibraryIds), ...cfClauses))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .where(and(inArray(books.libraryId, accessibleLibraryIds), notInUnfollowedSeries(userId), ...cfClauses))
       .orderBy(desc(books.addedAt), desc(books.id))
       .limit(limit);
 
@@ -108,7 +122,12 @@ export class DashboardRepository {
    * skips the series already grouped, so a large drop from one series costs one page instead of
    * crowding everything else off the shelf.
    */
-  async findRecentlyAddedGroups(accessibleLibraryIds: number[], limit: number, contentFilters?: ContentFilterRules): Promise<RecentlyAddedGroup[]> {
+  async findRecentlyAddedGroups(
+    accessibleLibraryIds: number[],
+    userId: number,
+    limit: number,
+    contentFilters?: ContentFilterRules,
+  ): Promise<RecentlyAddedGroup[]> {
     if (accessibleLibraryIds.length === 0 || limit <= 0) return [];
     const cfClauses = contentFilters ? buildContentFilterClauses(contentFilters, this.db) : [];
     const pageSize = Math.min(Math.max(limit * RECENTLY_ADDED_PAGE_MULTIPLIER, RECENTLY_ADDED_MIN_PAGE), RECENTLY_ADDED_MAX_PAGE);
@@ -135,6 +154,7 @@ export class DashboardRepository {
             inArray(books.libraryId, accessibleLibraryIds),
             cursor ? sql`(${books.addedAt}, ${books.id}) < (${cursor.addedAtKey}::timestamptz, ${cursor.id}::integer)` : undefined,
             excludedSeriesIds.length > 0 ? or(isNull(bookMetadata.seriesId), notInArray(bookMetadata.seriesId, excludedSeriesIds)) : undefined,
+            notInUnfollowedSeries(userId),
             ...cfClauses,
           ),
         )
@@ -167,13 +187,21 @@ export class DashboardRepository {
    * asking and the library widget already answers. A recency shelf is only interesting for how
    * much is new, so this counts the window and clients label it as one.
    */
-  async countBooksAddedThisMonth(accessibleLibraryIds: number[], contentFilters?: ContentFilterRules): Promise<number> {
+  async countBooksAddedThisMonth(accessibleLibraryIds: number[], userId: number, contentFilters?: ContentFilterRules): Promise<number> {
     if (accessibleLibraryIds.length === 0) return 0;
     const cfClauses = contentFilters ? buildContentFilterClauses(contentFilters, this.db) : [];
     const rows = await this.db
       .select({ value: sql<number>`count(*)::int` })
       .from(books)
-      .where(and(inArray(books.libraryId, accessibleLibraryIds), gte(books.addedAt, sql`date_trunc('month', now())`), ...cfClauses));
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .where(
+        and(
+          inArray(books.libraryId, accessibleLibraryIds),
+          gte(books.addedAt, sql`date_trunc('month', now())`),
+          notInUnfollowedSeries(userId),
+          ...cfClauses,
+        ),
+      );
 
     return rows[0]?.value ?? 0;
   }
@@ -398,6 +426,7 @@ export class DashboardRepository {
         where ${books.libraryId} in (${libraryIdList})
           and ${books.status} = 'present'
 	          and ${bookMetadata.seriesId} is not null
+          and ${notInUnfollowedSeries(userId)}
           ${filterSql}
       ),
       ordered_series as (

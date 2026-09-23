@@ -31,6 +31,7 @@ function makeSeries(overrides: Partial<SeriesPage['items'][number]> = {}): Serie
     nextBookId: null,
     nextIndex: null,
     nextTitle: null,
+    following: true,
     ...overrides,
   }
 }

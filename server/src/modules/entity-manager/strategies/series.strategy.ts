@@ -364,6 +364,16 @@ export class SeriesStrategy implements EntityStrategy {
         AND series_id IN (${sourceIdList})
     `);
 
+    // A rename to a new name also lands here, and the old series row is deleted afterwards, which
+    // would cascade away readers' unfollows and silently put the serial back on their shelves.
+    await db.execute(sql`
+      INSERT INTO user_unfollowed_series (user_id, series_id)
+      SELECT DISTINCT uus.user_id, ${targetId}::integer
+      FROM user_unfollowed_series uus
+      WHERE uus.series_id IN (${sourceIdList})
+      ON CONFLICT DO NOTHING
+    `);
+
     await this.renumberMemberships(bookIds, db);
   }
 

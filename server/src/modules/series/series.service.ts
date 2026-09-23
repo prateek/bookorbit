@@ -5,6 +5,7 @@ import type {
   SeriesBooksPage,
   SeriesContinueTarget,
   SeriesDetail,
+  SeriesFollowResponse,
   SeriesMarkReadResponse,
   SeriesNextBookResponse,
   SeriesPage,
@@ -94,6 +95,7 @@ export class SeriesService {
         nextIndex: row.next?.seriesIndex ?? null,
         nextTitle: row.next?.title ?? null,
         nextStatus: row.next ? toNextStatus(row.next.status) : null,
+        following: row.following,
       };
     });
 
@@ -118,7 +120,7 @@ export class SeriesService {
     }
 
     const contentFilters = user.isSuperuser ? undefined : user.contentFilters;
-    const [detail, bookPage, continueRow] = await Promise.all([
+    const [detail, bookPage, continueRow, unfollowedIds] = await Promise.all([
       this.seriesRepo.findDetail({ seriesId, userId: user.id, libraryIds, contentFilters }),
       this.seriesRepo.findBookIds({
         seriesId,
@@ -133,7 +135,9 @@ export class SeriesService {
         contentFilters,
       }),
       this.seriesRepo.findContinueTarget({ seriesId, userId: user.id, libraryIds, formats: [...READER_OPENABLE_FORMATS], contentFilters }),
+      this.seriesRepo.findUnfollowedSeriesIds(user.id, [seriesId]),
     ]);
+    const following = !unfollowedIds.has(seriesId);
 
     if (!detail) {
       if (dto.libraryId) {
@@ -155,6 +159,7 @@ export class SeriesService {
             possibleGaps: [],
             expectedBookCount: existsInAnyLibrary.expectedBookCount ?? null,
             next: null,
+            following,
           };
           return { items: [], total: 0, page, size, seriesInfo: emptyInfo };
         }
@@ -204,6 +209,7 @@ export class SeriesService {
       possibleGaps,
       expectedBookCount: detail.expectedBookCount ?? null,
       next: toContinueTarget(continueRow),
+      following,
     };
 
     return { items, total: bookPage.total, page: bookPage.page, size, seriesInfo };
@@ -276,6 +282,24 @@ export class SeriesService {
       );
       throw err;
     }
+  }
+
+  /**
+   * Follows or unfollows a series for this user. Only series the user can see are accepted, so
+   * the endpoint cannot be used to probe which series exist in libraries they cannot open.
+   */
+  async setFollowing(user: RequestUser, seriesId: number, following: boolean): Promise<SeriesFollowResponse> {
+    const libraryIds = await this.resolveLibraryIds(user);
+    const visible = await this.seriesRepo.isSeriesVisible({
+      seriesId,
+      libraryIds,
+      contentFilters: user.isSuperuser ? undefined : user.contentFilters,
+    });
+    if (!visible) throw new NotFoundException('Series not found');
+
+    await this.seriesRepo.setFollowing(user.id, seriesId, following);
+    this.logger.log(`[series.set_following] [end] seriesId=${seriesId} userId=${user.id} following=${following} - series follow state updated`);
+    return { seriesId, following };
   }
 
   private async resolveLibraryIds(user: RequestUser, scopedLibraryId?: number): Promise<number[]> {
