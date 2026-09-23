@@ -25,6 +25,7 @@ import type { CommunityRatingProviderKey } from "./metadata-fetch";
  * - `audioCover` - books whose cover media include audio, by whether their audio cover slot is filled
  * - `lockStatus` - derived from `book_metadata.locked_fields` (non-empty array = locked)
  * - `seriesStatus` - computed per-user: "up next in series" (next unstarted book whose earlier series entries are all finished)
+ * - `seriesFollowing` - per-user: `isFalse` matches books in a series the user unfollowed, `isTrue` matches every other book
  *
  * User-defined custom metadata fields are filterable too, as `CustomRuleField`.
  */
@@ -59,7 +60,8 @@ export type StaticRuleField =
   | "cover"
   | "audioCover"
   | "lockStatus"
-  | "seriesStatus";
+  | "seriesStatus"
+  | "seriesFollowing";
 
 /**
  * A user-defined custom metadata field, referenced by its numeric id.
@@ -137,6 +139,7 @@ export const FIELD_OPERATORS: Record<StaticRuleField, RuleOperator[]> = {
   audioCover: ["isMissing", "isPresent"],
   lockStatus: ["isLocked", "isUnlocked"],
   seriesStatus: ["isUpNext"],
+  seriesFollowing: ["isTrue", "isFalse"],
 };
 
 export const RULE_FIELDS = Object.keys(FIELD_OPERATORS) as StaticRuleField[];

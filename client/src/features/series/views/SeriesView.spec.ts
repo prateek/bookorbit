@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import type { SeriesFacets, SeriesSummary } from '@bookorbit/types'
@@ -7,6 +7,7 @@ import en from '@/locales/en.json'
 import { compileIcuCatalog } from '@/i18n/icu'
 import type { CompletionStatus, SeriesListSort, SortDirection } from '../types/series'
 import { APP_RESUMED_EVENT } from '@/components/sidebar/useAppResume'
+import { notifySeriesFollowChanged } from '../composables/useSeriesFollowChanges'
 import SeriesView from './SeriesView.vue'
 import SeriesStatusTabs from '../components/SeriesStatusTabs.vue'
 import SeriesGridCard from '../components/SeriesGridCard.vue'
@@ -50,6 +51,7 @@ function makeSeries(overrides: Partial<SeriesSummary> = {}): SeriesSummary {
     nextBookId: 12,
     nextIndex: '3',
     nextTitle: 'Three',
+    following: true,
     ...overrides,
   }
 }
@@ -178,6 +180,17 @@ describe('SeriesView', () => {
     expect(wrapper.findComponent(SeriesGridCard).exists()).toBe(false)
   })
 
+  it('marks unfollowed series in both the card and list views', async () => {
+    mocks.items.value = [makeSeries({ id: 1 }), makeSeries({ id: 2, name: 'Dropped', following: false })]
+    const cards = await mountView()
+    expect(cards.findAll('[data-testid="series-card-unfollowed"]')).toHaveLength(1)
+    cards.unmount()
+
+    mocks.storageValues['bookorbit:seriesViewMode'] = 'list'
+    const rows = await mountView()
+    expect(rows.findAll('[data-testid="series-row-unfollowed"]')).toHaveLength(1)
+  })
+
   it('shows server-side facet counts on the status tabs rather than counting the loaded page', async () => {
     mocks.facets = ref({ all: 4182, notStarted: 3900, inProgress: 210, complete: 72, hasGaps: 41 })
     const wrapper = await mountView()
@@ -247,5 +260,36 @@ describe('SeriesView', () => {
 
     expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(mocks.load).not.toHaveBeenCalled()
+  })
+
+  it('refreshes on return from another page after a series was followed or unfollowed', async () => {
+    const showSeries = ref(true)
+    const Other = defineComponent({ name: 'OtherView', render: () => h('div') })
+    mount(
+      defineComponent({
+        setup: () => () => h(KeepAlive, null, [showSeries.value ? h(SeriesView) : h(Other)]),
+      }),
+      {
+        global: {
+          plugins: [i18n],
+          stubs: {
+            ViewHeader: { template: '<div><slot name="toolbar" /></div>' },
+            Popover: { template: '<div><slot /></div>' },
+            PopoverTrigger: { template: '<div><slot /></div>' },
+            PopoverContent: { template: '<div><slot /></div>' },
+            BookCoverArtwork: true,
+          },
+        },
+      },
+    )
+    await flushPromises()
+
+    showSeries.value = false
+    await nextTick()
+    notifySeriesFollowChanged()
+    showSeries.value = true
+    await nextTick()
+
+    expect(mocks.refresh).toHaveBeenCalledOnce()
   })
 })

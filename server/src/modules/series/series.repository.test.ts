@@ -56,12 +56,19 @@ function makeFindPageDb(facetResult: unknown, dataResult: unknown) {
 
 function stubPageHelpers(
   repo: SeriesRepository,
-  maps?: { authors?: Map<number, string[]>; covers?: Map<number, number[]>; members?: Map<number, unknown>; next?: Map<number, unknown> },
+  maps?: {
+    authors?: Map<number, string[]>;
+    covers?: Map<number, number[]>;
+    members?: Map<number, unknown>;
+    next?: Map<number, unknown>;
+    unfollowed?: Set<number>;
+  },
 ) {
   vi.spyOn(repo as never, 'fetchAuthorsForSeries').mockResolvedValue(maps?.authors ?? new Map());
   vi.spyOn(repo as never, 'fetchCoverBookIds').mockResolvedValue(maps?.covers ?? new Map());
   vi.spyOn(repo as never, 'fetchSeriesMembers').mockResolvedValue(maps?.members ?? new Map());
   vi.spyOn(repo as never, 'fetchNextMembers').mockResolvedValue(maps?.next ?? new Map());
+  vi.spyOn(repo, 'findUnfollowedSeriesIds').mockResolvedValue(maps?.unfollowed ?? new Set());
 }
 
 function makeDb() {
@@ -127,10 +134,11 @@ describe('SeriesRepository', () => {
 
       const nextMap = new Map<number, unknown>([[10, { bookId: 101, seriesIndex: '2', title: 'Dune Messiah', status: null }]]);
 
-      stubPageHelpers(repo, { authors: authorsMap, covers: coversMap, members: membersMap, next: nextMap });
+      stubPageHelpers(repo, { authors: authorsMap, covers: coversMap, members: membersMap, next: nextMap, unfollowed: new Set([11]) });
 
       const result = await repo.findPage(BASE_PARAMS);
 
+      expect(repo.findUnfollowedSeriesIds).toHaveBeenCalledWith(7, [10, 11]);
       expect(result.total).toBe(2);
       expect(result.items).toHaveLength(2);
       expect(result.items[0]).toEqual({
@@ -147,6 +155,7 @@ describe('SeriesRepository', () => {
         membersTruncated: false,
         libraryNames: ['Novels'],
         next: { bookId: 101, seriesIndex: '2', title: 'Dune Messiah', status: null },
+        following: true,
       });
       expect(result.items[1]).toEqual({
         id: 11,
@@ -162,6 +171,7 @@ describe('SeriesRepository', () => {
         membersTruncated: false,
         libraryNames: [],
         next: null,
+        following: false,
       });
     });
 
@@ -541,6 +551,55 @@ describe('SeriesRepository', () => {
       const where = render((nextChain.where as ReturnType<typeof vi.fn>).mock.calls[0]![0]);
       expect(where.sql).toContain('"book_metadata"."published_date" is null and "books"."id" > $');
       expect(where.sql).not.toContain('"book_metadata"."published_date" > $');
+    });
+  });
+
+  describe('follow state', () => {
+    it('reads unfollowed series for one user, skipping the query when no series are asked about', async () => {
+      const chain = makeChain([{ seriesId: 4 }]);
+      db.select.mockReturnValue(chain);
+
+      await expect(repo.findUnfollowedSeriesIds(7, [])).resolves.toEqual(new Set());
+      expect(db.select).not.toHaveBeenCalled();
+
+      await expect(repo.findUnfollowedSeriesIds(7, [4, 5])).resolves.toEqual(new Set([4]));
+      const where = render((chain.where as ReturnType<typeof vi.fn>).mock.calls[0]![0]);
+      expect(where.sql).toContain('"user_unfollowed_series"."user_id" = $1');
+      expect(where.params).toEqual([7, 4, 5]);
+    });
+
+    it('stores an unfollow as a row and ignores a repeat', async () => {
+      const onConflictDoNothing = vi.fn().mockResolvedValue(undefined);
+      const values = vi.fn().mockReturnValue({ onConflictDoNothing });
+      db.insert.mockReturnValue({ values });
+
+      await repo.setFollowing(7, 4, false);
+
+      expect(values).toHaveBeenCalledWith({ userId: 7, seriesId: 4 });
+      expect(onConflictDoNothing).toHaveBeenCalled();
+      expect(db.delete).not.toHaveBeenCalled();
+    });
+
+    it("follows again by deleting only this user's row for the series", async () => {
+      const where = vi.fn().mockResolvedValue(undefined);
+      db.delete.mockReturnValue({ where });
+
+      await repo.setFollowing(7, 4, true);
+
+      const rendered = render(where.mock.calls[0]![0]);
+      expect(rendered.sql).toContain('"user_unfollowed_series"."user_id" = $1');
+      expect(rendered.sql).toContain('"user_unfollowed_series"."series_id" = $2');
+      expect(rendered.params).toEqual([7, 4]);
+      expect(db.insert).not.toHaveBeenCalled();
+    });
+
+    it('treats a series with no visible book as absent and never queries without libraries', async () => {
+      await expect(repo.isSeriesVisible({ seriesId: 4, libraryIds: [] })).resolves.toBe(false);
+      expect(db.select).not.toHaveBeenCalled();
+
+      db.select.mockReturnValueOnce(makeChain([])).mockReturnValueOnce(makeChain([{ one: 1 }]));
+      await expect(repo.isSeriesVisible({ seriesId: 4, libraryIds: [1] })).resolves.toBe(false);
+      await expect(repo.isSeriesVisible({ seriesId: 4, libraryIds: [1] })).resolves.toBe(true);
     });
   });
 });

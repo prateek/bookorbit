@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Post, Put, Query } from '@nestjs/common';
 
 import { AuditAction, AuditResource, Permission } from '@bookorbit/types';
 import { Auditable } from '../../common/decorators/auditable.decorator';
@@ -50,5 +50,17 @@ export class SeriesController {
   })
   markRead(@CurrentUser() user: RequestUser, @Param('seriesId', ParseIntPipe) seriesId: number, @Body() dto: MarkSeriesReadDto) {
     return this.seriesService.markRead(user, seriesId, dto);
+  }
+
+  @Put(':seriesId/follow')
+  @HttpCode(HttpStatus.OK)
+  follow(@CurrentUser() user: RequestUser, @Param('seriesId', ParseIntPipe) seriesId: number) {
+    return this.seriesService.setFollowing(user, seriesId, true);
+  }
+
+  @Delete(':seriesId/follow')
+  @HttpCode(HttpStatus.OK)
+  unfollow(@CurrentUser() user: RequestUser, @Param('seriesId', ParseIntPipe) seriesId: number) {
+    return this.seriesService.setFollowing(user, seriesId, false);
   }
 }

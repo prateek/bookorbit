@@ -178,6 +178,13 @@ function handleOpen() {
           <Check :size="12" />
           {{ t('series.status.read') }}
         </span>
+        <span
+          v-if="!series.following"
+          class="inline-flex h-[21px] shrink-0 items-center rounded-md border border-border px-1.5 text-[11.5px] text-muted-foreground"
+          data-testid="series-card-unfollowed"
+        >
+          {{ t('series.unfollowed') }}
+        </span>
         <SeriesLibraryChip :library-names="series.libraryNames" class="series-card-library min-w-0" />
         <span class="ml-auto shrink-0 text-[12.5px] font-semibold tabular-nums" :class="facts.isComplete ? 'text-success' : 'text-muted-foreground'">
           {{ progressLabel }}
