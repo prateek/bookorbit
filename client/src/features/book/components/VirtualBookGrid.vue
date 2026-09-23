@@ -8,7 +8,7 @@ import BookCoverSkeleton from './BookCoverSkeleton.vue'
 import CollapsedSeriesCard from './CollapsedSeriesCard.vue'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '../lib/cover-aspect-ratio'
 import { isBookPlaceholder, type BookSlot } from '../composables/useBookWindow'
-import { useDisplaySettings } from '@/composables/useDisplaySettings'
+import { useGridCardLabels } from '../composables/useGridCardLabels'
 
 type BookActionType = 'quick-view' | 'add-to-collection' | 'move-to-library' | 'delete'
 
@@ -118,7 +118,7 @@ const aspectMultiplier = computed(() => (coverAspectRatio.value === '1/1' ? 1 : 
 const cardWidth = computed(() => Math.max(1, itemSecondarySize.value - gapPx.value))
 const cardHeight = computed(() => Math.max(1, Math.round(cardWidth.value * aspectMultiplier.value)))
 
-const { gridCardSecondaryLabel, cardInfoMode } = useDisplaySettings()
+const { effectiveSecondaryLabel: gridCardSecondaryLabel, effectiveCardInfoMode: cardInfoMode } = useGridCardLabels()
 const labelAreaHeight = computed(() => {
   if (cardInfoMode.value !== 'below-cover') return 0
   const hasSecondary = gridCardSecondaryLabel.value !== 'hidden'

@@ -252,6 +252,9 @@ const {
   onMoveToLibrary: (bookId) => openMoveForBook(bookId),
 })
 
+const selectableLoadedCount = computed(() => books.value.reduce((count, book) => (book.collapsedSeries ? count : count + 1), 0))
+const allLoadedSelected = computed(() => selectableLoadedCount.value > 0 && selectedCount.value >= selectableLoadedCount.value)
+
 const {
   open: moveToLibraryOpen,
   payload: movePayload,
@@ -428,6 +431,9 @@ defineOptions({ name: 'CollectionView' })
       :count="selectedCount"
       :in-collection="isCollectionOwner"
       :in-flight="inFlight"
+      :can-select-all="true"
+      :all-selected="allLoadedSelected"
+      @toggle-select-all="handleSelectAllLoaded"
       @send="sendBookOpen = true"
       @download="handleDownloadFiles"
       @export-metadata="openMetadataExport"
@@ -757,6 +763,7 @@ defineOptions({ name: 'CollectionView' })
           :allow-move-to-library="true"
           @action="handleBookAction"
           @select="handleSelect"
+          @update:book="handleTableBookUpdate"
         />
 
         <div v-if="effectiveViewMode === 'list' && contiguousPrefix.length > 0" class="flex flex-col divide-y divide-border">
@@ -769,6 +776,7 @@ defineOptions({ name: 'CollectionView' })
             :allow-move-to-library="true"
             @action="handleBookAction(book, $event)"
             @select="handleSelect(book.id, $event)"
+            @update:book="handleTableBookUpdate"
           />
         </div>
 
