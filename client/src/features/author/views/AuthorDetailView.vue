@@ -514,7 +514,7 @@ defineOptions({ name: 'AuthorDetailView' })
     <main ref="mainRef" class="flex flex-1 min-h-0 w-full min-w-0 flex-col overflow-y-auto overflow-x-hidden pr-0 sm:pr-2">
       <div class="mb-3 mt-2 mr-0 sm:mr-4 flex items-center gap-2 px-1">
         <button
-          class="inline-flex h-8 items-center gap-1 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          class="touch-target inline-flex h-8 items-center gap-1 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           @click="goBack"
         >
           <ChevronLeft :size="14" />
