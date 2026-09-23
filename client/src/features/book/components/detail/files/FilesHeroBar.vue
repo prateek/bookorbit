@@ -73,7 +73,10 @@ function handleAddFile() {
 
     <div class="hero-id min-w-0 flex-1">
       <h2 class="truncate text-base font-semibold leading-tight tracking-tight">{{ book.title ?? folderSegments.at(-1) }}</h2>
-      <nav class="hero-crumb mt-1 flex items-center gap-1.5 text-xs text-muted-foreground" :aria-label="t('book.detail.files.folderAria')">
+      <nav
+        class="hero-crumb mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-muted-foreground"
+        :aria-label="t('book.detail.files.folderAria')"
+      >
         <template v-for="(segment, index) in folderSegments" :key="`${segment}-${index}`">
           <span v-if="index > 0" class="crumb-slash shrink-0 opacity-40" aria-hidden="true">/</span>
           <span class="crumb-part min-w-[1.5ch] truncate">{{ segment }}</span>

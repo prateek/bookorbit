@@ -227,7 +227,7 @@ function handleCopyPath(file: TreeFile) {
             <FileRoleBadge v-if="file.role !== 'content' && file.role !== 'primary'" :role="file.role" class="pointer-events-none relative" />
             <span
               v-if="progressOf(file) > 0"
-              class="pointer-events-none relative inline-flex h-[18px] shrink-0 items-center rounded bg-primary/15 px-1.5 text-[9.5px] font-bold uppercase tracking-wider text-primary tabular-nums"
+              class="pointer-events-none relative inline-flex h-[18px] shrink-0 items-center rounded bg-primary/15 px-1.5 text-[11px] font-bold uppercase tracking-wider text-primary tabular-nums"
             >
               {{ t('book.detail.files.percentRead', { percent: formatPercent(progressOf(file) / 100) }) }}
             </span>
@@ -246,7 +246,7 @@ function handleCopyPath(file: TreeFile) {
             <span class="relative flex shrink-0 items-center justify-end gap-1.5">
               <button
                 v-if="file.openable"
-                class="inline-flex h-7 min-w-[3.5rem] items-center justify-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                class="inline-flex h-7 min-w-[3.5rem] items-center justify-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-semibold pointer-coarse:h-11 pointer-coarse:min-w-[4.5rem] pointer-coarse:text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 :class="
                   file.id === selectedId
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
@@ -259,7 +259,7 @@ function handleCopyPath(file: TreeFile) {
               <DropdownMenu>
                 <DropdownMenuTrigger as-child>
                   <button
-                    class="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    class="inline-flex size-7 pointer-coarse:size-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     :aria-label="t('book.detail.files.moreActions')"
                   >
                     <MoreVertical class="size-4" aria-hidden="true" />

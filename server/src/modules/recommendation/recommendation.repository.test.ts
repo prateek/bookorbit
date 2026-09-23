@@ -1,4 +1,4 @@
-import { RecommendationRepository, seriesWindowOffset } from './recommendation.repository';
+import { RecommendationRepository, pgvectorHasIterativeScan, seriesWindowOffset } from './recommendation.repository';
 
 type SelectStep = {
   terminal: 'where' | 'limit' | 'groupBy' | 'as';
@@ -131,6 +131,41 @@ describe('RecommendationRepository', () => {
     expect(chains[0].where).toHaveBeenCalledTimes(1);
     expect(chains[0].orderBy).toHaveBeenCalledTimes(1);
     expect(chains[0].limit).toHaveBeenCalledWith(100);
+  });
+
+  it('turns on iterative index scans when leaving out a series on pgvector 0.8+', async () => {
+    const rows = [{ bookId: 12, cosineSim: 0.7, seriesId: 5, seriesName: 'Other', rating: null }];
+    const { db, select, chains } = makeDb([{ terminal: 'limit', result: rows }]);
+    const execute = vi.fn().mockResolvedValue({ rows: [{ extversion: '0.8.6' }] });
+    const txExecute = vi.fn().mockResolvedValue(undefined);
+    const transaction = vi.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn({ select, execute: txExecute }));
+    const repo = new RecommendationRepository({ ...(db as object), execute, transaction } as never);
+
+    const result = await repo.findAnnCandidates([0.1, 0.2], 1, [3], undefined, { excludeSeriesId: 9, limit: 300 });
+
+    expect(result).toEqual(rows);
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(txExecute).toHaveBeenCalledTimes(1);
+    expect(chains[0].limit).toHaveBeenCalledWith(300);
+  });
+
+  it('skips the transaction on pgvector versions without iterative scans', async () => {
+    const { db, chains } = makeDb([{ terminal: 'limit', result: [] }]);
+    const execute = vi.fn().mockResolvedValue({ rows: [{ extversion: '0.7.4' }] });
+    const transaction = vi.fn();
+    const repo = new RecommendationRepository({ ...(db as object), execute, transaction } as never);
+
+    await repo.findAnnCandidates([0.1, 0.2], 1, [3], undefined, { excludeSeriesId: 9 });
+
+    expect(transaction).not.toHaveBeenCalled();
+    expect(chains[0].limit).toHaveBeenCalledWith(100);
+  });
+
+  it('reads pgvector versions', () => {
+    expect(pgvectorHasIterativeScan('0.8.0')).toBe(true);
+    expect(pgvectorHasIterativeScan('1.0.0')).toBe(true);
+    expect(pgvectorHasIterativeScan('0.7.4')).toBe(false);
+    expect(pgvectorHasIterativeScan(undefined)).toBe(false);
   });
 
   it('returns empty metadata quickly when no book ids are requested', async () => {
@@ -280,14 +315,14 @@ describe('RecommendationRepository', () => {
     expect(chains[0].where).toHaveBeenCalledTimes(1);
     expect(chains[0].orderBy).toHaveBeenCalledTimes(1);
     expect(chains[0].offset).toHaveBeenCalledWith(0);
-    expect(chains[0].limit).toHaveBeenCalledWith(51);
+    expect(chains[0].limit).toHaveBeenCalledWith(26);
   });
 
   it('windows series books around the anchor book', async () => {
-    const ranked = { bookId: 'ranked.id', position: 'ranked.position', total: 'ranked.total' };
+    const ranked = { bookId: 'ranked.id', position: 'ranked.position' };
     const { db, select, chains } = makeDb([
       { terminal: 'as', result: ranked },
-      { terminal: 'limit', result: [{ position: 600, total: 1700 }] },
+      { terminal: 'limit', result: [{ position: 600 }] },
       {
         terminal: 'limit',
         result: [{ bookId: 600, title: 'Chapter 600', coverAspectRatio: '2/3', seriesIndex: '600', coverSource: null, primaryFormat: 'epub' }],
@@ -301,8 +336,8 @@ describe('RecommendationRepository', () => {
     expect(result.map((row) => row.bookId)).toEqual([600]);
     expect(select).toHaveBeenCalledTimes(4);
     expect(chains[1].from).toHaveBeenCalledWith(ranked);
-    expect(chains[2].offset).toHaveBeenCalledWith(589);
-    expect(chains[2].limit).toHaveBeenCalledWith(51);
+    expect(chains[2].offset).toHaveBeenCalledWith(594);
+    expect(chains[2].limit).toHaveBeenCalledWith(26);
   });
 
   it('falls back to the start of the series when the anchor is not visible', async () => {
@@ -433,21 +468,57 @@ describe('RecommendationRepository', () => {
   });
 });
 
+describe('RecommendationRepository related shelves', () => {
+  it('skips the author series and aggregate queries when nothing is in scope', async () => {
+    const { db, select } = makeDb([]);
+    const repo = new RecommendationRepository(db);
+
+    await expect(repo.findAuthorSeries(1, null, [], 2)).resolves.toEqual([]);
+    await expect(repo.findSeriesAggregates([], [1], 2)).resolves.toEqual([]);
+    await expect(repo.findCoverBooks([])).resolves.toEqual([]);
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it('aggregates series with the cover book id coerced to a number', async () => {
+    const { db, chains } = makeDb([
+      {
+        terminal: 'limit',
+        result: [{ seriesId: 4, name: 'Chrysalis', bookCount: 3, readCount: 1, readingCount: 1, coverBookId: '81', isSerial: null }],
+      },
+    ]);
+    const repo = new RecommendationRepository(db);
+
+    const rows = await repo.findSeriesAggregates([4], [1], 2);
+
+    expect(rows).toEqual([{ seriesId: 4, name: 'Chrysalis', bookCount: 3, readCount: 1, readingCount: 1, coverBookId: 81, isSerial: false }]);
+    expect(chains[0].leftJoin).toHaveBeenCalledTimes(1);
+    expect(chains[0].limit).toHaveBeenCalledWith(1);
+  });
+
+  it('maps cover books with their authors and format flags', async () => {
+    const { db } = makeDb([
+      { terminal: 'where', result: [{ bookId: 9, coverAspectRatio: '1/1', updatedAt: null, coverSource: 'embedded', primaryFormat: 'm4b' }] },
+      { terminal: 'where', result: [{ bookId: 9, name: 'Actus' }] },
+    ]);
+    const repo = new RecommendationRepository(db);
+
+    await expect(repo.findCoverBooks([9])).resolves.toEqual([
+      { bookId: 9, coverAspectRatio: '1/1', updatedAt: null, coverSource: 'embedded', authorNames: ['Actus'], isAudiobook: true, isComic: false },
+    ]);
+  });
+});
+
 describe('seriesWindowOffset', () => {
-  it('keeps ten entries before the anchor in the middle of a long series', () => {
-    expect(seriesWindowOffset(600, 1700)).toBe(589);
+  it('keeps five entries before the anchor in the middle of a long series', () => {
+    expect(seriesWindowOffset(600)).toBe(594);
   });
 
   it('starts at the beginning when the anchor is near the start', () => {
-    expect(seriesWindowOffset(1, 1700)).toBe(0);
-    expect(seriesWindowOffset(5, 1700)).toBe(0);
+    expect(seriesWindowOffset(1)).toBe(0);
+    expect(seriesWindowOffset(6)).toBe(0);
   });
 
-  it('shifts back so the window stays full near the end', () => {
-    expect(seriesWindowOffset(1700, 1700)).toBe(1649);
-  });
-
-  it('returns zero for series shorter than one window', () => {
-    expect(seriesWindowOffset(30, 40)).toBe(0);
+  it('keeps the latest chapter near the start of the window at the end of a serial', () => {
+    expect(seriesWindowOffset(1004)).toBe(998);
   });
 });

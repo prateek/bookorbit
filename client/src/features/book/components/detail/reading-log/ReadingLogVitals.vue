@@ -420,7 +420,7 @@ function handleAddSession() {
         <div v-for="row in ledgerRows" :key="row.key" class="flex h-[26px] items-center gap-2 border-t border-border/60 first:border-t-0">
           <dt class="text-xs leading-4 text-muted-foreground">{{ row.label }}</dt>
           <dd class="ml-auto flex items-center gap-1 text-xs font-semibold leading-4 tabular-nums text-foreground">
-            <span v-if="row.withMomentum" :title="momentumTitle" class="inline-flex">
+            <span v-if="row.withMomentum && momentum.hasActivity" :title="momentumTitle" class="inline-flex">
               <TrendingUp v-if="momentum.direction === 'up'" class="size-3.5 text-primary" />
               <TrendingDown v-else-if="momentum.direction === 'down'" class="size-3.5 text-amber-500" />
               <Minus v-else class="size-3.5 text-muted-foreground" />

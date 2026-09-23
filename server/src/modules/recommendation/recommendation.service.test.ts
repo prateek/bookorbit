@@ -31,6 +31,9 @@ function makeService() {
     getSeriesIdentity: vi.fn(),
     findSeriesBooks: vi.fn(),
     findAuthorBooks: vi.fn(),
+    findAuthorSeries: vi.fn(),
+    findSeriesAggregates: vi.fn(),
+    findCoverBooks: vi.fn(),
   };
   const bookRepo = {
     findLibraryIdByBookId: vi.fn(),
@@ -665,6 +668,131 @@ describe('RecommendationService', () => {
       await service.getAuthorBooks(1, user);
 
       expect(recRepo.findAuthorBooks).toHaveBeenCalledWith(1, [5], undefined);
+    });
+  });
+
+  describe('getAuthorShelf', () => {
+    it('returns one card per other series by the author, then standalone books, leaving out the current series', async () => {
+      const { service, bookRepo, recRepo, userBookStatusService } = makeService();
+      const user = makeUser();
+      bookRepo.findLibraryIdByBookId.mockResolvedValue(7);
+      recRepo.getSeriesIdentity.mockResolvedValue({ id: 40, name: 'Runebound' });
+      recRepo.findAuthorSeries.mockResolvedValue([
+        { seriesId: 41, name: 'Rise of the Living Forge', bookCount: 549, readCount: 12, readingCount: 1, coverBookId: 900, isSerial: true },
+      ]);
+      recRepo.findAuthorBooks.mockResolvedValue([
+        {
+          bookId: 77,
+          title: 'A chicken short story.',
+          coverAspectRatio: '2/3',
+          updatedAt: null,
+          coverSource: null,
+          authorNames: ['Actus'],
+          isAudiobook: false,
+          isComic: false,
+        },
+      ]);
+      recRepo.findCoverBooks.mockResolvedValue([
+        {
+          bookId: 900,
+          coverAspectRatio: '2/3',
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+          coverSource: 'embedded',
+          authorNames: ['Actus'],
+          isAudiobook: false,
+          isComic: false,
+        },
+      ]);
+      userBookStatusService.findByBookIds.mockResolvedValue(new Map([[77, { status: 'read' }]]));
+
+      const result = await service.getAuthorShelf(5, user);
+
+      expect(recRepo.findAuthorSeries).toHaveBeenCalledWith(5, 40, [7], user.id, EMPTY_CONTENT_FILTER_RULES);
+      expect(recRepo.findAuthorBooks).toHaveBeenCalledWith(5, [7], EMPTY_CONTENT_FILTER_RULES, { standaloneOnly: true, limit: 10 });
+      expect(userBookStatusService.findByBookIds).toHaveBeenCalledWith(user.id, [77]);
+      expect(result).toEqual([
+        {
+          kind: 'series',
+          seriesId: 41,
+          name: 'Rise of the Living Forge',
+          authors: ['Actus'],
+          bookCount: 549,
+          readCount: 12,
+          readingCount: 1,
+          isSerial: true,
+          coverBookId: 900,
+          coverUpdatedAt: '2026-01-02T00:00:00.000Z',
+          hasCover: true,
+          coverAspectRatio: '2/3',
+          isAudiobook: false,
+          isComic: false,
+        },
+        expect.objectContaining({ kind: 'book', id: 77, title: 'A chicken short story.', readStatus: { status: 'read' } }),
+      ]);
+    });
+
+    it('rejects users without access to the book library', async () => {
+      const { service, bookRepo, libraryService, recRepo } = makeService();
+      bookRepo.findLibraryIdByBookId.mockResolvedValue(7);
+      libraryService.verifyUserAccess.mockRejectedValue(new NotFoundException());
+
+      await expect(service.getAuthorShelf(5, makeUser())).rejects.toThrow(NotFoundException);
+      expect(recRepo.findAuthorSeries).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getSimilarShelf', () => {
+    it('excludes the current series and collapses the rest to one card per series', async () => {
+      const { service, bookRepo, recRepo } = makeService();
+      const user = makeUser();
+      bookRepo.findLibraryIdByBookId.mockResolvedValue(7);
+      recRepo.getTargetBookData.mockResolvedValue({
+        embedding: [0.1, 0.2],
+        seriesId: 40,
+        seriesName: 'Runebound',
+        rating: null,
+        authorNames: [],
+        genreTagNames: [],
+      });
+      recRepo.findAnnCandidates.mockResolvedValue([
+        { bookId: 2743, cosineSim: 0.9, seriesId: 50, seriesName: 'Chrysalis', rating: null },
+        { bookId: 4208, cosineSim: 0.8, seriesId: 50, seriesName: 'Chrysalis', rating: null },
+        { bookId: 12, cosineSim: 0.85, seriesId: null, seriesName: null, rating: null },
+        { bookId: 3000, cosineSim: 0.5, seriesId: 60, seriesName: 'Other', rating: null },
+      ]);
+      recRepo.getCandidateMetadata.mockResolvedValue([]);
+      recRepo.findSeriesAggregates.mockResolvedValue([
+        { seriesId: 60, name: 'Other', bookCount: 3, readCount: 0, readingCount: 0, coverBookId: 3000 },
+        { seriesId: 50, name: 'Chrysalis', bookCount: 1800, readCount: 0, readingCount: 0, coverBookId: 2000 },
+      ]);
+      recRepo.findCoverBooks.mockResolvedValue([]);
+      bookRepo.findRecommendationTitlesByBookIds.mockResolvedValue([
+        { id: 12, title: 'Standalone', coverAspectRatio: '2/3', updatedAt: null, hasCover: false, authors: [] },
+      ]);
+
+      const result = await service.getSimilarShelf(4329, user);
+
+      expect(recRepo.findAnnCandidates).toHaveBeenCalledWith([0.1, 0.2], 4329, [7], EMPTY_CONTENT_FILTER_RULES, {
+        excludeSeriesId: 40,
+        limit: 300,
+      });
+      expect(recRepo.findSeriesAggregates).toHaveBeenCalledWith([50, 60], [7], user.id, EMPTY_CONTENT_FILTER_RULES);
+      expect(bookRepo.findRecommendationTitlesByBookIds).toHaveBeenCalledWith([12]);
+      expect(result.map((item) => (item.kind === 'series' ? `series:${item.seriesId}` : `book:${item.id}`))).toEqual([
+        'series:50',
+        'book:12',
+        'series:60',
+      ]);
+    });
+
+    it('returns nothing when no embedding can be built', async () => {
+      const { service, bookRepo, recRepo, embedder } = makeService();
+      bookRepo.findLibraryIdByBookId.mockResolvedValue(7);
+      recRepo.getTargetBookData.mockResolvedValue(null);
+      embedder.embedBook.mockResolvedValue(null);
+
+      await expect(service.getSimilarShelf(1, makeUser())).resolves.toEqual([]);
+      expect(recRepo.findAnnCandidates).not.toHaveBeenCalled();
     });
   });
 });

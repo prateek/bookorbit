@@ -5100,6 +5100,9 @@
       "collections": "Collections",
       "noDescription": "No description available.",
       "openMetadataEditor": "Open metadata editor",
+      "percentRead": "{percent} read",
+      "collection": "Collection",
+      "more": "More",
       "coverPreview": "Book cover preview",
       "coverPreviewFor": "{title} cover preview",
       "coverPreviewDescription": "Enlarged cover image preview dialog."
@@ -5148,7 +5151,20 @@
       "discover": {
         "moreInSeries": "More in Series",
         "byAuthor": "By Author",
-        "similarBooks": "Similar Books"
+        "similarBooks": "Similar Books",
+        "inThisSeries": "In this series",
+        "seeAll": "See all",
+        "thisChapter": "You are here",
+        "moreByAuthor": "More by {name}",
+        "moreByAuthors": "More by these authors",
+        "similar": "Similar reads",
+        "scrollBack": "Scroll back",
+        "scrollForward": "Scroll forward",
+        "chapterCount": "{count, plural, one {# chapter} other {# chapters}}",
+        "bookCount": "{count, plural, one {# book} other {# books}}",
+        "readCount": "{count, plural, one {# read} other {# read}}",
+        "allRead": "all read",
+        "started": "started"
       },
       "recommended": {
         "moreLikeThis": "More Like This"
@@ -5243,6 +5259,20 @@
         "rateStar": "Rate {star}",
         "listen": "Listen",
         "read": "Read",
+        "readAgain": "Read again",
+        "listenAgain": "Listen again",
+        "resumeAt": "Resume · {percent}",
+        "readProgressAria": "Reading progress",
+        "actions": {
+          "download": "Download",
+          "shelf": "Shelf",
+          "addToShelf": "Add to collection",
+          "send": "Send",
+          "more": "More",
+          "moreAria": "More actions",
+          "resetReadingState": "Reset reading state",
+          "deleteBook": "Delete book"
+        },
         "chooseFormat": "Choose format",
         "audiobook": "Audiobook",
         "primary": "Primary",
