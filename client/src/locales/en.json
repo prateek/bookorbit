@@ -354,7 +354,12 @@
           "hint": "Where to show book title and author on grid cards",
           "onHover": "On hover",
           "belowCover": "Below cover",
-          "off": "Off"
+          "off": "Off",
+          "touchHint": "This screen can't hover, so titles show below covers here."
+        },
+        "sizing": {
+          "label": "Cover sizes and spacing",
+          "hint": "Exact pixel sizes for covers and the gaps between them."
         },
         "primaryCardLabel": {
           "label": "Primary card label",
@@ -7551,7 +7556,8 @@
       "updateTooltip": "{version} update available",
       "openUpdateRelease": "Open the {version} release on GitHub",
       "zones": {
-        "browse": "Browse"
+        "browse": "Browse",
+        "you": "You"
       },
       "reorder": {
         "gripAria": "Reorder {name}",

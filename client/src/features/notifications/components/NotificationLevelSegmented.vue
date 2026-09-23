@@ -28,7 +28,11 @@ function select(value: Level) {
 </script>
 
 <template>
-  <div role="radiogroup" :aria-label="props.label" class="inline-flex min-w-0 shrink-0 gap-0.5 rounded-md border border-input bg-muted p-0.5">
+  <div
+    role="radiogroup"
+    :aria-label="props.label"
+    class="inline-flex min-w-0 shrink-0 gap-0.5 rounded-md border border-input bg-muted p-0.5 max-sm:flex max-sm:w-full"
+  >
     <button
       v-for="option in options"
       :key="option.value"
@@ -37,7 +41,7 @@ function select(value: Level) {
       :aria-checked="props.modelValue === option.value"
       :aria-label="`${props.label}: ${option.short}. ${option.description}`"
       :title="option.description"
-      class="inline-flex h-7 min-w-0 items-center gap-1.5 rounded px-2 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+      class="inline-flex h-7 min-w-0 items-center gap-1.5 rounded px-2 text-xs transition-colors max-sm:h-11 max-sm:flex-1 max-sm:justify-center max-sm:text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
       :class="
         props.modelValue === option.value
           ? 'bg-background font-semibold text-foreground shadow-xs'

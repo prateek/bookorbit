@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, RouterLinkStub } from '@vue/test-utils'
 import { reactive } from 'vue'
 import SettingsView from '@/views/SettingsView.vue'
 
@@ -19,6 +19,7 @@ function mountView(routeName: string, meta: Record<string, unknown> = {}) {
     global: {
       stubs: {
         RouterView: { template: '<div data-testid="settings-outlet" />' },
+        RouterLink: RouterLinkStub,
       },
     },
   })
@@ -68,6 +69,24 @@ describe('SettingsView shell', () => {
   it('applies the route width so wide pages are not squeezed', () => {
     const wrapper = mountView('settings-admin-audit-log', { maxWidth: 'max-w-[96rem]' })
     expect(wrapper.html()).toContain('max-w-[96rem]')
+  })
+
+  it('gives every settings page a phone back link to the settings index', () => {
+    const back = mountView('settings-appearance-layout').get('[data-testid="settings-back"]')
+    expect(back.getComponent(RouterLinkStub).props('to')).toEqual({ name: 'settings-home' })
+    expect(back.classes()).toEqual(expect.arrayContaining(['min-h-11', 'md:hidden']))
+  })
+
+  it('titles the settings index and offers no back link from it', () => {
+    const wrapper = mountView('settings-home')
+    expect(wrapper.find('[data-testid="settings-back"]').exists()).toBe(false)
+    expect(wrapper.get('h1').text()).toBe('Settings')
+  })
+
+  it('drops the card chrome and inner scroller below md so the page scrolls with the app shell', () => {
+    const root = mountView('settings-appearance-layout').element as HTMLElement
+    expect(root.className).not.toMatch(/(^|\s)(border|overflow-hidden|rounded-lg)(\s|$)/)
+    expect(root.className).toContain('md:overflow-hidden')
   })
 
   it('falls back to the default width when the route does not set one', () => {

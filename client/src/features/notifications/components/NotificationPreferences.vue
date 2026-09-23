@@ -138,7 +138,11 @@ async function handleSave() {
       </div>
 
       <div class="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-xs">
-        <div v-for="category in group.categories" :key="category" class="flex items-center justify-between gap-4 px-4 py-4 md:px-5 md:py-5">
+        <div
+          v-for="category in group.categories"
+          :key="category"
+          class="flex flex-col items-stretch gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 md:px-5 md:py-5"
+        >
           <div class="flex min-w-0 max-w-2xl items-start gap-2.5">
             <component :is="NOTIFICATION_CATEGORY_ICONS[category]" :size="16" class="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <div class="min-w-0">

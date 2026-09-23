@@ -49,7 +49,7 @@ function cardAccent(libraryId: number): string {
         <LibraryIdentity :library="library" />
       </div>
       <div class="px-3 pt-2.5">
-        <div class="flex items-center gap-3">
+        <div>
           <p class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
             <span class="font-semibold tabular-nums text-foreground">{{ formatNumber(entryFor(library.id)?.totalBooks ?? 0) }}</span>
             <span class="text-xs text-muted-foreground">
@@ -58,8 +58,8 @@ function cardAccent(libraryId: number): string {
             <span class="text-xs opacity-50" aria-hidden="true">&middot;</span>
             <span class="font-medium tabular-nums text-foreground">{{ formatBytes(entryFor(library.id)?.totalSizeBytes ?? 0) }}</span>
           </p>
-          <LibraryCapabilityStrip class="shrink-0" :library="library" />
         </div>
+        <LibraryCapabilityStrip class="mt-2" :library="library" />
         <LibraryFormatBar class="mt-2" show-legend :counts="entryFor(library.id)?.formatCounts ?? {}" :legend-limit="2" />
       </div>
       <div class="mt-3 flex items-center gap-3 border-t border-border px-3 py-2.5">

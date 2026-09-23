@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Circle, Square } from '@lucide/vue'
+import { Check, ChevronDown, Circle, Square } from '@lucide/vue'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import {
   useDisplaySettings,
@@ -11,6 +11,7 @@ import {
   type GridCardLabelField,
   type SeriesCardCoverMode,
 } from '@/composables/useDisplaySettings'
+import { useGridCardLabels } from '@/features/book/composables/useGridCardLabels'
 
 const { t } = useI18n()
 
@@ -29,7 +30,24 @@ const {
   cardInfoMode,
 } = useDisplaySettings()
 
+const { touchLabelFallback } = useGridCardLabels()
+
 const syncModeEnabled = computed(() => coverSizeScope.value === 'synced')
+
+/** Pixel sizes mean little on a phone, so they wait behind a disclosure there. */
+const showSizing = ref(false)
+
+function toggleSizing() {
+  showSizing.value = !showSizing.value
+}
+
+const seriesCoverOptions: { value: SeriesCardCoverMode; labelKey: string }[] = [
+  { value: 'stack', labelKey: 'settings.appearance.layout.seriesDisplay.stack' },
+  { value: 'mosaic', labelKey: 'settings.appearance.layout.seriesDisplay.mosaic' },
+  { value: 'first-volume', labelKey: 'settings.appearance.layout.seriesDisplay.first' },
+  { value: 'latest-volume', labelKey: 'settings.appearance.layout.seriesDisplay.latest' },
+  { value: 'first-unread', labelKey: 'settings.appearance.layout.seriesDisplay.firstUnread' },
+]
 const showLabelFields = computed(() => cardInfoMode.value === 'below-cover')
 
 function setCoverSizeScope(mode: CoverSizeScope) {
@@ -109,7 +127,25 @@ function handleAuthorCoverSizeInput(event: Event) {
         {{ t('settings.appearance.layout.gridLayout.title') }}
       </p>
       <div class="settings-card">
-        <div class="settings-row">
+        <button
+          type="button"
+          class="flex min-h-11 w-full items-center justify-between gap-3 bg-card px-4 py-3 text-left md:hidden"
+          :aria-expanded="showSizing"
+          data-testid="layout-sizing-toggle"
+          @click="toggleSizing"
+        >
+          <span class="min-w-0">
+            <span class="settings-label block">{{ t('settings.appearance.layout.sizing.label') }}</span>
+            <span class="settings-hint block">{{ t('settings.appearance.layout.sizing.hint') }}</span>
+          </span>
+          <ChevronDown
+            :size="18"
+            class="shrink-0 text-muted-foreground motion-safe:transition-transform"
+            :class="showSizing ? 'rotate-180' : ''"
+            aria-hidden="true"
+          />
+        </button>
+        <div class="settings-row" :class="{ 'max-md:hidden': !showSizing }" data-testid="layout-sizing-row">
           <div>
             <p class="settings-label">
               {{ t('settings.appearance.layout.coverSizeBehavior.label') }}
@@ -121,16 +157,16 @@ function handleAuthorCoverSizeInput(event: Event) {
               {{ t('settings.appearance.layout.coverSizeBehavior.perViewHint') }}
             </p>
           </div>
-          <div class="flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/50 self-start">
+          <div class="flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/50 self-start max-md:self-stretch">
             <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+              class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors max-md:flex-1 pointer-coarse:min-h-11 pointer-coarse:text-sm"
               :class="coverSizeScope === 'synced' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="setCoverSizeScope('synced')"
             >
               {{ t('settings.appearance.layout.coverSizeBehavior.syncAll') }}
             </button>
             <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+              class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors max-md:flex-1 pointer-coarse:min-h-11 pointer-coarse:text-sm"
               :class="coverSizeScope === 'per-view' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="setCoverSizeScope('per-view')"
             >
@@ -139,7 +175,7 @@ function handleAuthorCoverSizeInput(event: Event) {
           </div>
         </div>
 
-        <div class="settings-row" :class="{ 'opacity-60': !syncModeEnabled }">
+        <div class="settings-row" :class="{ 'opacity-60': !syncModeEnabled, 'max-md:hidden': !showSizing }" data-testid="layout-sizing-row">
           <div>
             <p class="settings-label">
               {{ t('settings.appearance.layout.portraitCoverSize.label') }}
@@ -166,7 +202,7 @@ function handleAuthorCoverSizeInput(event: Event) {
           </div>
         </div>
 
-        <div class="settings-row" :class="{ 'opacity-60': !syncModeEnabled }">
+        <div class="settings-row" :class="{ 'opacity-60': !syncModeEnabled, 'max-md:hidden': !showSizing }" data-testid="layout-sizing-row">
           <div>
             <p class="settings-label">
               {{ t('settings.appearance.layout.squareCoverSize.label') }}
@@ -193,7 +229,7 @@ function handleAuthorCoverSizeInput(event: Event) {
           </div>
         </div>
 
-        <div class="settings-row" :class="{ 'opacity-60': !syncModeEnabled }">
+        <div class="settings-row" :class="{ 'opacity-60': !syncModeEnabled, 'max-md:hidden': !showSizing }" data-testid="layout-sizing-row">
           <div>
             <p class="settings-label">
               {{ t('settings.appearance.layout.portraitGridSpacing.label') }}
@@ -220,7 +256,7 @@ function handleAuthorCoverSizeInput(event: Event) {
           </div>
         </div>
 
-        <div class="settings-row" :class="{ 'opacity-60': !syncModeEnabled }">
+        <div class="settings-row" :class="{ 'opacity-60': !syncModeEnabled, 'max-md:hidden': !showSizing }" data-testid="layout-sizing-row">
           <div>
             <p class="settings-label">
               {{ t('settings.appearance.layout.squareGridSpacing.label') }}
@@ -255,24 +291,27 @@ function handleAuthorCoverSizeInput(event: Event) {
             <p class="settings-hint">
               {{ t('settings.appearance.layout.cardInfoMode.hint') }}
             </p>
+            <p v-if="touchLabelFallback" class="settings-hint mt-1 text-foreground" data-testid="card-info-touch-hint">
+              {{ t('settings.appearance.layout.cardInfoMode.touchHint') }}
+            </p>
           </div>
-          <div class="flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/50 self-start">
+          <div class="flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/50 self-start max-md:self-stretch">
             <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+              class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors max-md:flex-1 pointer-coarse:min-h-11 pointer-coarse:text-sm"
               :class="cardInfoMode === 'hover-overlay' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="setHoverOverlayMode"
             >
               {{ t('settings.appearance.layout.cardInfoMode.onHover') }}
             </button>
             <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+              class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors max-md:flex-1 pointer-coarse:min-h-11 pointer-coarse:text-sm"
               :class="cardInfoMode === 'below-cover' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="setBelowCoverMode"
             >
               {{ t('settings.appearance.layout.cardInfoMode.belowCover') }}
             </button>
             <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+              class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors max-md:flex-1 pointer-coarse:min-h-11 pointer-coarse:text-sm"
               :class="cardInfoMode === 'off' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="setOffMode"
             >
@@ -341,47 +380,27 @@ function handleAuthorCoverSizeInput(event: Event) {
               {{ t('settings.appearance.layout.seriesDisplay.collapsedCover.hint') }}
             </p>
           </div>
-          <div class="flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/50 self-start">
+          <!-- Five options never fit one phone row, so phones get a stacked list of 44px choices. -->
+          <div
+            class="flex flex-col items-stretch gap-1 self-stretch rounded-lg border border-border bg-muted/50 p-1 md:flex-row md:items-center md:self-start"
+            role="radiogroup"
+            :aria-label="t('settings.appearance.layout.seriesDisplay.collapsedCover.label')"
+          >
             <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
-              :class="seriesCardCoverMode === 'stack' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
-              @click="setSeriesCardCoverMode('stack')"
-            >
-              {{ t('settings.appearance.layout.seriesDisplay.stack') }}
-            </button>
-            <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
-              :class="seriesCardCoverMode === 'mosaic' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
-              @click="setSeriesCardCoverMode('mosaic')"
-            >
-              {{ t('settings.appearance.layout.seriesDisplay.mosaic') }}
-            </button>
-            <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+              v-for="option in seriesCoverOptions"
+              :key="option.value"
+              type="button"
+              role="radio"
+              :aria-checked="seriesCardCoverMode === option.value"
+              class="flex items-center justify-between gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors max-md:min-h-11 max-md:text-[15px] pointer-coarse:min-h-11"
               :class="
-                seriesCardCoverMode === 'first-volume' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
+                seriesCardCoverMode === option.value ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
               "
-              @click="setSeriesCardCoverMode('first-volume')"
+              data-testid="series-cover-option"
+              @click="setSeriesCardCoverMode(option.value)"
             >
-              {{ t('settings.appearance.layout.seriesDisplay.first') }}
-            </button>
-            <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
-              :class="
-                seriesCardCoverMode === 'latest-volume' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
-              "
-              @click="setSeriesCardCoverMode('latest-volume')"
-            >
-              {{ t('settings.appearance.layout.seriesDisplay.latest') }}
-            </button>
-            <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
-              :class="
-                seriesCardCoverMode === 'first-unread' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
-              "
-              @click="setSeriesCardCoverMode('first-unread')"
-            >
-              {{ t('settings.appearance.layout.seriesDisplay.firstUnread') }}
+              {{ t(option.labelKey) }}
+              <Check v-if="seriesCardCoverMode === option.value" :size="16" class="text-primary md:hidden" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -428,9 +447,9 @@ function handleAuthorCoverSizeInput(event: Event) {
               {{ t('settings.appearance.layout.authorGrid.coverShape.hint') }}
             </p>
           </div>
-          <div class="flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/50 self-start">
+          <div class="flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/50 self-start max-md:self-stretch">
             <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+              class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors max-md:flex-1 pointer-coarse:min-h-11 pointer-coarse:text-sm"
               :class="authorCoverShape === 'circle' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="setAuthorCoverShape('circle')"
             >
@@ -438,7 +457,7 @@ function handleAuthorCoverSizeInput(event: Event) {
               {{ t('settings.appearance.layout.authorGrid.circle') }}
             </button>
             <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+              class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors max-md:flex-1 pointer-coarse:min-h-11 pointer-coarse:text-sm"
               :class="authorCoverShape === 'square' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="setAuthorCoverShape('square')"
             >
@@ -460,7 +479,7 @@ function handleAuthorCoverSizeInput(event: Event) {
             <p class="settings-label">
               {{ t('settings.appearance.layout.zebraStriping.label') }}
             </p>
-            <p class="settings-hint overflow-hidden text-ellipsis whitespace-nowrap md:whitespace-normal md:overflow-visible">
+            <p class="settings-hint">
               {{ t('settings.appearance.layout.zebraStriping.hint') }}
             </p>
           </div>

@@ -36,13 +36,19 @@ function requestRemove() {
 
 <template>
   <div class="flex items-center gap-1.5">
-    <Button variant="outline" size="sm" type="button" :disabled="scanning" @click="requestScan">
+    <Button variant="outline" size="sm" type="button" class="pointer-coarse:h-11" :disabled="scanning" @click="requestScan">
       <RefreshCw :size="14" :class="scanning ? 'animate-spin motion-reduce:animate-none' : ''" aria-hidden="true" />
       {{ scanning ? t('settings.admin.libraries.scanning') : t('settings.admin.libraries.scan') }}
     </Button>
     <DropdownMenu>
       <DropdownMenuTrigger as-child>
-        <Button variant="outline" size="icon-sm" type="button" :aria-label="t('settings.admin.libraries.moreActions', { name: library.name })">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          type="button"
+          class="pointer-coarse:size-11"
+          :aria-label="t('settings.admin.libraries.moreActions', { name: library.name })"
+        >
           <MoreHorizontal :size="16" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>

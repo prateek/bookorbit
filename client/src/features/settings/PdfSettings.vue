@@ -62,9 +62,7 @@ function handleCustomScale(event: Event) {
 </script>
 
 <template>
-  <div
-    class="[&_.settings-hint]:overflow-hidden [&_.settings-hint]:text-ellipsis [&_.settings-hint]:whitespace-nowrap md:[&_.settings-hint]:overflow-visible md:[&_.settings-hint]:whitespace-normal"
-  >
+  <div>
     <SettingsPageHeader v-if="!props.embedded" :title="t('settings.reader.pdf.title')" :subtitle="t('settings.reader.pdf.subtitle')" />
 
     <!-- Layout -->
@@ -83,21 +81,21 @@ function handleCustomScale(event: Event) {
           </div>
           <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-lg border border-border bg-muted/50 self-start">
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.scrollMode === 'page' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="selectPageLayout"
             >
               {{ t('settings.reader.pdf.page') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.scrollMode === 'vertical' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="selectVerticalLayout"
             >
               {{ t('settings.reader.pdf.scrolled') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="
                 effective.scrollMode === 'horizontal' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
               "
@@ -120,28 +118,28 @@ function handleCustomScale(event: Event) {
           </div>
           <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-lg border border-border bg-muted/50 self-start">
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.spread === 'none' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="selectSingleSpread"
             >
               {{ t('settings.reader.pdf.spreadNone') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.spread === 'odd' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="selectOddSpread"
             >
               {{ t('settings.reader.pdf.spreadOdd') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.spread === 'even' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="selectEvenSpread"
             >
               {{ t('settings.reader.pdf.spreadEven') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.spread === 'auto' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="selectAutoSpread"
             >
@@ -176,7 +174,7 @@ function handleCustomScale(event: Event) {
               ]"
               :key="opt.id"
               :data-zoom-mode="opt.id"
-              class="h-8 px-3 text-xs border-2 transition-colors font-medium rounded-md"
+              class="h-8 px-3 text-xs border-2 transition-colors font-medium rounded-md pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="
                 effective.zoomMode === opt.id
                   ? 'border-primary text-primary bg-primary/8'

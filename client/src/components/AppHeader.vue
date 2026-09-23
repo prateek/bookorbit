@@ -130,6 +130,10 @@ function navigateToSettings() {
   router.push({ name: 'settings-libraries' })
 }
 
+function navigateToSettingsHome() {
+  router.push({ name: 'settings-home' })
+}
+
 const appearanceSheetOpen = ref(false)
 const languageSheetOpen = ref(false)
 const languagePopoverOpen = ref(false)
@@ -721,7 +725,7 @@ function formatBadgeStyle(fmt: string, result?: GlobalSearchResult) {
               <span class="ms-auto ps-3 text-xs text-muted-foreground">{{ currentLanguageLabel }}</span>
             </DropdownMenuItem>
 
-            <DropdownMenuItem @click="navigateToSettings">
+            <DropdownMenuItem @click="navigateToSettingsHome">
               <Settings :size="15" class="mr-2 text-muted-foreground" />
               {{ t('components.appHeader.settings') }}
             </DropdownMenuItem>

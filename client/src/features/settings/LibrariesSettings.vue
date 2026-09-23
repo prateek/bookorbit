@@ -315,7 +315,7 @@ async function confirmDelete() {
           variant="outline"
           size="sm"
           type="button"
-          class="max-sm:size-8 max-sm:p-0"
+          class="pointer-coarse:h-11 max-sm:size-11 max-sm:p-0"
           :disabled="scanningAll || libraries.length === 0"
           :aria-label="t('settings.admin.libraries.scanAll')"
           @click="scanAll"
@@ -325,7 +325,7 @@ async function confirmDelete() {
             {{ scanningAll ? t('settings.admin.libraries.scanning') : t('settings.admin.libraries.scanAll') }}
           </span>
         </Button>
-        <Button size="sm" type="button" @click="openCreate">
+        <Button size="sm" type="button" class="pointer-coarse:h-11" @click="openCreate">
           <Plus :size="14" aria-hidden="true" />
           {{ t('settings.admin.libraries.addLibrary') }}
         </Button>

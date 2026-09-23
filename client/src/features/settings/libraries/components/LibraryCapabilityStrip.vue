@@ -36,16 +36,16 @@ function slotTitle(slot: { label: string; on: boolean; detail: string | null }):
 </script>
 
 <template>
-  <ul class="flex items-center gap-1">
+  <ul class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
     <li
       v-for="slot in slots"
       :key="slot.key"
-      :title="slotTitle(slot)"
-      class="flex size-6 items-center justify-center rounded-md border"
-      :class="slot.on ? 'border-border bg-foreground/6 text-foreground' : 'border-dashed border-border/70 text-muted-foreground opacity-45'"
+      class="inline-flex items-center gap-1"
+      :class="slot.on ? 'text-foreground' : 'text-muted-foreground'"
+      data-testid="library-capability"
     >
-      <component :is="slot.icon" :size="12" aria-hidden="true" />
-      <span class="sr-only">{{ slotTitle(slot) }}</span>
+      <component :is="slot.icon" :size="12" :class="slot.on ? '' : 'opacity-60'" aria-hidden="true" />
+      <span>{{ slotTitle(slot) }}</span>
     </li>
   </ul>
 </template>

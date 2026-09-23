@@ -473,6 +473,6 @@ describe('AppHeader global search', () => {
 
     await settingsItem.trigger('click')
 
-    expect(mocks.routerPush).toHaveBeenCalledWith({ name: 'settings-libraries' })
+    expect(mocks.routerPush).toHaveBeenCalledWith({ name: 'settings-home' })
   })
 })

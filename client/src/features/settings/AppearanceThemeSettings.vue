@@ -29,6 +29,11 @@ const backgroundGroups = computed<{ label: string; ids: string[] }[]>(() => [
   },
 ])
 
+const selectedAccentLabel = computed(() => {
+  const selected = ACCENT_ROWS.flat().find((option) => option.id === themeStore.accent)
+  return selected ? t(selected.labelKey) : ''
+})
+
 function handleLightTheme() {
   themeStore.setTheme('light')
 }
@@ -68,23 +73,23 @@ function handleBrightnessInput(event: Event) {
               {{ t('settings.appearance.theme.colorScheme.hint') }}
             </p>
           </div>
-          <div class="flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/50 self-start">
+          <div class="flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/50 self-start max-md:self-stretch">
             <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:flex-1 pointer-coarse:min-h-11 pointer-coarse:text-sm"
               :class="themeStore.theme === 'light' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="handleLightTheme"
             >
               <Sun :size="12" /> {{ t('settings.appearance.themeMode.light') }}
             </button>
             <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:flex-1 pointer-coarse:min-h-11 pointer-coarse:text-sm"
               :class="themeStore.theme === 'dark' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="handleDarkTheme"
             >
               <Moon :size="12" /> {{ t('settings.appearance.themeMode.dark') }}
             </button>
             <button
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:flex-1 pointer-coarse:min-h-11 pointer-coarse:text-sm"
               :class="themeStore.theme === 'system' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="handleSystemTheme"
             >
@@ -95,29 +100,40 @@ function handleBrightnessInput(event: Event) {
         </div>
 
         <div class="px-4 py-3.5 md:px-5 md:py-4 bg-card">
-          <p class="settings-label mb-0.5">
-            {{ t('settings.appearance.theme.accentColor.label') }}
-          </p>
+          <div class="mb-0.5 flex items-baseline justify-between gap-3">
+            <p class="settings-label">
+              {{ t('settings.appearance.theme.accentColor.label') }}
+            </p>
+            <span class="truncate text-sm text-muted-foreground" data-testid="accent-selected-label">{{ selectedAccentLabel }}</span>
+          </div>
           <p class="text-xs text-muted-foreground mb-3">
             {{ t('settings.appearance.theme.accentColor.hint') }}
           </p>
-          <div class="overflow-x-auto no-scrollbar px-1 py-0.5">
-            <div class="space-y-2 w-max">
-              <div v-for="(row, rowIndex) in ACCENT_ROWS" :key="rowIndex" class="flex items-center gap-1.5">
+          <!-- Phones wrap every swatch into a grid of 44px cells; wider screens keep the paired rows. -->
+          <div class="md:overflow-x-auto md:no-scrollbar md:px-1 md:py-0.5">
+            <div class="grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] md:block md:w-max md:space-y-2">
+              <div v-for="(row, rowIndex) in ACCENT_ROWS" :key="rowIndex" class="contents md:flex md:items-center md:gap-1.5">
                 <Tooltip v-for="opt in row" :key="opt.id">
                   <TooltipTrigger as-child>
                     <button
-                      class="w-7 h-7 md:w-5 md:h-5 rounded-full transition-all hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card shrink-0"
-                      :class="opt.swatchClass"
+                      type="button"
+                      class="group/swatch flex size-11 shrink-0 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:size-auto"
                       :aria-label="t(opt.labelKey)"
-                      :style="{
-                        backgroundColor: opt.color,
-                        outline: themeStore.accent === opt.id ? `2px solid ${opt.color}` : 'none',
-                        outlineOffset: '2px',
-                        transform: themeStore.accent === opt.id ? 'scale(1.25)' : '',
-                      }"
+                      :aria-pressed="themeStore.accent === opt.id"
+                      data-testid="accent-swatch"
                       @click="themeStore.setAccent(opt.id)"
-                    />
+                    >
+                      <span
+                        class="block h-7 w-7 rounded-full transition-all group-hover/swatch:scale-110 md:h-5 md:w-5"
+                        :class="opt.swatchClass"
+                        :style="{
+                          backgroundColor: opt.color,
+                          outline: themeStore.accent === opt.id ? `2px solid ${opt.color}` : 'none',
+                          outlineOffset: '2px',
+                          transform: themeStore.accent === opt.id ? 'scale(1.25)' : '',
+                        }"
+                      />
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent>{{ t(opt.labelKey) }}</TooltipContent>
                 </Tooltip>
@@ -135,11 +151,11 @@ function handleBrightnessInput(event: Event) {
               {{ t('settings.appearance.theme.cornerRadius.hint') }}
             </p>
           </div>
-          <div class="flex items-center gap-1.5 self-start">
+          <div class="flex flex-wrap items-center gap-1.5 self-start">
             <button
               v-for="opt in RADIUS_OPTIONS"
               :key="opt.id"
-              class="h-7 px-3 text-xs border-2 transition-colors font-medium"
+              class="h-7 px-3 text-xs border-2 transition-colors font-medium pointer-coarse:h-11 pointer-coarse:text-sm"
               :style="{
                 borderRadius: opt.id === 'sharp' ? '2px' : opt.id === 'default' ? '6px' : opt.id === 'rounded' ? '14px' : '999px',
               }"
@@ -206,27 +222,36 @@ function handleBrightnessInput(event: Event) {
           </div>
           <div class="space-y-5 md:space-y-6">
             <div v-for="group in backgroundGroups" :key="group.label">
-              <p class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2.5 ml-0.5">
+              <p class="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2.5 ml-0.5">
                 {{ group.label }}
               </p>
-              <div
-                class="flex items-center gap-3 md:gap-4 overflow-x-auto md:overflow-visible md:flex-wrap pb-1 pt-0.5 px-0.5 md:pt-0 md:px-0 md:pb-0 no-scrollbar"
-              >
-                <Tooltip v-for="opt in BACKGROUND_OPTIONS.filter((o) => group.ids.includes(o.id))" :key="opt.id">
-                  <TooltipTrigger as-child>
-                    <button
-                      type="button"
-                      class="w-14 h-10 rounded overflow-hidden transition-all ring-2 focus:outline-none shrink-0"
-                      :class="
-                        themeStore.background === opt.id ? 'ring-primary shadow-xs shadow-primary/20' : 'ring-border hover:ring-muted-foreground/40'
-                      "
-                      @click="themeStore.setBackground(opt.id)"
-                    >
-                      <div class="w-full h-full bg-background [transform:translate(0)] pattern-preview" :class="opt.cssClass" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>{{ opt.label }}</TooltipContent>
-                </Tooltip>
+              <div class="flex flex-wrap items-start gap-3 px-0.5 pt-0.5 md:gap-4">
+                <button
+                  v-for="opt in BACKGROUND_OPTIONS.filter((o) => group.ids.includes(o.id))"
+                  :key="opt.id"
+                  type="button"
+                  class="group/pattern flex w-16 flex-col items-center gap-1.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  :aria-pressed="themeStore.background === opt.id"
+                  data-testid="background-option"
+                  @click="themeStore.setBackground(opt.id)"
+                >
+                  <span
+                    class="block h-10 w-14 overflow-hidden rounded ring-2 transition-all"
+                    :class="
+                      themeStore.background === opt.id
+                        ? 'ring-primary shadow-xs shadow-primary/20'
+                        : 'ring-border group-hover/pattern:ring-muted-foreground/40'
+                    "
+                  >
+                    <span class="block h-full w-full bg-background [transform:translate(0)] pattern-preview" :class="opt.cssClass" />
+                  </span>
+                  <span
+                    class="w-full truncate text-center text-xs"
+                    :class="themeStore.background === opt.id ? 'font-medium text-primary' : 'text-muted-foreground'"
+                  >
+                    {{ opt.label }}
+                  </span>
+                </button>
               </div>
             </div>
           </div>

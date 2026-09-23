@@ -55,7 +55,7 @@ function setThumbnailClickAction(action: BookThumbnailClickAction) {
           <p class="settings-label">
             {{ t('settings.appearance.behavior.thumbnailClicks.label') }}
           </p>
-          <p class="settings-hint overflow-hidden text-ellipsis whitespace-nowrap md:whitespace-normal md:overflow-visible">
+          <p class="settings-hint">
             {{ t('settings.appearance.behavior.thumbnailClicks.hint') }}
           </p>
         </div>
@@ -83,7 +83,7 @@ function setThumbnailClickAction(action: BookThumbnailClickAction) {
           <p class="settings-label">
             {{ t('settings.appearance.behavior.filterPreview.label') }}
           </p>
-          <p class="settings-hint overflow-hidden text-ellipsis whitespace-nowrap md:whitespace-normal md:overflow-visible">
+          <p class="settings-hint">
             {{ t('settings.appearance.behavior.filterPreview.hint') }}
           </p>
         </div>
@@ -94,9 +94,7 @@ function setThumbnailClickAction(action: BookThumbnailClickAction) {
           <p class="settings-label">
             {{ t('settings.appearance.behavior.collapseSeries.label') }}
           </p>
-          <p class="settings-hint overflow-hidden text-ellipsis whitespace-nowrap md:whitespace-normal md:overflow-visible">
-            Group books in the same series into a single card in library, collection, and Smart Scope views
-          </p>
+          <p class="settings-hint">Group books in the same series into a single card in library, collection, and Smart Scope views</p>
         </div>
         <ToggleSwitch :model-value="globalCollapseEnabled" @update:model-value="handleGlobalCollapseToggle" />
       </div>
