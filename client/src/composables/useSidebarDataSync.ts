@@ -1,3 +1,4 @@
+import { onAppResumed } from '@/components/sidebar/useAppResume'
 import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { Permission } from '@bookorbit/types'
 import { useBrowseCounts } from '@/composables/useBrowseCounts'
@@ -76,6 +77,12 @@ export function useSidebarDataSync() {
   })
 
   onUnmounted(() => stopLibraryUploadListener())
+
+  onAppResumed(() => {
+    void refreshLibraries()
+    void refreshBrowseCounts()
+    if (hasPermission(Permission.BookRequestAccess)) void refreshBookRequestSummary()
+  })
 
   return { outstandingRequestTotal }
 }

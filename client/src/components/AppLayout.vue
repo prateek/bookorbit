@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -8,6 +8,16 @@ import CommandPalette from '@/features/command-palette/components/CommandPalette
 import BookMetadataFetchWidget from '@/features/book-metadata-fetch/components/BookMetadataFetchWidget.vue'
 import { useAppStyleScope } from '@/composables/useAppStyleScope'
 import { useShellServices } from '@/composables/useShellServices'
+import AppBottomNav from '@/components/sidebar/AppBottomNav.vue'
+import { useAppResumeWatcher } from '@/components/sidebar/useAppResume'
+import {
+  isReturningToHistoryEntry,
+  readScrollPosition,
+  restoreScrollPosition,
+  scrollEntryKey,
+  writeScrollPosition,
+} from '@/features/book/composables/useScrollRestoreOnActivate'
+import { useCommandPalette } from '@/features/command-palette/composables/useCommandPalette'
 import { useThemeStore } from '@/stores/theme'
 
 const route = useRoute()
@@ -50,12 +60,82 @@ const viewKey = computed(() => {
   if (name.startsWith('tools-')) return 'tools'
   return route.path
 })
+
+const { openPalette } = useCommandPalette()
+
+function handleBottomNavSearch() {
+  openPalette()
+}
+
+useAppResumeWatcher()
+
+/*
+ * Views that scroll the shell container (the dashboard, detail pages) are re-created on every
+ * visit, and the window never scrolls, so the router's scrollBehavior cannot help. The shell
+ * position is saved per history entry and put back when the user returns to that entry.
+ */
+const shellScroll = ref<HTMLElement | null>(null)
+let shellKey = scrollEntryKey('shell', route.path)
+let shellPaused = false
+let shellFrame = 0
+let cancelShellRestore: (() => void) | null = null
+
+function handleShellScroll() {
+  if (shellPaused || shellFrame) return
+  shellFrame = requestAnimationFrame(() => {
+    shellFrame = 0
+    const el = shellScroll.value
+    if (el && !shellPaused) writeScrollPosition(shellKey, el.scrollTop)
+  })
+}
+
+function stopShellRestore() {
+  cancelShellRestore?.()
+  cancelShellRestore = null
+}
+
+watch(viewKey, () => {
+  // The leaving page clamps the scroll offset as it is removed; that must not overwrite its entry.
+  shellPaused = true
+  stopShellRestore()
+})
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (!shellPaused) shellKey = scrollEntryKey('shell', route.path)
+  },
+  { flush: 'post' },
+)
+
+function handlePageAfterEnter() {
+  const el = shellScroll.value
+  shellKey = scrollEntryKey('shell', route.path)
+  shellPaused = false
+  if (!el) return
+  const target = isReturningToHistoryEntry() ? readScrollPosition(shellKey) : 0
+  if (target === null) return
+  shellPaused = true
+  cancelShellRestore = restoreScrollPosition(el, target, () => {
+    shellPaused = false
+    cancelShellRestore = null
+  })
+}
+
+// Coming back from the reader re-creates the whole shell, and the first page renders without a
+// transition, so after-enter never fires for it.
+onMounted(handlePageAfterEnter)
+
+onBeforeUnmount(() => {
+  stopShellRestore()
+  if (shellFrame) cancelAnimationFrame(shellFrame)
+})
 </script>
 
 <template>
   <SidebarProvider class="app-shell min-h-svh" :class="themeStore.appliedBackgroundClass">
     <AppSidebar />
-    <SidebarInset class="app-shell-inset flex flex-col h-svh overflow-hidden relative bg-transparent pb-(--shell-gap)">
+    <SidebarInset class="app-shell-inset flex flex-col h-svh overflow-hidden relative bg-transparent md:pb-(--shell-gap)">
       <div aria-hidden="true" class="shell-glow" />
       <!-- No global header: the sidebar holds the shell controls. Phones get a slim bar only on
            pages that do not open with their own title row. -->
@@ -64,25 +144,26 @@ const viewKey = computed(() => {
       <!--
         Independent View Area: every page scrolls here. The bottom padding is the
         floating podcast player's measured height, so scrolled-to-bottom content clears it without a
-        document-level scrollbar.
+        document-level scrollbar. On phones the tab bar below is a flex sibling, so it never covers content.
       -->
       <div
-        class="app-shell-scroll ps-(--shell-content-gutter) pe-(--shell-gap) pt-(--shell-gap) pb-[var(--podcast-mini-player-clearance,0px)] flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth bg-transparent"
+        ref="shellScroll"
+        class="app-shell-scroll ps-(--shell-content-gutter) pe-(--shell-gap) pt-2 md:pt-(--shell-gap) pb-[var(--podcast-mini-player-clearance,0px)] flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth bg-transparent"
+        @scroll.passive="handleShellScroll"
       >
         <router-view v-slot="{ Component }">
-          <Transition name="page" mode="out-in">
+          <Transition name="page" mode="out-in" @after-enter="handlePageAfterEnter">
             <KeepAlive :include="GRID_VIEW_NAMES" :max="10">
               <component :is="Component" :key="viewKey" />
             </KeepAlive>
           </Transition>
         </router-view>
       </div>
+
+      <!-- 3. Phone tab bar: lives inside the shell, so the reader and the auth pages never show it. -->
+      <AppBottomNav @search="handleBottomNavSearch" />
     </SidebarInset>
     <BookMetadataFetchWidget :hide-book-card="route.name === 'settings-metadata-auto-fetch'" />
     <CommandPalette />
   </SidebarProvider>
 </template>
-
-<style scoped>
-/* No more masks or negative margins. Clean, stable layout. */
-</style>

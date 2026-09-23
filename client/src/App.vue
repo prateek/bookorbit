@@ -28,7 +28,7 @@ import { resolveRouteViewKey } from '@/router/view-key'
 import LegalNotices from '@/components/legal/LegalNotices.vue'
 
 // Bottom-edge media and download surfaces publish their measured heights, so the toaster clears
-// whichever one currently sits highest.
+// whichever one currently sits highest. The phone tab bar publishes its height the same way.
 const TOASTER_OFFSET = {
   right: '16px',
   bottom:
@@ -38,7 +38,7 @@ const TOASTER_MOBILE_OFFSET = {
   left: '16px',
   right: '16px',
   bottom:
-    'max(16px, var(--podcast-mini-player-clearance, 0px), var(--tts-mini-player-clearance, 0px), var(--podcast-download-widget-clearance, 0px))',
+    'max(calc(16px + var(--app-bottom-nav-height, 0px)), var(--podcast-mini-player-clearance, 0px), var(--tts-mini-player-clearance, 0px), var(--podcast-download-widget-clearance, 0px))',
 }
 
 const { isOpen } = useChangePasswordDialog()

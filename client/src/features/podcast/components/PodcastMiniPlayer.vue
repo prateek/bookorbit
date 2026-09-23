@@ -186,7 +186,7 @@ function retryPlayback() {
   <section
     v-if="isVisible && activeEpisode"
     ref="rootRef"
-    class="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-50 overflow-hidden border border-border bg-card/95 shadow-[var(--elevation-xl)] backdrop-blur"
+    class="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom),calc(var(--app-bottom-nav-height,0px)_+_0.5rem))] z-50 overflow-hidden border border-border bg-card/95 shadow-[var(--elevation-xl)] backdrop-blur"
     :class="isCompact ? 'rounded-full md:inset-x-auto md:right-6 md:w-80' : 'rounded-2xl md:inset-x-auto md:right-6 md:w-[28rem]'"
     :aria-label="t('podcast.player.miniPlayer')"
     data-podcast-mini-player
