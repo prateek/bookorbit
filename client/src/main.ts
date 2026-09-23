@@ -9,6 +9,7 @@ import router from './router'
 import { i18n } from './i18n'
 import { useLocaleStore } from './stores/locale'
 import { bootstrapSession } from './features/auth/composables/useSessionBootstrap'
+import { installAppBadgeClearing } from './features/push/lib/app-badge'
 
 // Chrome 124+ blocks aria-hidden from being applied to an element that contains
 // a focused descendant. Reka UI's dialog uses the aria-hidden package which sets
@@ -50,6 +51,7 @@ await bootstrapSession()
 
 app.use(router)
 app.mount('#app')
+installAppBadgeClearing()
 
 function prefetchPdfReader() {
   void Promise.all([import('./features/reader/pdf-v4/PdfV4ReaderView.vue'), import('@embedpdf/pdfium/pdfium.wasm?url')]).then(([, wasm]) => {

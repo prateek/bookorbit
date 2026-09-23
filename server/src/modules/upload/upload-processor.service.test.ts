@@ -293,6 +293,29 @@ describe('UploadProcessorService', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('queue offline'));
   });
 
+  it('reports the imported book for push notifications once its metadata is extracted', async () => {
+    const order: string[] = [];
+    const newBooksPush = { enqueue: vi.fn(() => order.push('push')) };
+    metadataService.extractAndSave.mockImplementation(() => {
+      order.push('extract');
+      return Promise.resolve();
+    });
+    const withPush = new UploadProcessorService(
+      db as any,
+      metadataService as any,
+      coverStore as any,
+      orchestrator as any,
+      undefined,
+      undefined,
+      newBooksPush as any,
+    );
+
+    await withPush.processNewBookImport(42, 1, '/folder/book.epub', 'epub');
+
+    expect(newBooksPush.enqueue).toHaveBeenCalledWith(1, [42]);
+    expect(order).toEqual(['extract', 'push']);
+  });
+
   it('extractMetadataAsync ignores unsupported formats', () => {
     service.extractMetadataAsync(1, '/tmp/file.txt', 'txt');
     expect(metadataService.extractAndSave).not.toHaveBeenCalled();
@@ -477,6 +500,28 @@ describe('UploadProcessorService', () => {
 
       expect(mockComputeFileHash).toHaveBeenCalledTimes(2);
       expect(db.transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports only the books the unit created for push notifications', async () => {
+      const newBooksPush = { enqueue: vi.fn() };
+      const withPush = new UploadProcessorService(
+        db as any,
+        metadataService as any,
+        coverStore as any,
+        orchestrator as any,
+        undefined,
+        undefined,
+        newBooksPush as any,
+      );
+      insertBooksReturning.mockResolvedValueOnce([{ id: 42 }]);
+      selectLimit
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 42 }])
+        .mockResolvedValueOnce([]);
+
+      await withPush.createUnitBookRecords(1, 2, unitFiles);
+
+      expect(newBooksPush.enqueue).toHaveBeenCalledWith(1, [42]);
     });
 
     it('renumbers the tracks of each book that received audio once every file of the unit is in', async () => {
