@@ -2,7 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { BarChart3, Check, ChevronDown, GripVertical, Settings2 } from '@lucide/vue'
+import { BarChart3, ArrowDown, ArrowUp, Check, ChevronDown, GripVertical, Settings2 } from '@lucide/vue'
+import { useMediaQuery } from '@vueuse/core'
 import { VueDraggable } from 'vue-draggable-plus'
 
 import type { ChartConfigEntry, StatisticsChartId } from '@bookorbit/types'
@@ -13,6 +14,7 @@ import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import { useLibraries } from '@/features/library/composables/useLibraries'
 import { STATISTICS_CHART_META } from '../statistics-chart-meta'
 import { useStatisticsConfig } from '../composables/useStatisticsConfig'
+import { rememberStatisticsTab, resolveStatisticsTab, type StatisticsTab } from '../lib/statistics-tab'
 import StatisticsGrid from './StatisticsGrid.vue'
 import StatisticsSummaryCard from './StatisticsSummaryCard.vue'
 
@@ -39,12 +41,7 @@ const router = useRouter()
 const { libraries, fetchLibraries } = useLibraries()
 const configOpen = ref(false)
 
-type StatisticsTab = 'library' | 'user'
-
-function resolveStatisticsTab(tabQuery: unknown): StatisticsTab {
-  const tab = Array.isArray(tabQuery) ? tabQuery[0] : tabQuery
-  return tab === 'user' ? 'user' : 'library'
-}
+const isCompact = useMediaQuery('(max-width: 767px)')
 
 const initialTab = resolveStatisticsTab(route.query.tab)
 const activeTab = ref<StatisticsTab>(initialTab)
@@ -135,7 +132,35 @@ function chartMeta(id: StatisticsChartId) {
 function setTab(tab: StatisticsTab) {
   activeTab.value = tab
   loaded.value.add(tab)
+  rememberStatisticsTab(tab)
   void router.replace({ query: { ...route.query, tab } })
+}
+
+function handleLibraryTab() {
+  setTab('library')
+}
+
+function handleUserTab() {
+  setTab('user')
+}
+
+function moveChart(id: StatisticsChartId, delta: -1 | 1) {
+  const list = [...activeOrderedCharts.value]
+  const from = list.findIndex((chart) => chart.id === id)
+  const to = from + delta
+  if (from === -1 || to < 0 || to >= list.length) return
+  const [moved] = list.splice(from, 1)
+  if (!moved) return
+  list.splice(to, 0, moved)
+  reorder(list)
+}
+
+function handleMoveUp(id: StatisticsChartId) {
+  moveChart(id, -1)
+}
+
+function handleMoveDown(id: StatisticsChartId) {
+  moveChart(id, 1)
 }
 </script>
 
@@ -146,19 +171,19 @@ function setTab(tab: StatisticsTab) {
         <div class="flex w-full items-center gap-1 rounded-lg bg-muted p-1 sm:w-auto">
           <button
             :class="[
-              'flex-1 rounded-md px-4 py-1.5 text-sm font-medium transition-colors sm:flex-none',
+              'flex-1 pointer-coarse:min-h-11 rounded-md px-4 py-1.5 text-sm font-medium transition-colors sm:flex-none',
               activeTab === 'library' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
             ]"
-            @click="setTab('library')"
+            @click="handleLibraryTab"
           >
             {{ t('statistics.tabs.library') }}
           </button>
           <button
             :class="[
-              'flex-1 rounded-md px-4 py-1.5 text-sm font-medium transition-colors sm:flex-none',
+              'flex-1 pointer-coarse:min-h-11 rounded-md px-4 py-1.5 text-sm font-medium transition-colors sm:flex-none',
               activeTab === 'user' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
             ]"
-            @click="setTab('user')"
+            @click="handleUserTab"
           >
             {{ t('statistics.tabs.user') }}
           </button>
@@ -222,10 +247,14 @@ function setTab(tab: StatisticsTab) {
       </template>
     </PageTitleRow>
 
-    <StatisticsSummaryCard />
-
     <Sheet v-model:open="configOpen">
-      <SheetContent side="right" class="w-[90dvw] max-w-[90dvw] sm:w-[420px] sm:max-w-[420px]">
+      <SheetContent
+        :side="isCompact ? 'bottom' : 'right'"
+        :class="isCompact ? 'max-h-[85dvh] rounded-t-xl pb-[env(safe-area-inset-bottom)]' : 'w-[90dvw] max-w-[90dvw] sm:w-[420px] sm:max-w-[420px]'"
+      >
+        <div v-if="isCompact" aria-hidden="true" class="pointer-events-none absolute inset-x-0 top-0 flex justify-center pt-1.5">
+          <span class="h-1 w-10 rounded-full bg-border" />
+        </div>
         <SheetHeader>
           <div class="flex items-center justify-between pr-8">
             <SheetTitle>{{ t('statistics.config.title') }}</SheetTitle>
@@ -233,7 +262,10 @@ function setTab(tab: StatisticsTab) {
               {{ activeVisibleCount }} / {{ activeTotalCount }}
             </span>
           </div>
-          <SheetDescription>{{ t('statistics.config.description') }}</SheetDescription>
+          <SheetDescription>
+            <span class="pointer-coarse:hidden">{{ t('statistics.config.description') }}</span>
+            <span class="hidden pointer-coarse:inline">{{ t('statistics.config.descriptionTouch') }}</span>
+          </SheetDescription>
         </SheetHeader>
 
         <div class="flex-1 overflow-y-auto px-4">
@@ -245,18 +277,40 @@ function setTab(tab: StatisticsTab) {
             @update:model-value="handleReorder"
           >
             <div
-              v-for="chart in activeOrderedCharts"
+              v-for="(chart, index) in activeOrderedCharts"
               :key="chart.id"
               :class="[
-                'border-border/50 bg-muted/40 flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-opacity',
+                'border-border/50 bg-muted/40 flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-opacity pointer-coarse:min-h-14 pointer-coarse:py-1',
                 !chart.visible && 'opacity-50',
               ]"
             >
-              <GripVertical class="text-muted-foreground drawer-drag-handle size-4 shrink-0 cursor-grab active:cursor-grabbing" />
+              <GripVertical
+                class="text-muted-foreground drawer-drag-handle size-4 shrink-0 cursor-grab active:cursor-grabbing pointer-coarse:hidden"
+              />
               <component :is="chartMeta(chart.id).icon" :class="['size-4 shrink-0', chart.visible ? 'text-primary' : 'text-muted-foreground']" />
               <span :class="['flex-1 text-sm', chart.visible ? 'text-foreground' : 'text-muted-foreground']">
                 {{ chartMeta(chart.id).label }}
               </span>
+              <div class="hidden shrink-0 items-center pointer-coarse:flex">
+                <button
+                  type="button"
+                  class="text-muted-foreground flex size-11 items-center justify-center rounded-md disabled:opacity-30"
+                  :disabled="index === 0"
+                  :aria-label="t('statistics.config.moveUp', { chart: chartMeta(chart.id).label })"
+                  @click="handleMoveUp(chart.id)"
+                >
+                  <ArrowUp class="size-4" />
+                </button>
+                <button
+                  type="button"
+                  class="text-muted-foreground flex size-11 items-center justify-center rounded-md disabled:opacity-30"
+                  :disabled="index === activeOrderedCharts.length - 1"
+                  :aria-label="t('statistics.config.moveDown', { chart: chartMeta(chart.id).label })"
+                  @click="handleMoveDown(chart.id)"
+                >
+                  <ArrowDown class="size-4" />
+                </button>
+              </div>
               <ToggleSwitch :model-value="chart.visible" @update:model-value="handleToggleChart(chart.id)" />
             </div>
           </VueDraggable>
@@ -264,7 +318,7 @@ function setTab(tab: StatisticsTab) {
 
         <SheetFooter>
           <button
-            class="text-muted-foreground hover:text-foreground w-full rounded-md py-2 text-sm transition-colors hover:bg-transparent"
+            class="text-muted-foreground hover:text-foreground w-full rounded-md py-2 text-sm transition-colors hover:bg-transparent pointer-coarse:min-h-11"
             @click="handleReset"
           >
             {{ t('statistics.config.reset') }}
@@ -273,10 +327,12 @@ function setTab(tab: StatisticsTab) {
       </SheetContent>
     </Sheet>
 
-    <div v-if="loaded.has('library')" v-show="activeTab === 'library'">
+    <div v-if="loaded.has('library')" v-show="activeTab === 'library'" class="flex flex-col gap-6">
+      <StatisticsSummaryCard tab="library" />
       <StatisticsGrid :charts="visibleLibraryCharts" />
     </div>
-    <div v-if="loaded.has('user')" v-show="activeTab === 'user'">
+    <div v-if="loaded.has('user')" v-show="activeTab === 'user'" class="flex flex-col gap-6">
+      <StatisticsSummaryCard tab="user" />
       <StatisticsGrid :charts="visibleUserCharts" />
     </div>
   </div>

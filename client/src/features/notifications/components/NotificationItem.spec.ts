@@ -97,4 +97,19 @@ describe('NotificationItem', () => {
     expect(wrapper.find('button[aria-label="Dismiss notification"]').exists()).toBe(true)
     expect(wrapper.findAll('button')[0].element.tagName).toBe('BUTTON')
   })
+
+  it('drops the repeat badge when a merged scan summary already carries the running totals', async () => {
+    const summary = { libraryId: 1, addedCount: 0, changedCount: 5, highlights: [], singleBookId: null, sampled: false }
+    const { wrapper } = await mountItem(
+      notification({ type: NotificationType.ScanCompleted, title: 'Serials updated', message: 'Updated 5 books.', count: 5, meta: { summary } }),
+    )
+
+    expect(wrapper.text()).toContain('Updated 5 books.')
+    expect(wrapper.text()).not.toContain('x5')
+  })
+
+  it('keeps the repeat badge for notifications whose message does not count repeats', async () => {
+    const { wrapper } = await mountItem(notification({ count: 3 }))
+    expect(wrapper.text()).toContain('x3')
+  })
 })

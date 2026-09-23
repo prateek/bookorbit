@@ -41,13 +41,20 @@ function pillClass(filter: FilterState): string {
       <span class="tabular-nums">{{ t('achievements.tiersEarnedFact', { earned: totalEarned, total: totalAvailable }) }}</span>
     </template>
     <template #inline>
-      <div class="-mx-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:px-0 sm:pb-0">
-        <div class="inline-flex min-w-max items-center gap-1 rounded-lg bg-muted p-1" role="group" :aria-label="t('achievements.filters.label')">
+      <div class="w-full sm:w-auto">
+        <div
+          class="grid grid-cols-4 sm:inline-flex items-center gap-1 rounded-lg bg-muted p-1"
+          role="group"
+          :aria-label="t('achievements.filters.label')"
+        >
           <button
             v-for="filter in FILTERS"
             :key="filter.id"
             type="button"
-            :class="['shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors max-sm:px-2.5 max-sm:text-[13px]', pillClass(filter.id)]"
+            :class="[
+              'min-h-11 shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors max-sm:px-2.5 max-sm:text-[13px]',
+              pillClass(filter.id),
+            ]"
             :aria-pressed="activeFilter === filter.id"
             @click="handleSelect(filter.id)"
           >

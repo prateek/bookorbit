@@ -33,4 +33,16 @@ describe('AchievementFilterBar', () => {
     for (const button of buttons) await button.trigger('click')
     expect(wrapper.emitted('change')).toEqual([['all'], ['earned'], ['in-progress'], ['locked']])
   })
+
+  it('lays the filters out as a four-column grid with finger-sized targets instead of a sideways scroller', () => {
+    const wrapper = mountComponent()
+    const buttons = wrapper.get('[role="group"]').findAll('button')
+
+    expect(buttons[0]!.element.parentElement!.classList).toContain('grid-cols-4')
+    expect(wrapper.find('.overflow-x-auto').exists()).toBe(false)
+    for (const button of buttons) expect(button.classes()).toContain('min-h-11')
+    expect(buttons[0]!.attributes('aria-pressed')).toBe('true')
+    expect(buttons[3]!.text()).toContain('Locked')
+    expect(buttons[3]!.text()).toContain('1')
+  })
 })
