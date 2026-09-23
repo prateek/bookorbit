@@ -48,6 +48,7 @@ import { useEffectiveViewMode } from '@/composables/useEffectiveViewMode'
 import { useViewDisplaySettings } from '@/composables/useViewDisplaySettings'
 import { useViewSearch } from '@/features/book/composables/useViewSearch'
 import { sortFieldLabel } from '@/features/book/lib/filter-labels'
+import { countFilterRules } from '@/features/smart-scope/lib/rule-summary'
 import BookShuffleButton from '@/features/book/components/BookShuffleButton.vue'
 import { DEFAULT_COVER_ASPECT_RATIO } from '@/features/book/lib/cover-aspect-ratio'
 import { usePageTitle } from '@/composables/usePageTitle'
@@ -278,6 +279,9 @@ const {
   onMoveToLibrary: (bookId) => openMoveForBook(bookId),
 })
 
+const selectableLoadedCount = computed(() => books.value.reduce((count, book) => (book.collapsedSeries ? count : count + 1), 0))
+const allLoadedSelected = computed(() => selectableLoadedCount.value > 0 && selectedCount.value >= selectableLoadedCount.value)
+
 const {
   open: moveToLibraryOpen,
   payload: movePayload,
@@ -507,6 +511,9 @@ defineOptions({ name: 'SmartScopeView' })
       :visible="selectionMode"
       :count="selectedCount"
       :in-flight="inFlight"
+      :can-select-all="true"
+      :all-selected="allLoadedSelected"
+      @toggle-select-all="handleSelectAllLoaded"
       @send="sendBookOpen = true"
       @download="handleDownloadFiles"
       @export-metadata="openMetadataExport"
@@ -805,6 +812,7 @@ defineOptions({ name: 'SmartScopeView' })
             :allow-move-to-library="true"
             @action="handleBookAction"
             @select="handleSelect"
+            @update:book="handleTableBookUpdate"
           />
 
           <!-- List view -->
@@ -818,6 +826,7 @@ defineOptions({ name: 'SmartScopeView' })
               @select="handleSelect(book.id, $event)"
               :allow-move-to-library="true"
               @action="handleBookAction(book, $event)"
+              @update:book="handleTableBookUpdate"
             />
           </div>
 

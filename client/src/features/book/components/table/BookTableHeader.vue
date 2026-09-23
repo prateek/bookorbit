@@ -121,7 +121,7 @@ function isSortableColumn(col: ColumnDef): boolean {
               <GripVertical
                 v-if="col.pinned === null && !isReadOnly"
                 :size="11"
-                class="shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/th:opacity-40 hover:!opacity-100"
+                class="shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity [@media(hover:none)]:opacity-40 group-hover/th:opacity-40 hover:!opacity-100"
               />
               <span class="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ col.header }}</span>
               <Loader2 v-if="loading && getSortDir(col.sortField!) !== null" :size="11" class="shrink-0 animate-spin text-primary" />
@@ -144,7 +144,7 @@ function isSortableColumn(col: ColumnDef): boolean {
           <GripVertical
             v-if="col.pinned === null && !isReadOnly"
             :size="11"
-            class="shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/th:opacity-40 hover:!opacity-100"
+            class="shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity [@media(hover:none)]:opacity-40 group-hover/th:opacity-40 hover:!opacity-100"
           />
           <span class="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ col.header }}</span>
         </div>
