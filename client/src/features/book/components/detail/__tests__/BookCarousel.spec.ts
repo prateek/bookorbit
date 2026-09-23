@@ -38,15 +38,15 @@ describe('BookCarousel read status badge', () => {
   it('draws no badge for an unread or untracked book', () => {
     const wrapper = mountCarousel([makeBook(1, 'unread'), makeBook(2, null)])
 
-    expect(wrapper.get('[data-book-id="1"]').find('.sr-only').exists()).toBe(false)
-    expect(wrapper.get('[data-book-id="2"]').find('.sr-only').exists()).toBe(false)
+    expect(wrapper.get('[data-book-id="1"]').find('[data-test="read-status-badge"]').exists()).toBe(false)
+    expect(wrapper.get('[data-book-id="2"]').find('[data-test="read-status-badge"]').exists()).toBe(false)
   })
 
   it('badges only the books that carry a status', () => {
     const wrapper = mountCarousel([makeBook(1, 'read'), makeBook(2, null), makeBook(3, 'abandoned')])
 
     expect(wrapper.get('[data-book-id="1"]').text()).toContain('Read')
-    expect(wrapper.get('[data-book-id="2"]').find('.sr-only').exists()).toBe(false)
+    expect(wrapper.get('[data-book-id="2"]').find('[data-test="read-status-badge"]').exists()).toBe(false)
     expect(wrapper.get('[data-book-id="3"]').text()).toContain('Abandoned')
   })
 })

@@ -60,7 +60,7 @@ describe('RecommendationController', () => {
       contentFilters: EMPTY_CONTENT_FILTER_RULES,
     };
 
-    await expect(controller.getRecommendations(10, user)).resolves.toEqual(recommendation);
+    await expect(controller.getRecommendations(10, {}, user)).resolves.toEqual(recommendation);
     expect(recommendationService.getRecommendations).toHaveBeenCalledWith(10, user);
   });
 
@@ -116,7 +116,27 @@ describe('RecommendationController', () => {
       contentFilters: EMPTY_CONTENT_FILTER_RULES,
     };
 
-    await expect(controller.getAuthorBooks(5, user)).resolves.toEqual(authorBooks);
+    await expect(controller.getAuthorBooks(5, {}, user)).resolves.toEqual(authorBooks);
     expect(recommendationService.getAuthorBooks).toHaveBeenCalledWith(5, user);
+  });
+
+  it('returns series-grouped shelves when asked to group by series', async () => {
+    const authorShelf = [{ kind: 'series', seriesId: 3 }];
+    const similarShelf = [{ kind: 'book', id: 9 }];
+    const recommendationService = {
+      getAuthorShelf: vi.fn().mockResolvedValue(authorShelf),
+      getSimilarShelf: vi.fn().mockResolvedValue(similarShelf),
+      getAuthorBooks: vi.fn(),
+      getRecommendations: vi.fn(),
+    };
+    const controller = new RecommendationController(recommendationService as never);
+    const user = { id: 1, isSuperuser: false, contentFilters: EMPTY_CONTENT_FILTER_RULES } as RequestUser;
+
+    await expect(controller.getAuthorBooks(5, { group: 'series' }, user)).resolves.toEqual(authorShelf);
+    await expect(controller.getRecommendations(5, { group: 'series' }, user)).resolves.toEqual(similarShelf);
+    expect(recommendationService.getAuthorShelf).toHaveBeenCalledWith(5, user);
+    expect(recommendationService.getSimilarShelf).toHaveBeenCalledWith(5, user);
+    expect(recommendationService.getAuthorBooks).not.toHaveBeenCalled();
+    expect(recommendationService.getRecommendations).not.toHaveBeenCalled();
   });
 });

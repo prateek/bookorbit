@@ -394,10 +394,11 @@ function handleLoadMore() {
                 {{ row.session.format }}
               </span>
             </span>
+            <!-- While confirming, the two 44px hit areas grow away from each other so a tap on cancel can never land on delete. -->
             <span class="flex items-center justify-end">
               <button
                 v-if="confirmDeleteId === row.session.id"
-                class="inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                class="touch-target inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors after:right-0 after:left-auto after:[transform:translateY(-50%)] hover:bg-muted hover:text-foreground"
                 :title="t('book.detail.readingLog.table.cancelDelete')"
                 :aria-label="t('book.detail.readingLog.table.cancelDeleteAria')"
                 @click="clearConfirmDelete"
@@ -406,10 +407,10 @@ function handleLoadMore() {
               </button>
               <button
                 :data-session-id="row.session.id"
-                class="inline-flex size-5 items-center justify-center rounded transition-colors"
+                class="touch-target inline-flex size-5 items-center justify-center rounded transition-colors"
                 :class="
                   confirmDeleteId === row.session.id
-                    ? 'bg-destructive/15 text-destructive ring-1 ring-destructive/40'
+                    ? 'bg-destructive/15 text-destructive ring-1 ring-destructive/40 after:left-0 after:[transform:translateY(-50%)]'
                     : 'text-muted-foreground hover:bg-muted hover:text-destructive'
                 "
                 :title="confirmDeleteId === row.session.id ? t('book.detail.readingLog.table.confirmDeleteTitle') : t('common.delete')"
