@@ -15,6 +15,7 @@ import SidebarModeSwitch from '@/components/sidebar/SidebarModeSwitch.vue'
 import SidebarSectionPopover from '@/components/sidebar/SidebarSectionPopover.vue'
 import SidebarGithubStar from '@/components/sidebar/SidebarGithubStar.vue'
 import SidebarAppLinks from '@/components/sidebar/SidebarAppLinks.vue'
+import SidebarYouZone from '@/components/sidebar/SidebarYouZone.vue'
 import { buildSidebarVersionUi } from '@/components/sidebar/versionUi'
 import { onAppResumed } from '@/components/sidebar/useAppResume'
 import { mergedMediaOrder, ownedInOrder, type DisplayOrderEntry } from '@/components/sidebar/sidebar-order'
@@ -116,7 +117,7 @@ const createCollectionMediaType = ref<MediaType>('books')
 const defaultPodcastLibraryId = computed(() => podcastLibraries.value[0]?.id ?? null)
 
 const isRail = computed(() => state.value === 'collapsed' && !isMobile.value)
-const isSettingsRoute = computed(() => typeof route.name === 'string' && route.name.startsWith('settings-'))
+const showSettingsSidebar = computed(() => !isMobile.value && typeof route.name === 'string' && route.name.startsWith('settings-'))
 const versionUi = computed(() => buildSidebarVersionUi(version.value, updateAvailable.value, latestVersion.value))
 
 function activeIdFor(...routeNames: string[]): number | null {
@@ -343,8 +344,9 @@ onAppResumed(() => {
     </SidebarHeader>
 
     <SidebarContent>
-      <!-- Settings takes over the sidebar rather than adding a second one next to it. -->
-      <SettingsSidebar v-if="isSettingsRoute" :is-rail="isRail" />
+      <!-- Settings takes over the desktop sidebar rather than adding a second one next to it. On phones
+           the drawer stays the app menu, and settings navigation lives on the settings index page. -->
+      <SettingsSidebar v-if="showSettingsSidebar" :is-rail="isRail" />
 
       <nav v-else :aria-label="t('components.sidebar.navLabel')" class="flex flex-col">
         <!-- Fixed destinations come first: they are a known height, so the variable-length
@@ -685,10 +687,15 @@ onAppResumed(() => {
             </SidebarNavItem>
           </SidebarZone>
         </template>
+
+        <template v-if="isMobile">
+          <SidebarSeparator />
+          <SidebarYouZone @navigate="handleNavigate" />
+        </template>
       </nav>
     </SidebarContent>
 
-    <SidebarFooter v-if="!isSettingsRoute" class="border-t border-sidebar-border px-4 py-2 group-data-[collapsible=icon]:px-2">
+    <SidebarFooter v-if="!showSettingsSidebar" class="border-t border-sidebar-border px-4 py-2 group-data-[collapsible=icon]:px-2">
       <div
         class="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 group-data-[collapsible=icon]:grid-cols-1 group-data-[collapsible=icon]:justify-items-center group-data-[collapsible=icon]:gap-1"
       >
