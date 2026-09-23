@@ -823,8 +823,9 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
         <div v-else class="flex-1" />
         <DropdownMenu v-model:open="menuOpen">
           <DropdownMenuTrigger as-child>
+            <!-- The hit area stays inside the label row: shelves pack cards 20px apart and the series label sits right below. -->
             <button
-              class="relative shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors after:absolute after:-inset-3.5 after:content-['']"
+              class="relative shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors after:absolute after:-top-1 after:-bottom-0.5 after:-left-1.5 after:-right-2.5 after:content-['']"
               data-testid="grid-card-kebab"
               :aria-label="t('book.actions.moreActions', { title: displayTitle ?? '' })"
             >
