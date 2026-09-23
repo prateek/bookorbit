@@ -89,6 +89,19 @@ describe('BookRepository', () => {
     expect(where).toHaveBeenCalledOnce();
   });
 
+  it('marks a book missing and clears its primary file', async () => {
+    const where = vi.fn().mockResolvedValue(undefined);
+    const set = vi.fn().mockReturnValue({ where });
+    const db = { update: vi.fn().mockReturnValue({ set }) };
+    const repo = new BookRepository(db as never);
+
+    await repo.markBookMissingWithoutFiles(9);
+
+    expect(db.update).toHaveBeenCalledWith(books);
+    expect(set).toHaveBeenCalledWith({ primaryFileId: null, status: 'missing', updatedAt: expect.any(Date) });
+    expect(where).toHaveBeenCalledOnce();
+  });
+
   it('runs callbacks inside db transactions', async () => {
     const db = {
       transaction: vi.fn((callback: (tx: { id: string }) => Promise<string>) => callback({ id: 'tx-1' })),

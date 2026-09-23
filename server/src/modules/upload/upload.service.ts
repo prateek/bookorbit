@@ -338,7 +338,14 @@ export class UploadService {
         };
       });
 
-      this.processor.extractAudioDurationAsync(bookId, destination, format);
+      // A file that becomes primary now represents the book, so its embedded metadata
+      // (respecting locked fields) replaces the previous primary's; the full extraction
+      // also aggregates audio duration. Secondary files only contribute audio duration.
+      if (isPrimary) {
+        this.processor.extractMetadataAsync(bookId, destination, format);
+      } else {
+        this.processor.extractAudioDurationAsync(bookId, destination, format);
+      }
 
       this.logger.log(
         `[${event}] [end] bookId=${bookId} userId=${user.id} fileId=${inserted.id} format=${format} sizeBytes=${sizeBytes} durationMs=${Date.now() - startedAt} - add file to book completed`,

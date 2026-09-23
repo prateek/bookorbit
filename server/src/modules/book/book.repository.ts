@@ -1588,6 +1588,10 @@ export class BookRepository {
     await this.db.update(books).set({ primaryFileId, updatedAt: new Date() }).where(eq(books.id, bookId));
   }
 
+  async markBookMissingWithoutFiles(bookId: number): Promise<void> {
+    await this.db.update(books).set({ primaryFileId: null, status: 'missing', updatedAt: new Date() }).where(eq(books.id, bookId));
+  }
+
   async findFilesForBook(bookId: number) {
     return this.db
       .select({

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { bookMetadata, readingSessions } from '../../db/schema';
 import { AchievementRepository } from './achievement.repository';
 
 function flattenSql(value: unknown): string {
@@ -21,6 +22,12 @@ function boundValues(node: unknown, out: unknown[] = [], seen = new Set<unknown>
   seen.add(node);
   for (const value of Object.values(node as Record<string, unknown>)) boundValues(value, out, seen);
   return out;
+}
+
+function joinColumns(condition: unknown): unknown[] {
+  return ((condition as { queryChunks?: unknown[] }).queryChunks ?? []).filter(
+    (chunk) => chunk && typeof chunk === 'object' && 'columnType' in chunk,
+  );
 }
 
 function makeSelectChain(resolvedValue: unknown) {
@@ -1474,7 +1481,7 @@ describe('AchievementRepository', () => {
       const db = { select: vi.fn().mockReturnValue(chain) };
       const repo = makeRepo(db);
 
-      const result = await repo.countAnnotationsOnDay(1, new Date('2024-03-15'));
+      const result = await repo.countAnnotationsOnDay(1, new Date('2024-03-15'), 'UTC');
 
       expect(result).toBe(8);
     });
@@ -1918,13 +1925,49 @@ describe('AchievementRepository', () => {
     });
   });
 
+  describe('page totals for sessions whose file was removed', () => {
+    // reading_sessions.book_file_id is ON DELETE SET NULL, so page math must reach metadata through book_id.
+    it('getMaxSessionPages joins metadata on the session book, not its file', async () => {
+      const chain = makeSelectChain([{ value: 10 }]);
+      const repo = makeRepo({ select: vi.fn().mockReturnValue(chain) });
+
+      await repo.getMaxSessionPages(1);
+
+      expect(chain.innerJoin).toHaveBeenCalledOnce();
+      expect(chain.innerJoin!.mock.calls[0]![0]).toBe(bookMetadata);
+      expect(joinColumns(chain.innerJoin!.mock.calls[0]![1])).toContain(readingSessions.bookId);
+    });
+
+    it('getPagesOnDay joins metadata on the session book, not its file', async () => {
+      const chain = makeSelectChain([{ value: 10 }]);
+      const repo = makeRepo({ select: vi.fn().mockReturnValue(chain) });
+
+      await repo.getPagesOnDay(1, new Date('2024-03-15'), 'UTC');
+
+      expect(chain.innerJoin).toHaveBeenCalledOnce();
+      expect(chain.innerJoin!.mock.calls[0]![0]).toBe(bookMetadata);
+      expect(joinColumns(chain.innerJoin!.mock.calls[0]![1])).toContain(readingSessions.bookId);
+    });
+
+    it('getMaxPagesInADay does not join book_files', async () => {
+      const db = { execute: vi.fn().mockResolvedValue({ rows: [{ max_pages: 10 }] }) };
+      const repo = makeRepo(db);
+
+      await repo.getMaxPagesInADay(1, 'UTC');
+
+      const sql = flattenSql(db.execute.mock.calls[0]![0]);
+      expect(sql).not.toContain('book_files');
+      expect(sql).toContain('bm.book_id = rs.book_id');
+    });
+  });
+
   describe('getPagesOnDay', () => {
     it('returns floor of pages read on a given day', async () => {
       const chain = makeSelectChain([{ value: 55.9 }]);
       const db = { select: vi.fn().mockReturnValue(chain) };
       const repo = makeRepo(db);
 
-      const result = await repo.getPagesOnDay(1, new Date('2024-03-15'));
+      const result = await repo.getPagesOnDay(1, new Date('2024-03-15'), 'UTC');
 
       expect(result).toBe(55);
     });
@@ -1934,7 +1977,7 @@ describe('AchievementRepository', () => {
       const db = { select: vi.fn().mockReturnValue(chain) };
       const repo = makeRepo(db);
 
-      const result = await repo.getPagesOnDay(1, new Date('2024-03-15'));
+      const result = await repo.getPagesOnDay(1, new Date('2024-03-15'), 'UTC');
 
       expect(result).toBe(0);
     });
