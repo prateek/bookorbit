@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 
-import type { SeriesFacets, SeriesSummary } from '@bookorbit/types'
+import type { SeriesFacets, SeriesPage, SeriesSummary } from '@bookorbit/types'
 import { fetchSeries } from '../api/series'
 import type { CompletionStatus, SeriesListSort, SortDirection } from '../types/series'
 
@@ -27,6 +27,18 @@ export function useSeriesList() {
 
   let requestToken = 0
 
+  function currentQuery() {
+    return {
+      q: q.value.trim() || undefined,
+      size: PAGE_SIZE,
+      sort: sort.value,
+      order: order.value,
+      libraryId: libraryId.value,
+      completionStatus: completionStatus.value,
+      author: author.value?.trim() || undefined,
+    }
+  }
+
   async function load(reset = false): Promise<void> {
     if (!reset && loading.value) return
     if (!reset && !hasMore.value) return
@@ -42,16 +54,7 @@ export function useSeriesList() {
     }
 
     try {
-      const data = await fetchSeries({
-        q: q.value.trim() || undefined,
-        page: requestPage,
-        size: PAGE_SIZE,
-        sort: sort.value,
-        order: order.value,
-        libraryId: libraryId.value,
-        completionStatus: completionStatus.value,
-        author: author.value?.trim() || undefined,
-      })
+      const data = await fetchSeries({ ...currentQuery(), page: requestPage })
 
       if (token !== requestToken) return
 
@@ -64,6 +67,31 @@ export function useSeriesList() {
       error.value = err instanceof Error ? err.message : 'Failed to load series'
     } finally {
       if (token === requestToken) loading.value = false
+    }
+  }
+
+  /**
+   * Refetches every page already loaded and swaps them in together, so the list picks up changes
+   * without emptying first and losing the reader's scroll position. Any load that starts meanwhile
+   * wins and the refreshed pages are dropped.
+   */
+  async function refresh(): Promise<void> {
+    if (loading.value || page.value === 0) return
+    const token = requestToken
+    const pageCount = page.value
+    try {
+      const pages: SeriesPage[] = []
+      for (let requestPage = 0; requestPage < pageCount; requestPage++) {
+        pages.push(await fetchSeries({ ...currentQuery(), page: requestPage }))
+        if (token !== requestToken) return
+      }
+      items.value = [...new Map(pages.flatMap((data) => data.items.map((item) => [item.id, item] as const))).values()]
+      const last = pages[pages.length - 1]!
+      total.value = last.total
+      facets.value = last.facets ?? { ...EMPTY_FACETS }
+      error.value = null
+    } catch {
+      // The list on screen is still valid; a failed background refresh should not replace it with an error.
     }
   }
 
@@ -81,5 +109,6 @@ export function useSeriesList() {
     completionStatus,
     author,
     load,
+    refresh,
   }
 }
