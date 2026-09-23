@@ -28,7 +28,7 @@ function select(value: string) {
       :key="option.value"
       type="button"
       :aria-pressed="modelValue === option.value"
-      class="flex h-8.5 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55 focus-visible:ring-offset-1 focus-visible:ring-offset-card"
+      class="flex h-8.5 pointer-coarse:h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55 focus-visible:ring-offset-1 focus-visible:ring-offset-card"
       :class="
         modelValue === option.value
           ? 'bg-background text-foreground shadow-sm ring-1 ring-border'

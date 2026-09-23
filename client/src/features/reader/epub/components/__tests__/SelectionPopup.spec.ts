@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import SelectionPopup from '../SelectionPopup.vue'
 
 const globalStubs = {
@@ -126,5 +126,50 @@ describe('SelectionPopup', () => {
     await deleteButton?.trigger('click')
 
     expect(withDelete.emitted('deleteAnnotation')?.[0]).toEqual([55])
+  })
+
+  describe('viewport clamping', () => {
+    const originalInnerWidth = window.innerWidth
+
+    afterEach(() => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth })
+    })
+
+    function mountAt(x: number) {
+      return mount(SelectionPopup, {
+        props: {
+          visible: true,
+          position: { x, y: 200 },
+          showBelow: true,
+          selectedText: 'text',
+          overlappingAnnotationId: null,
+          isTtsAvailable: true,
+        },
+        global: globalStubs,
+      })
+    }
+
+    function leftOf(wrapper: ReturnType<typeof mountAt>) {
+      const style = wrapper.get('.fixed.z-\\[60\\]').attributes('style') ?? ''
+      return Number(/left: (-?[\d.]+)px/.exec(style)?.[1])
+    }
+
+    it('keeps a toolbar anchored near the left edge fully on screen', () => {
+      expect(leftOf(mountAt(20))).toBe(8)
+    })
+
+    it('keeps a toolbar anchored near the right edge fully on screen', () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 402 })
+
+      const left = leftOf(mountAt(395))
+
+      expect(left + 296).toBeLessThanOrEqual(402 - 8)
+    })
+
+    it('centers on the selection when there is room', () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 })
+
+      expect(leftOf(mountAt(600))).toBe(600 - 296 / 2)
+    })
   })
 })
