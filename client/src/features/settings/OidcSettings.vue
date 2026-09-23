@@ -486,7 +486,7 @@ async function deleteGroupMapping(id: number) {
       </div>
     </div>
     <div class="md:hidden px-1 mb-4">
-      <Button variant="ghost" size="sm" type="button" class="mb-2" @click="backToList">
+      <Button variant="ghost" size="sm" type="button" class="touch-target mb-2" @click="backToList">
         <ArrowLeft class="w-4 h-4" />
         {{ t('common.back') }}
       </Button>
