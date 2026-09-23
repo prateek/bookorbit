@@ -53,10 +53,29 @@ const OPTIONAL_META_INF_FILES = [
 interface CacheEntry {
   info: EpubBookInfo;
   mtime: number;
+  size: number;
+  version: string;
   validPaths: Set<string>;
   lastAccessed: number;
   /** Narration playlists built from this copy of the file, by `bookId:fileId`. */
   playlists?: Map<string, Promise<EpubMediaOverlayPlaylist>>;
+}
+
+/**
+ * EPUB info plus a token that changes whenever the file on disk changes. Resource URLs carry it
+ * so a same-path overwrite (which keeps the fileId) cannot be served from a stale browser cache.
+ */
+export type EpubReaderInfo = EpubBookInfo & { version: string };
+
+export interface EpubResourceStream {
+  stream: NodeJS.ReadableStream;
+  contentType: string;
+  size: number;
+  version: string;
+}
+
+function epubVersion(mtimeMs: number, size: number): string {
+  return `${Math.trunc(mtimeMs * 1000).toString(36)}-${size.toString(36)}`;
 }
 
 interface EpubFileResolution {
@@ -345,9 +364,10 @@ export class EpubService {
     private readonly libraryService: LibraryService,
   ) {}
 
-  async getBookInfo(bookId: number, fileId: number | undefined, user: RequestUser): Promise<EpubBookInfo> {
+  async getBookInfo(bookId: number, fileId: number | undefined, user: RequestUser): Promise<EpubReaderInfo> {
     const epubPath = await this.resolveEpubPath(bookId, fileId, user);
-    return (await this.getCachedEntry(epubPath)).info;
+    const { info, version } = await this.getCachedEntry(epubPath);
+    return { ...info, version };
   }
 
   /** The contents title for a chapter file of a book file the caller already resolved, or null when it cannot be read. */
@@ -435,12 +455,7 @@ export class EpubService {
     };
   }
 
-  async streamFile(
-    bookId: number,
-    filePath: string,
-    fileId: number | undefined,
-    user: RequestUser,
-  ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; size: number }> {
+  async streamFile(bookId: number, filePath: string, fileId: number | undefined, user: RequestUser): Promise<EpubResourceStream> {
     if (filePath.includes('..')) throw new ForbiddenException('Invalid path');
     const normalizedPath = normalizeZipPath(filePath);
     if (!normalizedPath) throw new ForbiddenException('Invalid path');
@@ -457,7 +472,7 @@ export class EpubService {
     const manifestItem = cached.info.manifest.find((m) => m.href === normalizedPath);
     const contentType = manifestItem?.mediaType ?? guessContentType(normalizedPath);
 
-    return { stream: entry.stream(), contentType, size: entry.uncompressedSize };
+    return { stream: entry.stream(), contentType, size: entry.uncompressedSize, version: cached.version };
   }
 
   // The web reader always renders the original EPUB: every stored CFI is epub-DOM.
@@ -514,9 +529,11 @@ export class EpubService {
   }
 
   private async getCachedEntry(epubPath: string): Promise<CacheEntry> {
-    const { mtimeMs } = await stat(epubPath);
+    const fileStat = await stat(epubPath);
+    const mtimeMs = fileStat.mtimeMs;
+    const size = fileStat.size ?? 0;
     const cached = this.cache.get(epubPath);
-    if (cached && cached.mtime === mtimeMs) {
+    if (cached && cached.mtime === mtimeMs && cached.size === size) {
       cached.lastAccessed = Date.now();
       return cached;
     }
@@ -528,7 +545,7 @@ export class EpubService {
     for (const item of info.manifest) validPaths.add(normalizeZipPath(item.href));
     for (const path of info.optionalFiles ?? []) validPaths.add(normalizeZipPath(path));
 
-    const entry: CacheEntry = { info, mtime: mtimeMs, validPaths, lastAccessed: Date.now() };
+    const entry: CacheEntry = { info, mtime: mtimeMs, size, version: epubVersion(mtimeMs, size), validPaths, lastAccessed: Date.now() };
     this.evict();
     this.cache.set(epubPath, entry);
     return entry;

@@ -24,6 +24,7 @@ import { useReaderProgress } from '../shared/composables/useReaderProgress'
 import { useReadingSession } from '../shared/composables/useReadingSession'
 import { useCbz } from './composables/useCbz'
 import { useSeriesNextBook } from '../shared/composables/useSeriesNextBook'
+import { useReaderBack } from '../shared/composables/useReaderBack'
 import { useCbzSettings } from './composables/useCbzSettings'
 import { useReaderSettings } from '../shared/composables/useReaderSettings'
 import { useFullscreen } from '../shared/composables/useFullscreen'
@@ -64,6 +65,7 @@ const { onActivity, elapsedMinutes } = useReadingSession(
 )
 const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes, 0, { trackingEnabled })
 const { pageCount, bookTitle, seriesId, loading, error, pageUrl, load } = useCbz(props.fileId, props.bookId, props.source ?? 'cbz')
+const { goBack } = useReaderBack(props.bookId, () => ({ seriesId: seriesId.value, seriesMemberships: [] }))
 const {
   fitMode,
   viewMode,
@@ -85,9 +87,6 @@ const currentPage = ref(0)
 const imageError = ref(false)
 const imageGeneration = ref(0)
 const showPageText = ref(false)
-function goBack() {
-  router.back()
-}
 function firstPage() {
   goToPage(0)
 }

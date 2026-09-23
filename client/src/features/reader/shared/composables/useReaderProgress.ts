@@ -115,6 +115,8 @@ export function useReaderProgress(
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null
   let saving = false
+  let dirty = false
+  let inFlight: Promise<boolean> | null = null
   let hadSavedPosition = false
   let lastValidPercentage = 0
   // The newest write to the row this reader has read or made, on the server's clock. Anything
@@ -126,8 +128,16 @@ export function useReaderProgress(
   let knownNarrationFragment: string | null = null
   let adoptingNewerPosition = false
 
+  function onVisibilityChange() {
+    if (document.visibilityState === 'hidden') void flush()
+  }
+  function onPageHide() { void flush() }
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('pagehide', onPageHide)
   onUnmounted(() => {
-    if (saveTimer) clearTimeout(saveTimer)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    window.removeEventListener('pagehide', onPageHide)
+    void flush()
   })
 
   function updatePercentage(value: unknown, fallback = lastValidPercentage): number {
@@ -170,9 +180,15 @@ export function useReaderProgress(
     mediaOverlaySectionIndex.value = typeof data.mediaOverlaySectionIndex === 'number' ? data.mediaOverlaySectionIndex : null
   }
 
-  function scheduleSave() {
+  function cancelScheduledSave() {
     if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = null
+  }
+
+  function scheduleSave() {
+    cancelScheduledSave()
     if (!unref(trackingEnabled)) return
+    dirty = true
     saveTimer = setTimeout(() => {
       saveTimer = null
       void save()
@@ -205,7 +221,8 @@ export function useReaderProgress(
     timeTotal.value = detail?.time?.total ?? 0
 
     if (!hasSaveableLocation) {
-      if (saveTimer) clearTimeout(saveTimer)
+      cancelScheduledSave()
+      dirty = false
       return
     }
     // Opening at a position a device saved, or reflowing the page, moves no reader. Saving the
@@ -225,20 +242,43 @@ export function useReaderProgress(
     scheduleSave()
   }
 
-  async function save() {
-    if (!unref(trackingEnabled)) return
+  async function flush() {
+    cancelScheduledSave()
+    if (!dirty && inFlight) await inFlight
+    if (dirty) await save({ keepalive: true })
+  }
+
+  function save(saveOptions: { keepalive?: boolean } = {}): Promise<boolean> {
+    if (!unref(trackingEnabled)) return Promise.resolve(true)
+    const previous = inFlight
+    const run = previous ? previous.then(() => send(saveOptions)) : send(saveOptions)
+    inFlight = run
+    void run.finally(() => {
+      if (inFlight === run) inFlight = null
+    })
+    return run
+  }
+
+  async function send(saveOptions: { keepalive?: boolean }): Promise<boolean> {
+    dirty = false
     saving = true
     try {
       if (pendingSource.value === 'narration') {
         const movedBack = await narrationMovedBack()
         if (movedBack) {
           options.onNarrationMovedBack?.(movedBack)
-          return
+          return false
         }
       }
       const safePercentage = updatePercentage(percentage.value)
       const savedFragment = pendingSource.value === 'narration' ? mediaOverlayFragment.value : null
-      noteOwnWrite(await postProgress(safePercentage), savedFragment)
+      const res = await postProgress(safePercentage, saveOptions.keepalive)
+      if (res.ok) noteOwnWrite(res, savedFragment)
+      else dirty = true
+      return res.ok
+    } catch {
+      dirty = true
+      return false
     } finally {
       saving = false
     }
@@ -278,9 +318,10 @@ export function useReaderProgress(
     knownNarrationFragment = narrationFragment
   }
 
-  function postProgress(safePercentage: number) {
+  function postProgress(safePercentage: number, keepalive = false) {
     return api(`/api/v1/books/files/${fileId}/progress`, {
       method: 'POST',
+      ...(keepalive ? { keepalive: true } : {}),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         cfi: cfi.value,
@@ -311,9 +352,9 @@ export function useReaderProgress(
    * while a save is waiting: this reader is about to speak for the position itself.
    */
   async function checkForNewerPosition(): Promise<NewerPosition | null> {
-    if (!unref(trackingEnabled) || saveTimer || saving) return null
+    if (!unref(trackingEnabled) || saveTimer || saving || dirty || inFlight) return null
     const res = await api(`/api/v1/books/files/${fileId}/progress`)
-    if (!res.ok || saveTimer || saving) return null
+    if (!res.ok || saveTimer || saving || dirty || inFlight) return null
     const data = (await res.json()) as Record<string, unknown>
     const stamp = positionStamp(data)
     if (stamp <= knownServerStamp) return null
@@ -329,6 +370,7 @@ export function useReaderProgress(
   async function adoptNewerPosition(position: NewerPosition, navigate: () => Promise<void>) {
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = null
+    dirty = false
     applyServerProgress(position.data)
     knownServerStamp = Math.max(knownServerStamp, position.stamp)
     knownNarrationFragment = normalizeString(position.data.mediaOverlayFragment)
@@ -496,6 +538,7 @@ export function useReaderProgress(
     onRelocate,
     setMediaOverlayProgress,
     save,
+    flush,
     cycleFooterMode,
     updateHeadsFeet,
   }
