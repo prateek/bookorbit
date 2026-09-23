@@ -89,7 +89,7 @@ describe('Reading attempt cache integration', () => {
         },
         { provide: ReadingAttemptRepository, useValue: fake.repo },
         { provide: DashboardWidgetRepository, useValue: { countCompletedBooks, getCurrentlyReadingBooks: vi.fn().mockResolvedValue({ books: [] }) } },
-        { provide: LibraryService, useValue: { findAccessibleLibraryIds: vi.fn().mockResolvedValue([1, 2]) } },
+        { provide: LibraryService, useValue: { findAccessibleLibraryIds: vi.fn().mockResolvedValue([1, 2]), onBookCountingChanged: vi.fn() } },
       ],
     }).compile();
     await module.init();

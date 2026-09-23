@@ -85,6 +85,9 @@ export class DashboardWidgetService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     this.readingAttemptEvents.on(READING_ATTEMPT_CHANGED, this.onReadingAttemptChanged);
+    this.libraryService.onBookCountingChanged((userIds) => {
+      for (const userId of userIds) this.clearCacheForUser(userId);
+    });
   }
 
   onModuleDestroy(): void {

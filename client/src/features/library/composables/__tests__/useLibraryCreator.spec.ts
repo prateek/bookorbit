@@ -187,6 +187,7 @@ describe('useLibraryCreator', () => {
       excludePatterns: [],
       readingThreshold: 0.25,
       markAsFinishedPercentComplete: 98,
+      countSeriesAsOneBook: true,
       fileNamingPattern: null,
       fileWriteEnabled: false,
       fileWriteWriteCover: true,
@@ -212,6 +213,7 @@ describe('useLibraryCreator', () => {
     })
 
     expect(creator.form.fileRenameEnabled).toBe(true)
+    expect(creator.form.countSeriesAsOneBook).toBe(true)
     expect(creator.form.fileWriteAudioEnabled).toBe(false)
     expect(creator.form.fileWriteAudioMaxFileSizeMb).toBe(750)
     expect(creator.form.fileWriteAllFiles).toBe(true)
@@ -276,6 +278,7 @@ describe('useLibraryCreator', () => {
     const payload = JSON.parse(apiMock.mock.calls[0]?.[1]?.body as string)
     expect(payload).toMatchObject({
       name: 'Audio',
+      countSeriesAsOneBook: false,
       fileWriteAudioEnabled: true,
       fileWriteAudioMaxFileSizeMb: 750,
     })
@@ -307,6 +310,7 @@ describe('useLibraryCreator', () => {
     })
     expect(payload).not.toHaveProperty('watch')
     expect(payload).not.toHaveProperty('autoScanCronExpression')
+    expect(payload).not.toHaveProperty('countSeriesAsOneBook')
   })
 
   it('trims user-entered values and surfaces save connection failures', async () => {
@@ -391,6 +395,7 @@ function makeLibrary(overrides: Partial<Library> = {}): Library {
     excludePatterns: [],
     readingThreshold: 0.25,
     markAsFinishedPercentComplete: 98,
+    countSeriesAsOneBook: false,
     fileNamingPattern: null,
     fileWriteEnabled: false,
     fileWriteWriteCover: true,

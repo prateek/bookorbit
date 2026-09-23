@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, countDistinct, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, sql, sum } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
+import { countBookUnitsSql } from '../../common/utils/book-count-sql.utils';
 import { addDateKeyDays } from '../../common/utils/reading-daily-stats.utils';
 import { resolveTimeZone, toDateKeyInTimeZone, toTimeZoneStartOfDay } from '../../common/utils/timezone.utils';
 import { DB } from '../../db';
@@ -22,6 +23,7 @@ import {
   bookMetadata,
   bookGenres,
   bookAuthors,
+  libraries,
   userReadingDailyStats,
   userLibraryAccess,
   koreaderDeviceProgress,
@@ -222,8 +224,11 @@ export class AchievementRepository {
 
   async countFinishedBooks(userId: number): Promise<number> {
     const [{ value }] = await this.db
-      .select({ value: count() })
+      .select({ value: countBookUnitsSql(userBookStatus.bookId) })
       .from(userBookStatus)
+      .innerJoin(books, eq(books.id, userBookStatus.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(and(eq(userBookStatus.userId, userId), eq(userBookStatus.status, 'read')));
     return value;
   }
@@ -345,13 +350,17 @@ export class AchievementRepository {
   }
 
   async maxBooksPerAuthor(userId: number): Promise<number> {
+    const finishedBooks = countBookUnitsSql(userBookStatus.bookId);
     const rows = await this.db
-      .select({ cnt: count() })
+      .select({ cnt: finishedBooks })
       .from(userBookStatus)
       .innerJoin(bookAuthors, eq(userBookStatus.bookId, bookAuthors.bookId))
+      .innerJoin(books, eq(books.id, userBookStatus.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(and(eq(userBookStatus.userId, userId), eq(userBookStatus.status, 'read')))
       .groupBy(bookAuthors.authorId)
-      .orderBy(desc(count()))
+      .orderBy(desc(finishedBooks))
       .limit(1);
     return rows.length > 0 ? rows[0].cnt : 0;
   }
@@ -437,8 +446,11 @@ export class AchievementRepository {
 
   async countBooksFinishedInDateRange(userId: number, start: Date, end: Date): Promise<number> {
     const [{ value }] = await this.db
-      .select({ value: count() })
+      .select({ value: countBookUnitsSql(readingAttempts.id) })
       .from(readingAttempts)
+      .innerJoin(books, eq(books.id, readingAttempts.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(
         and(
           eq(readingAttempts.userId, userId),
@@ -732,9 +744,11 @@ export class AchievementRepository {
 
   async countFinishedBooksByMaxPageCount(userId: number, maxPages: number): Promise<number> {
     const [{ value }] = await this.db
-      .select({ value: count() })
+      .select({ value: countBookUnitsSql(userBookStatus.bookId) })
       .from(userBookStatus)
       .innerJoin(bookMetadata, eq(userBookStatus.bookId, bookMetadata.bookId))
+      .innerJoin(books, eq(books.id, userBookStatus.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
       .where(
         and(
           eq(userBookStatus.userId, userId),
@@ -781,13 +795,17 @@ export class AchievementRepository {
   }
 
   async maxBooksPerGenre(userId: number): Promise<number> {
+    const finishedBooks = countBookUnitsSql(userBookStatus.bookId);
     const rows = await this.db
-      .select({ cnt: count() })
+      .select({ cnt: finishedBooks })
       .from(userBookStatus)
       .innerJoin(bookGenres, eq(userBookStatus.bookId, bookGenres.bookId))
+      .innerJoin(books, eq(books.id, userBookStatus.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(and(eq(userBookStatus.userId, userId), eq(userBookStatus.status, 'read')))
       .groupBy(bookGenres.genreId)
-      .orderBy(desc(count()))
+      .orderBy(desc(finishedBooks))
       .limit(1);
     return rows.length > 0 ? rows[0].cnt : 0;
   }
@@ -979,19 +997,24 @@ export class AchievementRepository {
   }
 
   async hasMonthWithBooksFinished(userId: number, minCount: number): Promise<boolean> {
-    const result = await this.db.execute<{ found: boolean }>(sql`
-      SELECT EXISTS (
-        SELECT 1
-        FROM reading_attempts
-        WHERE user_id = ${userId}
-          AND outcome = 'completed'
-          AND ended_on IS NOT NULL
-          AND deleted_at IS NULL
-        GROUP BY DATE_TRUNC('month', ended_on)
-        HAVING COUNT(*) >= ${minCount}
-      ) AS found
-    `);
-    return (result as unknown as { rows: Array<{ found: boolean }> }).rows[0]?.found ?? false;
+    const [row] = await this.db
+      .select({ one: sql<number>`1` })
+      .from(readingAttempts)
+      .innerJoin(books, eq(books.id, readingAttempts.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .where(
+        and(
+          eq(readingAttempts.userId, userId),
+          eq(readingAttempts.outcome, 'completed'),
+          isNotNull(readingAttempts.endedOn),
+          isNull(readingAttempts.deletedAt),
+        ),
+      )
+      .groupBy(sql`date_trunc('month', ${readingAttempts.endedOn})`)
+      .having(sql`${countBookUnitsSql(readingAttempts.id)} >= ${minCount}`)
+      .limit(1);
+    return !!row;
   }
 
   async hasSessionWithProgressDeltaAtLeast(userId: number, minDelta: number): Promise<boolean> {

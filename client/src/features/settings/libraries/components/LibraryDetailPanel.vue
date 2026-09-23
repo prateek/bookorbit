@@ -55,6 +55,11 @@ const readingThresholdLabel = computed(() => formatNumber(props.library.readingT
 const finishedThresholdLabel = computed(() =>
   formatNumber(props.library.markAsFinishedPercentComplete / 100, { style: 'percent', maximumFractionDigits: 2 }),
 )
+const seriesCountLabel = computed(() =>
+  props.library.countSeriesAsOneBook
+    ? t('settings.admin.libraries.detail.seriesCountAsValue.one')
+    : t('settings.admin.libraries.detail.seriesCountAsValue.each'),
+)
 
 function editFolders() {
   emit('edit', props.library, 'folders')
@@ -170,6 +175,10 @@ async function copyPath(folderId: number, path: string) {
             <dd class="ms-auto text-[12.5px] font-medium tabular-nums text-foreground">
               {{ finishedThresholdLabel }}
             </dd>
+          </div>
+          <div class="flex items-center gap-3 border-t border-border py-1.5">
+            <dt class="shrink-0 text-[12.5px] text-muted-foreground">{{ t('settings.admin.libraries.detail.seriesCountAs') }}</dt>
+            <dd class="ms-auto text-[12.5px] font-medium text-foreground">{{ seriesCountLabel }}</dd>
           </div>
         </dl>
       </section>

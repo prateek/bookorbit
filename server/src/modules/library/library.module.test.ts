@@ -6,6 +6,7 @@ vi.mock('../scanner/scanner.module', () => ({ ScannerModule: class ScannerModule
 vi.mock('../achievement/achievement.module', () => ({ AchievementModule: class AchievementModule {} }));
 vi.mock('../app-settings/app-settings.module', () => ({ AppSettingsModule: class AppSettingsModule {} }));
 vi.mock('../notification/notification.module', () => ({ NotificationModule: class NotificationModule {} }));
+vi.mock('../user-statistics/user-statistics.module', () => ({ UserStatisticsModule: class UserStatisticsModule {} }));
 
 import { LibraryController } from './library.controller';
 import { LibraryModule } from './library.module';
