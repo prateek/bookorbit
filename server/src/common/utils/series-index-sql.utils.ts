@@ -21,6 +21,19 @@ export function seriesIndexOrderBy(value: SQLWrapper, direction: SqlSortDirectio
   return [sql`${seriesIndexSortKey(value)} ${sql.raw(direction)} NULLS LAST`, sql`${value}::text COLLATE "C" ${sql.raw(direction)} NULLS LAST`];
 }
 
+/**
+ * Series reading order: the series index, then the release date. Web serials leave many chapters
+ * unnumbered or share one index across several, and those ties read in release order rather than
+ * in whatever order they happened to be imported.
+ */
+export function seriesReadingOrderBy(seriesIndex: SQLWrapper, publishedDate: SQLWrapper, direction: SqlSortDirection): SQL[] {
+  return [...seriesIndexOrderBy(seriesIndex, direction), publishedDateOrderBy(publishedDate, direction)];
+}
+
+export function publishedDateOrderBy(publishedDate: SQLWrapper, direction: SqlSortDirection): SQL {
+  return sql`${publishedDate} ${sql.raw(direction)} NULLS LAST`;
+}
+
 export function compareSeriesIndexSql(column: SQLWrapper, operator: SeriesIndexComparisonOperator, value: string): SQL {
   // The compared value is a bound parameter, and Postgres cannot infer a type for one that appears
   // bare in a null test (42P18). Only the literal side is cast: casting the column side instead

@@ -4,6 +4,17 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 
 import { SeriesRepository } from './series.repository';
 
+const dialect = new PgDialect();
+
+function render(fragment: unknown) {
+  return dialect.sqlToQuery(fragment as SQL);
+}
+
+function renderedOrderBy(chain: Record<string, unknown>) {
+  const orderBy = chain.orderBy as ReturnType<typeof vi.fn>;
+  return (orderBy.mock.calls[0] as unknown[]).map((term) => render(term).sql);
+}
+
 function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {
     then(resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) {
@@ -45,11 +56,12 @@ function makeFindPageDb(facetResult: unknown, dataResult: unknown) {
 
 function stubPageHelpers(
   repo: SeriesRepository,
-  maps?: { authors?: Map<number, string[]>; covers?: Map<number, number[]>; members?: Map<number, unknown> },
+  maps?: { authors?: Map<number, string[]>; covers?: Map<number, number[]>; members?: Map<number, unknown>; next?: Map<number, unknown> },
 ) {
   vi.spyOn(repo as never, 'fetchAuthorsForSeries').mockResolvedValue(maps?.authors ?? new Map());
   vi.spyOn(repo as never, 'fetchCoverBookIds').mockResolvedValue(maps?.covers ?? new Map());
   vi.spyOn(repo as never, 'fetchSeriesMembers').mockResolvedValue(maps?.members ?? new Map());
+  vi.spyOn(repo as never, 'fetchNextMembers').mockResolvedValue(maps?.next ?? new Map());
 }
 
 function makeDb() {
@@ -113,7 +125,9 @@ describe('SeriesRepository', () => {
         [10, { rows: [{ bookId: 100, seriesIndex: '1', title: 'Dune', status: 'read' }], truncated: false, libraryNames: ['Novels'] }],
       ]);
 
-      stubPageHelpers(repo, { authors: authorsMap, covers: coversMap, members: membersMap });
+      const nextMap = new Map<number, unknown>([[10, { bookId: 101, seriesIndex: '2', title: 'Dune Messiah', status: null }]]);
+
+      stubPageHelpers(repo, { authors: authorsMap, covers: coversMap, members: membersMap, next: nextMap });
 
       const result = await repo.findPage(BASE_PARAMS);
 
@@ -132,6 +146,7 @@ describe('SeriesRepository', () => {
         members: [{ bookId: 100, seriesIndex: '1', title: 'Dune', status: 'read' }],
         membersTruncated: false,
         libraryNames: ['Novels'],
+        next: { bookId: 101, seriesIndex: '2', title: 'Dune Messiah', status: null },
       });
       expect(result.items[1]).toEqual({
         id: 11,
@@ -146,6 +161,7 @@ describe('SeriesRepository', () => {
         members: [],
         membersTruncated: false,
         libraryNames: [],
+        next: null,
       });
     });
 
@@ -314,6 +330,7 @@ describe('SeriesRepository', () => {
       sort: 'seriesIndex' as const,
       order: 'asc' as const,
       libraryIds: [1],
+      userId: 7,
     };
 
     it('returns bookIds and total from parallel queries', async () => {
@@ -379,6 +396,42 @@ describe('SeriesRepository', () => {
       expect(dataChain.orderBy).toHaveBeenCalledTimes(1);
     });
 
+    it('opens on the page holding the anchor book in series order', async () => {
+      const anchorChain = makeChain([{ seriesIndex: '501' }]);
+      const beforeChain = makeChain([{ before: 500 }]);
+      const dataChain = makeChain([{ id: 501 }]);
+      const countChain = makeChain([{ total: 1700 }]);
+      db.select.mockReturnValueOnce(anchorChain).mockReturnValueOnce(beforeChain).mockReturnValueOnce(dataChain).mockReturnValueOnce(countChain);
+
+      const result = await repo.findBookIds({ ...BOOK_PARAMS, page: 0, size: 50, anchorBookId: 501 });
+
+      expect(result.page).toBe(10);
+      expect(dataChain.offset).toHaveBeenCalledWith(500);
+    });
+
+    it('keeps the requested page when the anchor is not in the listing', async () => {
+      const anchorChain = makeChain([]);
+      const dataChain = makeChain([]);
+      const countChain = makeChain([{ total: 0 }]);
+      db.select.mockReturnValueOnce(anchorChain).mockReturnValueOnce(dataChain).mockReturnValueOnce(countChain);
+
+      const result = await repo.findBookIds({ ...BOOK_PARAMS, page: 3, size: 10, anchorBookId: 999 });
+
+      expect(result.page).toBe(3);
+      expect(dataChain.offset).toHaveBeenCalledWith(30);
+    });
+
+    it('ignores the anchor for sorts other than series order', async () => {
+      const dataChain = makeChain([]);
+      const countChain = makeChain([{ total: 0 }]);
+      db.select.mockReturnValueOnce(dataChain).mockReturnValueOnce(countChain);
+
+      const result = await repo.findBookIds({ ...BOOK_PARAMS, sort: 'title', page: 2, size: 10, anchorBookId: 5 });
+
+      expect(result.page).toBe(2);
+      expect(db.select).toHaveBeenCalledTimes(2);
+    });
+
     it('coerces total to number', async () => {
       const dataChain = makeChain([]);
       const countChain = makeChain([{ total: '42' }]);
@@ -388,6 +441,106 @@ describe('SeriesRepository', () => {
 
       expect(typeof result.total).toBe('number');
       expect(result.total).toBe(42);
+    });
+  });
+  describe('series reading order', () => {
+    const BOOK_PARAMS = {
+      seriesId: 42,
+      page: 0,
+      size: 2,
+      sort: 'seriesIndex' as const,
+      order: 'asc' as const,
+      libraryIds: [1],
+      userId: 7,
+    };
+
+    it('orders the series listing by index, then release date, then book id', async () => {
+      const dataChain = makeChain([]);
+      const countChain = makeChain([{ total: 0 }]);
+      db.select.mockReturnValueOnce(dataChain).mockReturnValueOnce(countChain);
+
+      await repo.findBookIds({ ...BOOK_PARAMS, order: 'desc' });
+
+      const terms = renderedOrderBy(dataChain);
+      expect(terms.slice(-2)).toEqual(['"book_metadata"."published_date" DESC NULLS LAST', '"books"."id" asc']);
+      expect(terms[1]).toContain('COLLATE "C" DESC NULLS LAST');
+    });
+
+    it('counts earlier-released chapters sharing the anchor index as ahead of it', async () => {
+      const anchorChain = makeChain([{ seriesIndex: null, publishedDate: '2024-06-01' }]);
+      const beforeChain = makeChain([{ before: 4 }]);
+      db.select
+        .mockReturnValueOnce(anchorChain)
+        .mockReturnValueOnce(beforeChain)
+        .mockReturnValueOnce(makeChain([]))
+        .mockReturnValueOnce(makeChain([{ total: 6 }]));
+
+      const result = await repo.findBookIds({ ...BOOK_PARAMS, anchorBookId: 88 });
+
+      const where = render((beforeChain.where as ReturnType<typeof vi.fn>).mock.calls[0]![0]);
+      expect(where.sql).toContain('"book_metadata"."published_date" < $');
+      expect(where.params).toEqual(expect.arrayContaining(['2024-06-01', 88]));
+      expect(result.page).toBe(2);
+    });
+
+    it('treats every dated chapter as ahead of an undated anchor in either direction', async () => {
+      const anchorChain = makeChain([{ seriesIndex: '5', publishedDate: null }]);
+      const beforeChain = makeChain([{ before: 0 }]);
+      db.select
+        .mockReturnValueOnce(anchorChain)
+        .mockReturnValueOnce(beforeChain)
+        .mockReturnValueOnce(makeChain([]))
+        .mockReturnValueOnce(makeChain([{ total: 0 }]));
+
+      await repo.findBookIds({ ...BOOK_PARAMS, order: 'desc', anchorBookId: 88 });
+
+      const where = render((beforeChain.where as ReturnType<typeof vi.fn>).mock.calls[0]![0]);
+      expect(where.sql).toContain('"book_metadata"."published_date" is not null');
+    });
+
+    it('compares release dates the other way when the listing runs newest first', async () => {
+      const anchorChain = makeChain([{ seriesIndex: '5', publishedDate: '2024-01-01' }]);
+      const beforeChain = makeChain([{ before: 0 }]);
+      db.select
+        .mockReturnValueOnce(anchorChain)
+        .mockReturnValueOnce(beforeChain)
+        .mockReturnValueOnce(makeChain([]))
+        .mockReturnValueOnce(makeChain([{ total: 0 }]));
+
+      await repo.findBookIds({ ...BOOK_PARAMS, order: 'desc', anchorBookId: 88 });
+
+      const where = render((beforeChain.where as ReturnType<typeof vi.fn>).mock.calls[0]![0]);
+      expect(where.sql).toContain('"book_metadata"."published_date" > $');
+      expect(where.sql).not.toContain('"book_metadata"."published_date" < $');
+    });
+
+    it('picks the next chapter by release date among chapters sharing the current index', async () => {
+      const currentChain = makeChain([{ seriesIndex: null, publishedDate: '2023-01-10' }]);
+      const nextChain = makeChain([{ bookId: 90, title: 'Book 6 - Chapter 1', seriesIndex: null, fileId: 3, format: 'epub' }]);
+      db.select.mockReturnValueOnce(currentChain).mockReturnValueOnce(nextChain);
+
+      const result = await repo.findNextReadableBook({ seriesId: 42, bookId: 89, libraryIds: [1], formats: ['epub'] });
+
+      expect(result).toEqual(expect.objectContaining({ bookId: 90 }));
+      const where = render((nextChain.where as ReturnType<typeof vi.fn>).mock.calls[0]![0]);
+      expect(where.sql).toContain('"book_metadata"."published_date" > $');
+      expect(where.sql).toContain('"book_metadata"."published_date" is null');
+      expect(where.params).toEqual(expect.arrayContaining(['2023-01-10', 89]));
+      const terms = renderedOrderBy(nextChain);
+      expect(terms[2]).toBe('"book_metadata"."published_date" ASC NULLS LAST');
+      expect(terms[3]).toBe('"books"."id" asc');
+    });
+
+    it('only moves on to later undated chapters from an undated one', async () => {
+      const currentChain = makeChain([{ seriesIndex: null, publishedDate: null }]);
+      const nextChain = makeChain([]);
+      db.select.mockReturnValueOnce(currentChain).mockReturnValueOnce(nextChain);
+
+      await repo.findNextReadableBook({ seriesId: 42, bookId: 89, libraryIds: [1], formats: ['epub'] });
+
+      const where = render((nextChain.where as ReturnType<typeof vi.fn>).mock.calls[0]![0]);
+      expect(where.sql).toContain('"book_metadata"."published_date" is null and "books"."id" > $');
+      expect(where.sql).not.toContain('"book_metadata"."published_date" > $');
     });
   });
 });
