@@ -8,7 +8,8 @@ const props = defineProps<{
 </script>
 
 <template>
-  <main
+  <!-- A div, not <main>: the routed views render their own <main>, and landmarks must not nest. -->
+  <div
     data-slot="sidebar-inset"
     :class="
       cn(
@@ -30,5 +31,5 @@ const props = defineProps<{
     "
   >
     <slot />
-  </main>
+  </div>
 </template>

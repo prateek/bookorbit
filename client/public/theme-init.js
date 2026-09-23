@@ -40,4 +40,7 @@
   root.setAttribute('data-surface', surfacePalette)
   root.style.setProperty('--glow-reach', String(glowReach / 100))
   root.setAttribute('data-glow', glowReach > 0 ? 'on' : 'off')
+  // Close to the resolved --background; the theme store replaces it with the exact color once styles load.
+  var themeColor = document.querySelector('meta[name="theme-color"]')
+  if (themeColor) themeColor.setAttribute('content', isDark ? '#0a0a0c' : '#fcfcfd')
 })()
