@@ -68,7 +68,7 @@ function makeService() {
     unsubscribeFromKobo: vi.fn(),
   };
   const bookReadService = {
-    countWhere: vi.fn(),
+    summarizeWhere: vi.fn(),
     findCards: vi.fn(),
   };
   const queryBuilder = {
@@ -143,7 +143,7 @@ describe('SmartScopeService', () => {
     smartScopeRepo.findAllForUser.mockResolvedValue([firstSmartScope, secondSmartScope]);
     libraryService.findAccessibleLibraryIds.mockResolvedValue([2, 3]);
     queryBuilder.buildWhere.mockReturnValueOnce('where-2');
-    bookReadService.countWhere.mockResolvedValueOnce(7);
+    bookReadService.summarizeWhere.mockResolvedValueOnce({ bookCount: 7, seriesCount: 2, unreadCount: 4 });
 
     const result = await service.findAll(user);
 
@@ -154,9 +154,10 @@ describe('SmartScopeService', () => {
       timeZone: 'UTC',
       contentFilters: EMPTY_CONTENT_FILTER_RULES,
     });
+    expect(bookReadService.summarizeWhere).toHaveBeenCalledWith('where-2', 8);
     expect(result).toEqual([
       { ...firstSmartScope, isOwner: false, koboSyncEnabled: false, bookCount: 0 },
-      { ...secondSmartScope, isOwner: false, koboSyncEnabled: false, bookCount: 7 },
+      { ...secondSmartScope, isOwner: false, koboSyncEnabled: false, bookCount: 7, seriesCount: 2, unreadCount: 4 },
     ]);
   });
 
@@ -173,18 +174,18 @@ describe('SmartScopeService', () => {
 
     let inFlight = 0;
     let peakInFlight = 0;
-    bookReadService.countWhere.mockImplementation(async () => {
+    bookReadService.summarizeWhere.mockImplementation(async () => {
       inFlight += 1;
       peakInFlight = Math.max(peakInFlight, inFlight);
       await new Promise((resolve) => setImmediate(resolve));
       inFlight -= 1;
-      return 3;
+      return { bookCount: 3, seriesCount: 1, unreadCount: 0 };
     });
 
     const result = await service.findAll(makeUser({ id: 8 }));
 
     expect(peakInFlight).toBeLessThanOrEqual(4);
-    expect(bookReadService.countWhere).toHaveBeenCalledTimes(12);
+    expect(bookReadService.summarizeWhere).toHaveBeenCalledTimes(12);
     expect(result.map((scope) => scope.id)).toEqual(scopes.map((scope) => scope.id));
     expect(result.every((scope) => scope.bookCount === 3)).toBe(true);
   });
@@ -208,13 +209,13 @@ describe('SmartScopeService', () => {
     smartScopeRepo.findAllForUser.mockResolvedValue([brokenScope, healthyScope]);
     libraryService.findAccessibleLibraryIds.mockResolvedValue([2, 3]);
     queryBuilder.buildWhere.mockReturnValueOnce('where-2');
-    bookReadService.countWhere.mockResolvedValueOnce(7);
+    bookReadService.summarizeWhere.mockResolvedValueOnce({ bookCount: 7, seriesCount: 2, unreadCount: 4 });
 
     const result = await service.findAll(user);
 
     expect(result).toEqual([
       { ...brokenScope, isOwner: false, koboSyncEnabled: false, bookCount: null },
-      { ...healthyScope, isOwner: false, koboSyncEnabled: false, bookCount: 7 },
+      { ...healthyScope, isOwner: false, koboSyncEnabled: false, bookCount: 7, seriesCount: 2, unreadCount: 4 },
     ]);
     expect(queryBuilder.buildWhere).toHaveBeenCalledTimes(1);
     expect(queryBuilder.buildWhere).toHaveBeenCalledWith(healthyScope.filter, {
@@ -291,7 +292,7 @@ describe('SmartScopeService', () => {
 
       expect(result).toEqual(expect.objectContaining({ episodeCount: 6 }));
       expect(podcastEpisodeRepo.countEpisodes).toHaveBeenCalledExactlyOnceWith(4, 12, expect.objectContaining({ filter: 'unplayed' }));
-      expect(bookReadService.countWhere).not.toHaveBeenCalled();
+      expect(bookReadService.summarizeWhere).not.toHaveBeenCalled();
     });
 
     it('leaves book scopes uncapped, which has always been their contract', async () => {
@@ -315,7 +316,7 @@ describe('SmartScopeService', () => {
 
       expect(podcastEpisodeRepo.countEpisodes).toHaveBeenCalledWith(4, 8, expect.objectContaining({ filter: 'unplayed', maxDurationMinutes: 30 }));
       expect(queryBuilder.buildWhere).not.toHaveBeenCalled();
-      expect(bookReadService.countWhere).not.toHaveBeenCalled();
+      expect(bookReadService.summarizeWhere).not.toHaveBeenCalled();
       expect(result).toEqual([{ ...scope, isOwner: false, koboSyncEnabled: false, episodeCount: 12 }]);
     });
 
@@ -559,7 +560,7 @@ describe('SmartScopeService', () => {
     smartScopeRepo.findAllForUser.mockResolvedValue([brokenScope]);
     libraryService.findAccessibleLibraryIds.mockResolvedValue([2, 3]);
     queryBuilder.buildWhere.mockReturnValueOnce('where-3');
-    bookReadService.countWhere.mockRejectedValueOnce(new Error('date/time field value out of range: "21-12-31"'));
+    bookReadService.summarizeWhere.mockRejectedValueOnce(new Error('date/time field value out of range: "21-12-31"'));
 
     await expect(service.findAll(user)).rejects.toThrow('date/time field value out of range');
   });
@@ -613,19 +614,19 @@ describe('SmartScopeService', () => {
     smartScopeRepo.insert.mockResolvedValue([created]);
     libraryService.findAccessibleLibraryIds.mockResolvedValue([2, 3]);
     queryBuilder.buildWhere.mockReturnValue('visible-matches');
-    bookReadService.countWhere.mockResolvedValue(7);
+    bookReadService.summarizeWhere.mockResolvedValue({ bookCount: 7, seriesCount: 2, unreadCount: 4 });
     const user = makeUser({ settings: { timezone: 'America/Denver' } });
 
     const result = await service.create({ name: created.name, icon: 'Aperture', filter: created.filter, defaultSort: [] }, user);
 
-    expect(result).toEqual({ ...created, isOwner: true, koboSyncEnabled: false, bookCount: 7 });
+    expect(result).toEqual({ ...created, isOwner: true, koboSyncEnabled: false, bookCount: 7, seriesCount: 2, unreadCount: 4 });
     expect(queryBuilder.buildWhere).toHaveBeenCalledWith(created.filter, {
       accessibleLibraryIds: [2, 3],
       userId: user.id,
       timeZone: 'America/Denver',
       contentFilters: user.contentFilters,
     });
-    expect(bookReadService.countWhere).toHaveBeenCalledExactlyOnceWith('visible-matches');
+    expect(bookReadService.summarizeWhere).toHaveBeenCalledExactlyOnceWith('visible-matches', user.id);
     expect(smartScopeRepo.findAllForUser).not.toHaveBeenCalled();
   });
 
@@ -641,13 +642,13 @@ describe('SmartScopeService', () => {
     smartScopeRepo.update.mockResolvedValue([updated]);
     libraryService.findAccessibleLibraryIds.mockResolvedValue([2]);
     queryBuilder.buildWhere.mockReturnValue('updated-matches');
-    bookReadService.countWhere.mockResolvedValue(3);
+    bookReadService.summarizeWhere.mockResolvedValue({ bookCount: 3, seriesCount: 1, unreadCount: 0 });
 
     const result = await service.update(existing.id, { filter: updated.filter }, makeUser());
 
-    expect(result).toEqual({ ...updated, isOwner: true, koboSyncEnabled: false, bookCount: 3 });
+    expect(result).toEqual({ ...updated, isOwner: true, koboSyncEnabled: false, bookCount: 3, seriesCount: 1, unreadCount: 0 });
     expect(queryBuilder.buildWhere).toHaveBeenCalledWith(updated.filter, expect.objectContaining({ accessibleLibraryIds: [2], userId: 12 }));
-    expect(bookReadService.countWhere).toHaveBeenCalledExactlyOnceWith('updated-matches');
+    expect(bookReadService.summarizeWhere).toHaveBeenCalledExactlyOnceWith('updated-matches', 12);
     expect(smartScopeRepo.findAllForUser).not.toHaveBeenCalled();
   });
 

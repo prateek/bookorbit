@@ -4617,8 +4617,6 @@
       "resultCount": "{shown} z {total}",
       "noMatches": "Žádné shody",
       "noMatchesHint": "Vyzkoušejte jiný hledaný výraz.",
-      "bookCount": "Knihy: {count}",
-      "showCount": "Shows: {count}",
       "librariesEmptyHint": "Vytvořte knihovnu, abyste mohli začít přidávat knihy.",
       "podcastLibrariesEmptyHint": "Create a podcast library to start following shows.",
       "smartScopesEmptyHint": "Chytré rozsahy ukládají často používanou sadu filtrů.",

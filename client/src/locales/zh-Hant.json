@@ -8056,8 +8056,6 @@
       "resultCount": "共 {total} 條，展示 {shown} 條",
       "noMatches": "沒有匹配",
       "noMatchesHint": "嘗試一個不同的搜尋詞。",
-      "bookCount": "書籍數量：{count}",
-      "showCount": "顯示：{count}",
       "librariesEmptyHint": "建立一個庫開始新增書籍。",
       "podcastLibrariesEmptyHint": "建立一個播客媒體庫，開始訂閱節目。",
       "smartScopesEmptyHint": "智慧書架儲存您經常使用的一組過濾器。",

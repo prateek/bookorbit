@@ -167,8 +167,8 @@ export class SmartScopeService {
         timeZone,
         contentFilters: user.isSuperuser ? undefined : user.contentFilters,
       });
-      const bookCount = await this.bookReadService.countWhere(where);
-      return { ...response, bookCount };
+      const { bookCount, seriesCount, unreadCount } = await this.bookReadService.summarizeWhere(where, user.id);
+      return { ...response, bookCount, seriesCount, unreadCount };
     } catch (err) {
       if (!(err instanceof BadRequestException)) throw err;
       const errorClass = err.constructor.name;

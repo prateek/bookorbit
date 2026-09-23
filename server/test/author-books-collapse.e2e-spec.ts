@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 
-import type { BookCard } from '@bookorbit/types';
+import type { AuthorDetail, AuthorsPage, BookCard } from '@bookorbit/types';
+import { eq } from 'drizzle-orm';
 
 import * as schema from '../src/db/schema';
 import {
@@ -99,6 +100,7 @@ describe('Author books collapsed by series (e2e)', { timeout: SCENARIO_TIMEOUT_M
   let reader!: TestUserSession;
   let prolificAuthorId!: number;
   let otherAuthorId!: number;
+  let serialAuthorId!: number;
   let standaloneBookId!: number;
 
   async function listBooks(authorId: number, query = '') {
@@ -132,6 +134,16 @@ describe('Author books collapsed by series (e2e)', { timeout: SCENARIO_TIMEOUT_M
 
     // Same series, a different author: it must not be counted into the prolific author's card.
     await seedBook(ctx, library, { title: 'Foreign Volume', authorIds: [otherAuthorId], series: discworld, seriesIndex: '4' });
+
+    // A library that counts a series as one book, holding one serial of three chapters.
+    const serialLibrary = await createLibraryWithFolder(ctx, { name: `author-collapse-serials-${randomUUID()}` });
+    await ctx.db.update(schema.libraries).set({ countSeriesAsOneBook: true }).where(eq(schema.libraries.id, serialLibrary.libraryId));
+    await grantLibraryAccess(ctx, reader.userId, serialLibrary.libraryId);
+    serialAuthorId = await createAuthor(ctx, 'Serial Writer');
+    const serial = await createSeries(ctx, 'Runebound');
+    for (const index of ['1', '2', '10']) {
+      await seedBook(ctx, serialLibrary, { title: `Chapter ${index}`, authorIds: [serialAuthorId], series: serial, seriesIndex: index });
+    }
   });
 
   afterAll(async () => {
@@ -215,5 +227,41 @@ describe('Author books collapsed by series (e2e)', { timeout: SCENARIO_TIMEOUT_M
     expect(body.items).toEqual([]);
     expect(body.total).toBe(3);
     expect(body.bookTotal).toBe(6);
+  });
+
+  it('reports the latest series number on a collapsed card', async () => {
+    const response = await listBooks(prolificAuthorId, '?collapseSeries=true');
+    const body = response.json() as { items: BookCard[] };
+
+    const discworld = body.items.find((item) => item.seriesName === 'Discworld');
+    expect(discworld!.collapsedSeries!.latestSeriesIndex).toBe('3');
+  });
+
+  it('counts an author in series as well as books', async () => {
+    const response = await ctx.app.inject({
+      method: 'GET',
+      url: `/api/v1/authors/${prolificAuthorId}`,
+      headers: authHeader(reader.accessToken),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const author = response.json() as AuthorDetail;
+    expect(author.bookCount).toBe(6);
+    expect(author.seriesCount).toBe(2);
+    // Neither series sits in a library that counts a series as one book.
+    expect(author.serialBookCount).toBe(0);
+  });
+
+  it('counts the chapters of a serial in a library that counts a series as one book', async () => {
+    const response = await ctx.app.inject({
+      method: 'GET',
+      url: `/api/v1/authors?q=${encodeURIComponent('Serial Writer')}`,
+      headers: authHeader(reader.accessToken),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const page = response.json() as AuthorsPage;
+    const author = page.items.find((item) => item.id === serialAuthorId);
+    expect(author).toEqual(expect.objectContaining({ bookCount: 3, seriesCount: 1, serialBookCount: 3 }));
   });
 });

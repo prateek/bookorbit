@@ -689,6 +689,8 @@ export class AuthorsService {
     sortName: string | null;
     description: string | null;
     bookCount: number;
+    seriesCount?: number;
+    serialBookCount?: number;
     lastAddedAt: Date | null;
     coverBookId?: number | null;
   }): AuthorSummary {
@@ -698,6 +700,8 @@ export class AuthorsService {
       sortName: row.sortName,
       description: row.description,
       bookCount: row.bookCount,
+      ...(row.seriesCount !== undefined ? { seriesCount: row.seriesCount } : {}),
+      ...(row.serialBookCount !== undefined ? { serialBookCount: row.serialBookCount } : {}),
       lastAddedAt: row.lastAddedAt ? row.lastAddedAt.toISOString() : null,
       coverBookId: row.coverBookId ?? null,
     };

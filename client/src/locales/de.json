@@ -8056,8 +8056,6 @@
       "resultCount": "{shown} von {total}",
       "noMatches": "Keine Treffer",
       "noMatchesHint": "Versuchen Sie es mit einem anderen Suchbegriff.",
-      "bookCount": "Bücher: {count}",
-      "showCount": "Zeigt: {count}",
       "librariesEmptyHint": "Erstellen Sie eine Bibliothek, um mit dem Hinzufügen von Büchern zu beginnen.",
       "podcastLibrariesEmptyHint": "Erstellen Sie eine Podcast-Bibliothek, um Sendungen zu verfolgen.",
       "smartScopesEmptyHint": "Intelligente Bereiche speichern eine Reihe von Filtern, die Sie häufig verwenden.",
