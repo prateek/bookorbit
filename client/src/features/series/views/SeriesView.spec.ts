@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import type { SeriesFacets, SeriesSummary } from '@bookorbit/types'
 import en from '@/locales/en.json'
 import { compileIcuCatalog } from '@/i18n/icu'
 import type { CompletionStatus, SeriesListSort, SortDirection } from '../types/series'
+import { APP_RESUMED_EVENT } from '@/components/sidebar/useAppResume'
 import SeriesView from './SeriesView.vue'
 import SeriesStatusTabs from '../components/SeriesStatusTabs.vue'
 import SeriesGridCard from '../components/SeriesGridCard.vue'
@@ -53,12 +54,15 @@ function makeSeries(overrides: Partial<SeriesSummary> = {}): SeriesSummary {
   }
 }
 
+enableAutoUnmount(afterEach)
+
 const mocks = vi.hoisted(() => ({
   route: { params: {} as Record<string, string>, query: {} as Record<string, unknown>, fullPath: '/series' },
   routerPush: vi.fn<(to: unknown) => Promise<void>>(),
   routerReplace: vi.fn<(to: unknown) => Promise<void>>(),
   fetchLibraries: vi.fn<() => Promise<void>>(),
   load: vi.fn<(reset?: boolean) => Promise<void>>(),
+  refresh: vi.fn<() => Promise<void>>(),
   storageSet: vi.fn<(key: string, value: unknown) => void>(),
   storageValues: {} as Record<string, unknown>,
   items: null as unknown as { value: SeriesSummary[] },
@@ -94,6 +98,7 @@ vi.mock('../composables/useSeriesList', () => ({
     libraryId: mocks.libraryId,
     completionStatus: mocks.completionStatus,
     load: mocks.load,
+    refresh: mocks.refresh,
   }),
 }))
 
@@ -232,5 +237,15 @@ describe('SeriesView', () => {
     const wrapper = await mountView()
 
     expect(wrapper.text()).toContain(en.series.list.empty)
+  })
+
+  it('refreshes the loaded list in place when the app resumes', async () => {
+    await mountView()
+    mocks.load.mockClear()
+
+    window.dispatchEvent(new CustomEvent(APP_RESUMED_EVENT))
+
+    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.load).not.toHaveBeenCalled()
   })
 })

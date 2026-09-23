@@ -3,7 +3,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatNumber } from '@/i18n/formatters'
 import { useRoute, useRouter } from 'vue-router'
-import { ChevronLeft, Pencil } from '@lucide/vue'
+import { useMediaQuery } from '@vueuse/core'
+import { ArrowDownToLine, CheckCheck, ChevronLeft, ChevronUp, MoreHorizontal, Pencil, Play, SlidersHorizontal } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type { BookCard, BookDetail } from '@bookorbit/types'
@@ -15,11 +16,15 @@ import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrol
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useBookNavigation } from '@/features/book/composables/useBookNavigation'
+import type { BookSlot } from '@/features/book/composables/useBookWindow'
 import { useLibraries } from '@/features/library/composables/useLibraries'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useSafeHtml } from '@/features/book/composables/useSafeHtml'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { api } from '@/lib/api'
+import { onAppResumed } from '@/components/sidebar/useAppResume'
 import EntityNotFound from '@/components/EntityNotFound.vue'
 import AddToCollectionSheet from '@/features/collection/components/AddToCollectionSheet.vue'
 import BookQuickView from '@/features/book/components/BookQuickView.vue'
@@ -28,7 +33,10 @@ import { useDeleteBook } from '@/features/book/composables/useDeleteBook'
 import SeriesCompletionBar from '../components/SeriesCompletionBar.vue'
 import SeriesOwnershipBar from '../components/SeriesOwnershipBar.vue'
 import SeriesGapBanner from '../components/SeriesGapBanner.vue'
-import { fetchSeriesBooks } from '../api/series'
+import SeriesChapterList from '../components/SeriesChapterList.vue'
+import { fetchSeriesBooks, markSeriesRead } from '../api/series'
+import { chapterReaderFile } from '../lib/series-chapter'
+import type { SeriesBookReadFilter } from '../types/series'
 import { groupSeriesBooksByMedia } from '../composables/useSeriesBookMediaGroups'
 import { useSeriesDetail } from '../composables/useSeriesDetail'
 import { useCoverStack, MAX_VISIBLE as MAX_STACK_VISIBLE } from '../composables/useCoverStack'
@@ -48,8 +56,8 @@ const route = useRoute()
 const router = useRouter()
 const mainRef = ref<HTMLElement | null>(null)
 useScrollRestoreOnActivate(mainRef)
-const { hasPermission } = usePermissions()
-const { setBookContext } = useBookNavigation()
+const { hasPermission, isDemoRestrictedAccount } = usePermissions()
+const { setBookContext, setBookSlotContext } = useBookNavigation()
 const { coverUrl } = useCoverVersions()
 
 const { portraitCoverSize, gridGap } = useDisplaySettings()
@@ -69,11 +77,21 @@ const {
   error: booksError,
   notFound,
   hasMore,
+  hasEarlier,
+  firstIndex,
+  loadingEarlier,
   sort,
   order,
   libraryId,
+  readFilter,
   load: loadBooks,
+  jumpTo,
+  loadEarlier,
+  refresh: refreshBooks,
 } = useSeriesDetail(seriesId)
+
+/** Phones get a dense chapter list and a compact control row instead of the cover grid. */
+const isCompact = useMediaQuery('(max-width: 767px)')
 
 const pageTitle = computed(() => {
   if (seriesInfo.value?.name) return t('series.detail.pageTitleNamed', { name: seriesInfo.value.name })
@@ -82,6 +100,7 @@ const pageTitle = computed(() => {
 usePageTitle(pageTitle)
 
 const sentinel = ref<HTMLElement | null>(null)
+const booksSectionRef = ref<HTMLElement | null>(null)
 const openingSeriesEditor = ref(false)
 const loadingLeadBook = ref(false)
 const leadBookError = ref<string | null>(null)
@@ -104,6 +123,25 @@ let observer: IntersectionObserver | null = null
 let leadBookRequestToken = 0
 
 const canEditMetadata = computed(() => hasPermission('library_edit_metadata'))
+const canMarkRead = computed(() => !isDemoRestrictedAccount.value)
+const controlsOpen = ref(false)
+const leadDetailsOpen = ref(false)
+const jumping = ref(false)
+const markingRead = ref(false)
+const pendingMarkRead = ref<{ upToIndex: string | null; description: string } | null>(null)
+
+const continueTarget = computed(() => seriesInfo.value?.next ?? null)
+const canMarkAllRead = computed(() => canMarkRead.value && seriesInfo.value != null && seriesInfo.value.readCount < seriesInfo.value.bookCount)
+const showSeriesMenu = computed(() => (canEditMetadata.value && books.value.length > 0) || canMarkAllRead.value)
+const continueLabel = computed(() => {
+  const target = continueTarget.value
+  if (!target) return null
+  const info = seriesInfo.value
+  const started = target.status === 'reading' || (info?.readCount ?? 0) > 0 || (info?.readingCount ?? 0) > 0
+  const number = target.seriesIndex != null ? `#${target.seriesIndex}` : null
+  const name = [number, target.title].filter(Boolean).join(' ') || t('series.detail.untitled')
+  return started ? t('series.detail.continueAt', { name }) : t('series.detail.startAt', { name })
+})
 const safeLeadDescription = useSafeHtml(() => leadBook.value?.description)
 const visibleSeriesAuthors = computed(() => (seriesInfo.value?.authors ?? []).slice(0, 5))
 const hiddenSeriesAuthorsCount = computed(() => Math.max(0, (seriesInfo.value?.authors.length ?? 0) - visibleSeriesAuthors.value.length))
@@ -367,6 +405,8 @@ async function editSeriesMetadata() {
 
   openingSeriesEditor.value = true
   try {
+    // After a jump the list starts mid-series; the editor needs the whole series from book 1.
+    if (hasEarlier.value) await loadBooks({ reset: true, keepPreviousData: true })
     while (hasMore.value) {
       const beforeCount = books.value.length
       await loadBooks()
@@ -391,6 +431,135 @@ async function editSeriesMetadata() {
   }
 }
 
+function handleContinue() {
+  const target = continueTarget.value
+  if (!target) return
+  if (target.fileId != null) {
+    void router.push({ name: 'reader', params: { bookId: target.bookId, fileId: target.fileId }, query: { format: target.format ?? 'epub' } })
+    return
+  }
+  void router.push({ name: 'book-detail', params: { bookId: target.bookId } })
+}
+
+function handleOpenChapter(book: BookCard) {
+  const file = chapterReaderFile(book)
+  if (file) {
+    void router.push({ name: 'reader', params: { bookId: book.id, fileId: file.id }, query: { format: file.format ?? 'epub' } })
+    return
+  }
+  handleChapterDetails(book)
+}
+
+function handleChapterDetails(book: BookCard) {
+  void router.push({ name: 'book-detail', params: { bookId: book.id } })
+}
+
+function handleReadFilterChange(event: Event) {
+  readFilter.value = (event.target as HTMLSelectElement).value === 'unread' ? 'unread' : 'all'
+}
+
+function setReadFilter(value: SeriesBookReadFilter) {
+  readFilter.value = value
+}
+
+function showAllChapters() {
+  setReadFilter('all')
+}
+
+function showUnreadChapters() {
+  setReadFilter('unread')
+}
+
+function toggleControls() {
+  controlsOpen.value = !controlsOpen.value
+}
+
+function toggleLeadDetails() {
+  leadDetailsOpen.value = !leadDetailsOpen.value
+}
+
+function scrollToBook(bookId: number) {
+  const row = mainRef.value?.querySelector<HTMLElement>(`[data-book-id="${bookId}"]`)
+  if (row) {
+    row.scrollIntoView?.({ block: 'center' })
+    return
+  }
+  booksSectionRef.value?.scrollIntoView?.({ block: 'start' })
+}
+
+async function handleJumpToNext() {
+  const target = continueTarget.value
+  if (!target) {
+    toast.info(t('series.detail.allChaptersRead'))
+    return
+  }
+  if (jumping.value) return
+  jumping.value = true
+  try {
+    if (sort.value !== 'seriesIndex' || order.value !== 'asc') {
+      sort.value = 'seriesIndex'
+      order.value = 'asc'
+      // Let the sort watcher start its reload first, so the jump supersedes it.
+      await nextTick()
+    }
+    await jumpTo(target.bookId)
+    await nextTick()
+    scrollToBook(target.bookId)
+  } finally {
+    jumping.value = false
+  }
+}
+
+async function handleLoadEarlier() {
+  const scroller = mainRef.value
+  const heightBefore = scroller?.scrollHeight ?? 0
+  const added = await loadEarlier()
+  if (!added || !scroller) return
+  await nextTick()
+  scroller.scrollTop += scroller.scrollHeight - heightBefore
+}
+
+function promptMarkReadUpTo(book: BookCard) {
+  if (book.seriesIndex == null) return
+  pendingMarkRead.value = {
+    upToIndex: book.seriesIndex,
+    description: t('series.detail.markReadUpToConfirm', { index: book.seriesIndex }),
+  }
+}
+
+function promptMarkAllRead() {
+  const count = seriesInfo.value?.bookCount ?? 0
+  pendingMarkRead.value = { upToIndex: null, description: t('series.detail.markAllReadConfirm', { count }) }
+}
+
+function cancelMarkRead() {
+  if (!markingRead.value) pendingMarkRead.value = null
+}
+
+async function confirmMarkRead() {
+  const pending = pendingMarkRead.value
+  const id = seriesId.value
+  if (!pending || id == null || markingRead.value) return
+  markingRead.value = true
+  try {
+    await markSeriesRead(id, { upToIndex: pending.upToIndex, libraryId: libraryId.value })
+    pendingMarkRead.value = null
+    toast.success(t('series.detail.markedRead'))
+    const wasJumped = hasEarlier.value
+    await loadBooks({ reset: true, keepPreviousData: true })
+    const next = continueTarget.value
+    if (wasJumped && next && sort.value === 'seriesIndex') {
+      await jumpTo(next.bookId)
+      await nextTick()
+      scrollToBook(next.bookId)
+    }
+  } catch {
+    toast.error(t('series.detail.markReadError'))
+  } finally {
+    markingRead.value = false
+  }
+}
+
 onMounted(async () => {
   await fetchLibraries()
   await loadBooks({ reset: true })
@@ -408,23 +577,33 @@ onMounted(async () => {
   if (sentinel.value) observer.observe(sentinel.value)
 })
 
+onAppResumed(() => {
+  void refreshBooks()
+})
+
 onUnmounted(() => {
   observer?.disconnect()
 })
 
 watch(
-  [books, total],
-  ([newBooks, newTotal]) => {
+  [books, total, firstIndex],
+  ([newBooks, newTotal, offset]) => {
     if (seriesId.value === null) return
-    setBookContext(
-      newBooks.map((book) => book.id),
-      newTotal,
-    )
+    if (offset === 0) {
+      setBookContext(
+        newBooks.map((book) => book.id),
+        newTotal,
+      )
+      return
+    }
+    // A jumped listing starts mid-series; pad it so each book keeps its true position.
+    const leading: BookSlot[] = Array.from({ length: offset }, (_, index) => ({ id: -1 - index, placeholder: true }))
+    setBookSlotContext([...leading, ...newBooks], newTotal)
   },
   { immediate: true },
 )
 
-watch([sort, order, libraryId], () => {
+watch([sort, order, libraryId, readFilter], () => {
   void loadBooks({ reset: true, keepPreviousData: true })
 })
 
@@ -479,7 +658,7 @@ defineOptions({ name: 'SeriesDetailView' })
         <!-- Series header -->
         <div v-if="seriesInfo" class="mb-4 rounded-lg border border-border/70 bg-card/60 p-4">
           <div class="flex flex-col gap-4 md:flex-row md:items-start">
-            <div class="mx-auto w-full max-w-[360px] md:mx-0 md:w-[340px] md:shrink-0 lg:w-[360px]">
+            <div class="mx-auto w-full max-w-[200px] md:mx-0 md:w-[340px] md:max-w-[360px] md:shrink-0 lg:w-[360px]">
               <div
                 class="series-cover-stack-container relative isolate rounded-lg border border-border/60 bg-linear-to-b from-white/[0.035] via-background/5 to-black/[0.07]"
                 style="aspect-ratio: 11 / 8; transform-style: preserve-3d; perspective: 1000px"
@@ -540,15 +719,58 @@ defineOptions({ name: 'SeriesDetailView' })
                   </div>
                 </div>
 
-                <button
-                  v-if="canEditMetadata && books.length > 0"
-                  class="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-input bg-background px-2.5 text-sm transition-colors hover:bg-muted disabled:opacity-40 sm:px-3 md:w-auto"
-                  :disabled="openingSeriesEditor || loadingBooks"
-                  @click="editSeriesMetadata"
-                >
-                  <Pencil :size="14" />
-                  {{ openingSeriesEditor ? t('series.detail.preparingEditor') : t('series.detail.editMetadata') }}
-                </button>
+                <div class="flex w-full min-w-0 items-center gap-2 md:w-auto md:shrink-0">
+                  <button
+                    v-if="continueLabel"
+                    type="button"
+                    data-testid="series-continue"
+                    class="flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 md:h-8 md:max-w-[320px] md:flex-none"
+                    @click="handleContinue"
+                  >
+                    <Play :size="14" class="shrink-0" />
+                    <span class="truncate">{{ continueLabel }}</span>
+                  </button>
+
+                  <button
+                    v-if="canEditMetadata && books.length > 0"
+                    type="button"
+                    data-testid="series-edit-metadata"
+                    class="hidden h-8 items-center justify-center gap-1.5 rounded-lg border border-input bg-background px-3 text-sm transition-colors hover:bg-muted disabled:opacity-40 md:flex"
+                    :disabled="openingSeriesEditor || loadingBooks"
+                    @click="editSeriesMetadata"
+                  >
+                    <Pencil :size="14" />
+                    {{ openingSeriesEditor ? t('series.detail.preparingEditor') : t('series.detail.editMetadata') }}
+                  </button>
+
+                  <DropdownMenu v-if="showSeriesMenu">
+                    <DropdownMenuTrigger as-child>
+                      <button
+                        type="button"
+                        data-testid="series-actions-menu"
+                        class="grid size-11 shrink-0 place-items-center rounded-lg border border-input bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:size-8"
+                        :aria-label="t('series.detail.moreActions')"
+                      >
+                        <MoreHorizontal :size="16" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        v-if="canEditMetadata && books.length > 0"
+                        class="md:hidden"
+                        :disabled="openingSeriesEditor || loadingBooks"
+                        @select="editSeriesMetadata"
+                      >
+                        <Pencil :size="14" />
+                        {{ openingSeriesEditor ? t('series.detail.preparingEditor') : t('series.detail.editMetadata') }}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem v-if="canMarkAllRead" data-testid="series-mark-all-read" @select="promptMarkAllRead">
+                        <CheckCheck :size="14" />
+                        {{ t('series.detail.markAllRead') }}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
 
               <div class="mt-3 grid max-w-md gap-3 sm:grid-cols-2">
@@ -561,7 +783,17 @@ defineOptions({ name: 'SeriesDetailView' })
               </div>
               <SeriesGapBanner v-if="seriesInfo.possibleGaps.length > 0" :gaps="seriesInfo.possibleGaps" class="mt-3" />
 
-              <div class="mt-4 border-t border-border/60 pt-4">
+              <button
+                type="button"
+                class="mt-2 flex h-11 items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground md:hidden"
+                :aria-expanded="leadDetailsOpen"
+                data-testid="series-lead-toggle"
+                @click="toggleLeadDetails"
+              >
+                {{ leadDetailsOpen ? t('series.detail.hideFirstBook') : t('series.detail.showFirstBook') }}
+              </button>
+
+              <div class="mt-4 border-t border-border/60 pt-4" :class="leadDetailsOpen ? '' : 'max-md:hidden'">
                 <div class="mb-2">
                   <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{{ t('series.detail.firstInSeries') }}</p>
                   <p v-if="leadBook" class="mt-1 text-base font-semibold leading-tight text-foreground">
@@ -628,18 +860,69 @@ defineOptions({ name: 'SeriesDetailView' })
         </div>
 
         <!-- Books section -->
-        <section v-if="seriesInfo" class="rounded-lg border border-border/70 bg-card/60 p-3">
+        <section v-if="seriesInfo" ref="booksSectionRef" class="scroll-mt-2 rounded-lg border border-border/70 bg-card/60 p-3">
           <div
-            class="sticky top-0 z-20 -mx-3 mb-3 border-b border-border/60 bg-card/92 px-3 pb-3 pt-1 backdrop-blur supports-backdrop-filter:bg-card/78"
+            class="-mx-3 mb-3 border-b border-border/60 bg-card/92 px-3 pb-3 pt-1 md:sticky md:top-0 md:z-20 md:backdrop-blur md:supports-backdrop-filter:bg-card/78"
           >
             <div class="flex flex-col gap-2 md:flex-row md:items-center" :class="groupByMedia ? 'md:justify-end' : 'md:justify-between'">
-              <h2 v-if="!groupByMedia" data-testid="series-books-section-heading" class="text-sm font-semibold text-foreground">
+              <h2 v-if="!groupByMedia" data-testid="series-books-section-heading" class="text-sm font-semibold text-foreground max-md:hidden">
                 {{ t('series.detail.booksHeading') }}
               </h2>
-              <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+
+              <div class="flex items-center gap-2 md:hidden" data-testid="series-compact-controls">
+                <div
+                  class="flex h-11 shrink-0 overflow-hidden rounded-md border border-input text-sm"
+                  role="group"
+                  :aria-label="t('series.detail.readFilter.label')"
+                >
+                  <button
+                    type="button"
+                    class="px-3 transition-colors"
+                    :class="readFilter === 'all' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'"
+                    :aria-pressed="readFilter === 'all'"
+                    @click="showAllChapters"
+                  >
+                    {{ t('series.detail.readFilter.all') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="border-l border-input px-3 transition-colors"
+                    :class="readFilter === 'unread' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'"
+                    :aria-pressed="readFilter === 'unread'"
+                    data-testid="series-unread-filter"
+                    @click="showUnreadChapters"
+                  >
+                    {{ t('series.detail.readFilter.unread') }}
+                  </button>
+                </div>
+                <button
+                  v-if="continueTarget"
+                  type="button"
+                  class="flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border border-input px-2 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                  :disabled="jumping"
+                  data-testid="series-jump-next-compact"
+                  @click="handleJumpToNext"
+                >
+                  <ArrowDownToLine :size="15" class="shrink-0" />
+                  <span class="truncate">{{ t('series.detail.jumpToNextUnread') }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="ml-auto grid size-11 shrink-0 place-items-center rounded-md border border-input transition-colors hover:bg-muted"
+                  :class="controlsOpen ? 'bg-muted text-foreground' : 'text-muted-foreground'"
+                  :aria-expanded="controlsOpen"
+                  :aria-label="t('series.detail.sortAndFilter')"
+                  data-testid="series-controls-toggle"
+                  @click="toggleControls"
+                >
+                  <SlidersHorizontal :size="16" />
+                </button>
+              </div>
+
+              <div class="flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center md:flex" :class="controlsOpen ? 'flex' : 'hidden'">
                 <select
                   v-model="sort"
-                  class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
+                  class="h-11 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-base outline-none transition-colors focus:border-primary/60 sm:w-auto md:h-8 md:text-sm"
                 >
                   <option value="seriesIndex">{{ t('series.detail.sort.seriesOrder') }}</option>
                   <option value="title">{{ t('series.detail.sort.title') }}</option>
@@ -648,7 +931,7 @@ defineOptions({ name: 'SeriesDetailView' })
 
                 <select
                   v-model="order"
-                  class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
+                  class="h-11 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-base outline-none transition-colors focus:border-primary/60 sm:w-auto md:h-8 md:text-sm"
                 >
                   <option value="asc">{{ t('series.detail.order.ascending') }}</option>
                   <option value="desc">{{ t('series.detail.order.descending') }}</option>
@@ -656,14 +939,28 @@ defineOptions({ name: 'SeriesDetailView' })
 
                 <select
                   :value="libraryId ?? ''"
-                  class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
+                  class="h-11 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-base outline-none transition-colors focus:border-primary/60 sm:w-auto md:h-8 md:text-sm"
                   @change="onLibraryFilterChange"
                 >
                   <option value="">{{ t('series.detail.allLibraries') }}</option>
                   <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.name }}</option>
                 </select>
 
-                <div class="flex h-8 w-full items-center justify-between gap-2 rounded-md border border-input px-2.5 text-sm sm:w-auto">
+                <select
+                  :value="readFilter"
+                  class="h-8 min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 max-md:hidden"
+                  :aria-label="t('series.detail.readFilter.label')"
+                  data-testid="series-read-filter"
+                  @change="handleReadFilterChange"
+                >
+                  <option value="all">{{ t('series.detail.readFilter.all') }}</option>
+                  <option value="unread">{{ t('series.detail.readFilter.unread') }}</option>
+                </select>
+
+                <div
+                  v-if="!isCompact"
+                  class="flex h-8 w-full items-center justify-between gap-2 rounded-md border border-input px-2.5 text-sm sm:w-auto"
+                >
                   <span class="whitespace-nowrap text-muted-foreground">{{ t('series.detail.groupByMedia') }}</span>
                   <ToggleSwitch
                     :model-value="groupByMedia"
@@ -672,9 +969,33 @@ defineOptions({ name: 'SeriesDetailView' })
                     @update:model-value="handleGroupByMediaUpdate"
                   />
                 </div>
+
+                <button
+                  v-if="continueTarget"
+                  type="button"
+                  class="h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-sm transition-colors hover:bg-muted disabled:opacity-50 max-md:hidden md:flex"
+                  :disabled="jumping"
+                  data-testid="series-jump-next"
+                  @click="handleJumpToNext"
+                >
+                  <ArrowDownToLine :size="14" />
+                  {{ t('series.detail.jumpToNextUnread') }}
+                </button>
               </div>
             </div>
           </div>
+
+          <button
+            v-if="hasEarlier"
+            type="button"
+            class="mb-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-input text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            :disabled="loadingEarlier"
+            data-testid="series-load-earlier"
+            @click="handleLoadEarlier"
+          >
+            <ChevronUp :size="15" />
+            {{ loadingEarlier ? t('common.loading') : t('series.detail.loadEarlier') }}
+          </button>
 
           <div v-if="!loadingBooks && books.length === 0" class="flex flex-col items-center justify-center gap-2 py-16 text-center">
             <p class="text-sm font-medium text-foreground">{{ t('series.detail.noBooksFound') }}</p>
@@ -682,7 +1003,17 @@ defineOptions({ name: 'SeriesDetailView' })
           </div>
 
           <template v-if="books.length > 0">
-            <div v-if="groupByMedia" class="space-y-7">
+            <SeriesChapterList
+              v-if="isCompact"
+              :books="books"
+              :next-book-id="continueTarget?.bookId ?? null"
+              :can-mark-read="canMarkRead"
+              @open="handleOpenChapter"
+              @details="handleChapterDetails"
+              @mark-read-up-to="promptMarkReadUpTo"
+            />
+
+            <div v-else-if="groupByMedia" class="space-y-7">
               <section v-for="group in nonEmptyMediaGroups" :key="group.key" class="space-y-3" :data-testid="`series-media-group-${group.key}`">
                 <div class="flex items-center justify-between border-b border-border/60 pb-2">
                   <h3 class="text-sm font-semibold text-foreground">{{ group.label }}</h3>
@@ -737,6 +1068,17 @@ defineOptions({ name: 'SeriesDetailView' })
     />
 
     <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
+
+    <ConfirmDialog
+      :open="pendingMarkRead !== null"
+      :title="t('series.detail.markReadTitle')"
+      :description="pendingMarkRead?.description ?? ''"
+      :confirm-label="t('series.detail.markReadConfirmLabel')"
+      :busy="markingRead"
+      :destructive="false"
+      @confirm="confirmMarkRead"
+      @cancel="cancelMarkRead"
+    />
   </div>
 </template>
 
