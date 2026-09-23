@@ -86,10 +86,29 @@ export function useReaderProgress(
   const trackingEnabled = options.trackingEnabled ?? true
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null
+  // Set while the current position has not reached the server, including after a failed write.
+  let dirty = false
+  let inFlight: Promise<boolean> | null = null
   let lastValidPercentage = 0
 
+  // A page turn is only written after a short pause, so anything still pending when the reader is
+  // closed, backgrounded or unloaded is written straight away instead of being dropped. iOS Home
+  // Screen apps are often killed while hidden, without an unload event.
+  function onVisibilityChange() {
+    if (document.visibilityState === 'hidden') void flush()
+  }
+
+  function onPageHide() {
+    void flush()
+  }
+
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('pagehide', onPageHide)
+
   onUnmounted(() => {
-    if (saveTimer) clearTimeout(saveTimer)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    window.removeEventListener('pagehide', onPageHide)
+    void flush()
   })
 
   function updatePercentage(value: unknown, fallback = lastValidPercentage): number {
@@ -121,10 +140,19 @@ export function useReaderProgress(
     mediaOverlaySectionIndex.value = typeof data.mediaOverlaySectionIndex === 'number' ? data.mediaOverlaySectionIndex : null
   }
 
-  function scheduleSave() {
+  function cancelScheduledSave() {
     if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = null
+  }
+
+  function scheduleSave() {
+    cancelScheduledSave()
     if (!unref(trackingEnabled)) return
-    saveTimer = setTimeout(() => save(), 2000)
+    dirty = true
+    saveTimer = setTimeout(() => {
+      saveTimer = null
+      void save()
+    }, 2000)
   }
 
   function onRelocate(detail: RelocateDetail) {
@@ -153,7 +181,8 @@ export function useReaderProgress(
     timeTotal.value = detail?.time?.total ?? 0
 
     if (!hasSaveableLocation) {
-      if (saveTimer) clearTimeout(saveTimer)
+      cancelScheduledSave()
+      dirty = false
       return
     }
     pendingSource.value = 'text'
@@ -174,27 +203,57 @@ export function useReaderProgress(
     mediaOverlaySectionIndex.value = null
   }
 
-  async function save() {
-    if (!unref(trackingEnabled)) return
-    const safePercentage = updatePercentage(percentage.value)
-    await api(`/api/v1/books/files/${fileId}/progress`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        cfi: cfi.value,
-        pageNumber: normalizePageNumber(pageNumber.value),
-        percentage: safePercentage,
-        koboLocationSource: koboLocationSource.value,
-        koboLocationType: koboLocationType.value,
-        koboLocationValue: koboLocationValue.value,
-        koboContentSourceProgressPercent: normalizeNullablePercentage(koboContentSourceProgressPercent.value),
-        koreaderProgress: koreaderProgress.value,
-        positionSeconds: positionSeconds.value,
-        mediaOverlayFragment: mediaOverlayFragment.value,
-        mediaOverlaySectionIndex: mediaOverlaySectionIndex.value,
-        source: pendingSource.value,
-      }),
+  /**
+   * Writes any unsaved position now, after whatever save is already in flight, so an older write
+   * can never land after it. `keepalive` lets the request outlive the page. Never rejects.
+   */
+  async function flush() {
+    cancelScheduledSave()
+    if (!dirty && inFlight) await inFlight
+    if (dirty) await save({ keepalive: true })
+  }
+
+  /** Resolves to whether the position reached the server; saves are sent one at a time, in order. */
+  function save(options: { keepalive?: boolean } = {}): Promise<boolean> {
+    if (!unref(trackingEnabled)) return Promise.resolve(true)
+    const previous = inFlight
+    const run = previous ? previous.then(() => send(options)) : send(options)
+    inFlight = run
+    void run.finally(() => {
+      if (inFlight === run) inFlight = null
     })
+    return run
+  }
+
+  async function send(options: { keepalive?: boolean }): Promise<boolean> {
+    dirty = false
+    const safePercentage = updatePercentage(percentage.value)
+    try {
+      const res = await api(`/api/v1/books/files/${fileId}/progress`, {
+        method: 'POST',
+        ...(options.keepalive ? { keepalive: true } : {}),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cfi: cfi.value,
+          pageNumber: normalizePageNumber(pageNumber.value),
+          percentage: safePercentage,
+          koboLocationSource: koboLocationSource.value,
+          koboLocationType: koboLocationType.value,
+          koboLocationValue: koboLocationValue.value,
+          koboContentSourceProgressPercent: normalizeNullablePercentage(koboContentSourceProgressPercent.value),
+          koreaderProgress: koreaderProgress.value,
+          positionSeconds: positionSeconds.value,
+          mediaOverlayFragment: mediaOverlayFragment.value,
+          mediaOverlaySectionIndex: mediaOverlaySectionIndex.value,
+          source: pendingSource.value,
+        }),
+      })
+      if (!res.ok) dirty = true
+      return res.ok
+    } catch {
+      dirty = true
+      return false
+    }
   }
 
   function cycleFooterMode() {
@@ -341,6 +400,7 @@ export function useReaderProgress(
     setMediaOverlayProgress,
     clearMediaOverlayProgress,
     save,
+    flush,
     cycleFooterMode,
     updateHeadsFeet,
   }

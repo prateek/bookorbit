@@ -1,15 +1,21 @@
-import { BadRequestException, Controller, Get, Param, ParseIntPipe, Query, Req, Res } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Header, Param, ParseIntPipe, Query, Req, Res } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { RequestUser } from '../../../common/types/request-user';
 import { EpubService } from './epub.service';
 
+// Resources are bearer-authenticated, so only the browser may cache them. A URL carrying the
+// current file version names immutable bytes; anything else must revalidate.
+const VERSIONED_RESOURCE_CACHE_CONTROL = 'private, max-age=31536000, immutable';
+const UNVERSIONED_RESOURCE_CACHE_CONTROL = 'private, no-cache';
+
 @Controller('epub')
 export class EpubController {
   constructor(private readonly epubService: EpubService) {}
 
   @Get(':bookId/info')
+  @Header('Cache-Control', UNVERSIONED_RESOURCE_CACHE_CONTROL)
   getBookInfo(@Param('bookId', ParseIntPipe) bookId: number, @Query('fileId') fileId: string | undefined, @CurrentUser() user: RequestUser) {
     return this.epubService.getBookInfo(bookId, this.parseFileId(fileId), user);
   }
@@ -55,14 +61,18 @@ export class EpubController {
     @Query('fileId') fileId: string | undefined,
     @CurrentUser() user: RequestUser,
     @Res() reply: FastifyReply,
+    @Query('v') requestedVersion?: string,
   ) {
     const filePath = this.decodePathParam(encodedPath);
 
-    const { stream, contentType, size } = await this.epubService.streamFile(bookId, filePath, this.parseFileId(fileId), user);
+    const { stream, contentType, size, version } = await this.epubService.streamFile(bookId, filePath, this.parseFileId(fileId), user);
 
     reply.header('Content-Type', contentType);
     if (size > 0) reply.header('Content-Length', size);
-    reply.header('Cache-Control', 'public, max-age=3600');
+    reply.header(
+      'Cache-Control',
+      requestedVersion && requestedVersion === version ? VERSIONED_RESOURCE_CACHE_CONTROL : UNVERSIONED_RESOURCE_CACHE_CONTROL,
+    );
     reply.send(stream);
   }
 

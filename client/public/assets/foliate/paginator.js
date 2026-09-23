@@ -206,6 +206,17 @@ export const usesNegativePageScroll = (vertical, pageProgressionRtl) => pageProg
 export const getPageScrollOffset = (page, size, vertical, pageProgressionRtl) =>
   size * (usesNegativePageScroll(vertical, pageProgressionRtl) ? -page : page)
 
+// Scrolled-flow counterpart of a paginated page: `fraction` is where the screen starts and `size` the
+// visible span, so progress is measured to the bottom of the screen. `start / viewSize` alone tops out
+// one screen short of the end, and a chapter read to its last line never counts as finished.
+export const getScrolledProgress = (start, size, viewSize) => {
+  if (!(viewSize > 0)) return { fraction: 0, size: 0 }
+  const fraction = Math.min(1, Math.max(0, start / viewSize))
+  // Within the same 2px slack #scrollNext uses, the bottom has been reached.
+  const visible = viewSize - (start + size) <= 2 ? viewSize - start : size
+  return { fraction, size: Math.max(0, Math.min(visible, viewSize - start)) / viewSize }
+}
+
 export const normalizeStylesheetForReader = (data, width = innerWidth, height = innerHeight) =>
   data
     // unprefix as most of the props are (only) supported unprefixed
@@ -978,7 +989,7 @@ export class Paginator extends HTMLElement {
 
     const index = this.#index
     const detail = { reason, range, index }
-    if (this.scrolled) detail.fraction = this.start / this.viewSize
+    if (this.scrolled) Object.assign(detail, getScrolledProgress(this.start, this.size, this.viewSize))
     else if (this.pages > 0) {
       const { page, pages } = this
       this.#header.style.visibility = page > 1 ? 'visible' : 'hidden'

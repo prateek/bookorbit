@@ -29,6 +29,7 @@ import { api } from '@/lib/api'
 import { useReaderProgress } from '../shared/composables/useReaderProgress'
 import { useReadingSession } from '../shared/composables/useReadingSession'
 import { useReaderSettings } from '../shared/composables/useReaderSettings'
+import { useReaderBack } from '../shared/composables/useReaderBack'
 import PdfReaderContent from './components/PdfReaderContent.vue'
 import { toRotation, toScrollStrategy, toSpreadMode, toZoomLevel } from './pdf-viewer-utils'
 
@@ -173,8 +174,10 @@ async function handleStartReading() {
   onActivity()
 }
 
+const { goBack } = useReaderBack(props.bookId, () => null)
+
 function handleBack() {
-  router.back()
+  goBack()
 }
 
 async function loadReader() {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { ref } from 'vue'
+import { defineComponent, ref } from 'vue'
+import { mount } from '@vue/test-utils'
 import { formatTimeRemaining, useReaderProgress } from '../useReaderProgress'
 import type { RelocateDetail } from '../../../epub/composables/useFoliate'
 
@@ -273,5 +274,166 @@ describe('useReaderProgress', () => {
     expect(apiMock).not.toHaveBeenCalled()
 
     vi.useRealTimers()
+  })
+
+  describe('flushing a pending save', () => {
+    // Earlier tests leave instances with pending saves listening on the document; only this file counts.
+    function progressSaves() {
+      return apiMock.mock.calls.filter(
+        (c: unknown[]) => c[0] === '/api/v1/books/files/7/progress' && (c[1] as { method?: string })?.method === 'POST',
+      )
+    }
+
+    function setVisibility(state: 'hidden' | 'visible') {
+      Object.defineProperty(document, 'visibilityState', { value: state, configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+
+    afterEach(() => {
+      setVisibility('visible')
+      vi.useRealTimers()
+    })
+
+    it('writes the pending position with keepalive as soon as the page is hidden', async () => {
+      vi.useFakeTimers()
+      const progress = useReaderProgress(1, 7, elapsedMinutes)
+      progress.onRelocate(makeDetail({ fraction: 1 }))
+
+      setVisibility('hidden')
+      await Promise.resolve()
+
+      const saves = progressSaves()
+      expect(saves).toHaveLength(1)
+      expect(saves[0]?.[1]).toEqual(expect.objectContaining({ keepalive: true }))
+      expect(JSON.parse((saves[0]?.[1] as { body?: string } | undefined)?.body ?? '{}')).toEqual(expect.objectContaining({ percentage: 100 }))
+
+      await vi.advanceTimersByTimeAsync(2500)
+      expect(progressSaves()).toHaveLength(1)
+    })
+
+    it('writes the pending position on pagehide', async () => {
+      vi.useFakeTimers()
+      const progress = useReaderProgress(1, 7, elapsedMinutes)
+      progress.onRelocate(makeDetail({ fraction: 0.5 }))
+
+      window.dispatchEvent(new Event('pagehide'))
+      await Promise.resolve()
+
+      expect(progressSaves()).toHaveLength(1)
+    })
+
+    it('writes the pending position when the reader closes instead of dropping it', async () => {
+      vi.useFakeTimers()
+      let progress!: ReturnType<typeof useReaderProgress>
+      const wrapper = mount(
+        defineComponent({
+          setup() {
+            progress = useReaderProgress(1, 7, elapsedMinutes)
+            return {}
+          },
+          template: '<div />',
+        }),
+      )
+      progress.onRelocate(makeDetail({ fraction: 0.5 }))
+
+      wrapper.unmount()
+      await Promise.resolve()
+
+      expect(progressSaves()).toHaveLength(1)
+    })
+
+    function postedPercentage(call: unknown[] | undefined) {
+      return JSON.parse((call?.[1] as { body?: string } | undefined)?.body ?? '{}').percentage
+    }
+
+    it('sends the final position only after an older save in flight has landed', async () => {
+      vi.useFakeTimers()
+      let landOlderSave!: (value: unknown) => void
+      apiMock.mockImplementationOnce(() => new Promise((resolve) => (landOlderSave = resolve)))
+      const progress = useReaderProgress(1, 7, elapsedMinutes)
+      progress.onRelocate(makeDetail({ fraction: 0.5 }))
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(progressSaves()).toHaveLength(1)
+
+      progress.onRelocate(makeDetail({ fraction: 1 }))
+      let flushed = false
+      const flushing = progress.flush().then(() => (flushed = true))
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(progressSaves()).toHaveLength(1)
+      expect(flushed).toBe(false)
+
+      landOlderSave({ ok: true })
+      await flushing
+
+      const saves = progressSaves()
+      expect(saves.map(postedPercentage)).toEqual([50, 100])
+      expect(saves[1]?.[1]).toEqual(expect.objectContaining({ keepalive: true }))
+    })
+
+    it('waits for a save already in flight even when nothing new is pending', async () => {
+      let landSave!: (value: unknown) => void
+      apiMock.mockImplementationOnce(() => new Promise((resolve) => (landSave = resolve)))
+      const progress = useReaderProgress(1, 7, elapsedMinutes)
+      void progress.save()
+
+      let flushed = false
+      const flushing = progress.flush().then(() => (flushed = true))
+      await Promise.resolve()
+      expect(flushed).toBe(false)
+
+      landSave({ ok: true })
+      await flushing
+      expect(progressSaves()).toHaveLength(1)
+    })
+
+    it('keeps a rejected save pending so the next flush sends it again', async () => {
+      vi.useFakeTimers()
+      apiMock.mockResolvedValueOnce({ ok: false, status: 500 })
+      const progress = useReaderProgress(1, 7, elapsedMinutes)
+      progress.onRelocate(makeDetail({ fraction: 0.8 }))
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(progressSaves()).toHaveLength(1)
+
+      await progress.flush()
+
+      const saves = progressSaves()
+      expect(saves.map(postedPercentage)).toEqual([80, 80])
+      await progress.flush()
+      expect(progressSaves()).toHaveLength(2)
+    })
+
+    it('reports a failed save without throwing and retries it on flush', async () => {
+      apiMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      const progress = useReaderProgress(1, 7, elapsedMinutes)
+
+      await expect(progress.save()).resolves.toBe(false)
+      await expect(progress.flush()).resolves.toBeUndefined()
+
+      expect(progressSaves()).toHaveLength(2)
+    })
+
+    it('retries a failed save that was still in flight when flushed', async () => {
+      let failSave!: (value: unknown) => void
+      apiMock.mockImplementationOnce(() => new Promise((resolve) => (failSave = resolve)))
+      const progress = useReaderProgress(1, 7, elapsedMinutes)
+      void progress.save()
+
+      const flushing = progress.flush()
+      failSave({ ok: false, status: 503 })
+      await flushing
+
+      expect(progressSaves()).toHaveLength(2)
+    })
+
+    it('does nothing when no save is pending', async () => {
+      const progress = useReaderProgress(1, 7, elapsedMinutes)
+
+      await progress.flush()
+      setVisibility('hidden')
+      await Promise.resolve()
+
+      expect(progressSaves()).toHaveLength(0)
+    })
   })
 })
