@@ -7,6 +7,7 @@ describe('NotificationService', () => {
   let service: NotificationService;
   let repo: {
     insertOrCollapse: ReturnType<typeof vi.fn>;
+    findUnreadInGroup: ReturnType<typeof vi.fn>;
     findByUser: ReturnType<typeof vi.fn>;
     countUnread: ReturnType<typeof vi.fn>;
     setRead: ReturnType<typeof vi.fn>;
@@ -34,6 +35,7 @@ describe('NotificationService', () => {
   beforeEach(() => {
     repo = {
       insertOrCollapse: vi.fn(),
+      findUnreadInGroup: vi.fn().mockResolvedValue(new Map()),
       findByUser: vi.fn(),
       countUnread: vi.fn(),
       setRead: vi.fn(),
@@ -342,6 +344,42 @@ describe('NotificationService', () => {
       await service.notify(makePayload({ kind: 'user', userId: 3 }, { type: 'file_rename_completed' }));
 
       expect(repo.insertOrCollapse.mock.calls[0][0][0].groupKey).toBe('file_rename_completed:user');
+    });
+
+    it('folds a repeat into the unread content when the payload knows how to merge', async () => {
+      repo.findUserIdsWithLibraryAccess.mockResolvedValue([1, 2]);
+      repo.findUserSettings.mockResolvedValue(
+        new Map([
+          [1, {}],
+          [2, {}],
+        ]),
+      );
+      repo.findUnreadInGroup.mockResolvedValue(
+        new Map([[1, { title: 'New in Serials', message: 'Added 3 books.', actionUrl: null, meta: { added: 3 } }]]),
+      );
+      repo.insertOrCollapse.mockResolvedValue([makeInserted(1, { count: 2 }), makeInserted(2)]);
+      const collapse = vi.fn((unread: { meta?: Record<string, unknown> | null }) => ({
+        title: 'New in Serials',
+        message: 'Added 5 books.',
+        meta: { added: Number(unread.meta?.added) + 2 },
+      }));
+
+      await service.notify(makePayload({ kind: 'library', libraryId: 4 }, { message: 'Added 2 books.', meta: { added: 2 }, collapse }));
+
+      expect(repo.findUnreadInGroup).toHaveBeenCalledWith([1, 2], 'scan_completed:library:4');
+      const rows = repo.insertOrCollapse.mock.calls[0][0];
+      expect(rows[0]).toMatchObject({ userId: 1, message: 'Added 5 books.', meta: { added: 5 } });
+      expect(rows[1]).toMatchObject({ userId: 2, message: 'Added 2 books.', meta: { added: 2 } });
+      expect(collapse).toHaveBeenCalledOnce();
+    });
+
+    it('skips the unread lookup for payloads that simply replace', async () => {
+      repo.findUserSettings.mockResolvedValue(new Map([[1, {}]]));
+      repo.insertOrCollapse.mockResolvedValue([makeInserted(1)]);
+
+      await service.notify(makePayload({ kind: 'user', userId: 1 }));
+
+      expect(repo.findUnreadInGroup).not.toHaveBeenCalled();
     });
 
     it('does not collapse distinct achievement or batch-summary notifications', async () => {

@@ -25,9 +25,21 @@ function makeUser(overrides: Partial<RequestUser> = {}): RequestUser {
   };
 }
 
+function standaloneGroups(bookIds: number[]) {
+  return bookIds.map((bookId) => ({
+    bookId,
+    seriesId: null,
+    bookIds: [bookId],
+    bookCount: 1,
+    lastBookId: bookId,
+    latestAddedAt: new Date('2026-01-01T00:00:00.000Z'),
+  }));
+}
+
 function makeService() {
   const dashboardRepo = {
     findRecentlyAddedBookIds: vi.fn(),
+    findRecentlyAddedGroups: vi.fn(),
     findContinueReadingBookIds: vi.fn(),
     findContinueListeningBookIds: vi.fn(),
     findWantToReadBookIds: vi.fn(),
@@ -112,12 +124,12 @@ describe('DashboardService', () => {
     const { service, dashboardRepo, bookReadService, libraryService } = makeService();
     const user = makeUser({ id: 5, settings: { dashboardConfig: { libraryIds: [200, 999] } } });
     libraryService.findAccessibleLibraryIds.mockResolvedValue([100, 200]);
-    dashboardRepo.findRecentlyAddedBookIds.mockResolvedValue([9]);
+    dashboardRepo.findRecentlyAddedGroups.mockResolvedValue(standaloneGroups([9]));
     bookReadService.findCardsByBookIds.mockResolvedValue(makeFindCardsResult([9]));
 
     await service.getScroller(ScrollerType.RECENTLY_ADDED, user, 20);
 
-    expect(dashboardRepo.findRecentlyAddedBookIds).toHaveBeenCalledWith([200], 20, EMPTY_CONTENT_FILTER_RULES);
+    expect(dashboardRepo.findRecentlyAddedGroups).toHaveBeenCalledWith([200], 20, EMPTY_CONTENT_FILTER_RULES);
   });
 
   it('returns empty list when user has no accessible libraries', async () => {
@@ -127,7 +139,7 @@ describe('DashboardService', () => {
     const result = await service.getScroller(ScrollerType.RECENTLY_ADDED, makeUser(), 20);
 
     expect(result).toEqual({ books: [], total: 0 });
-    expect(dashboardRepo.findRecentlyAddedBookIds).not.toHaveBeenCalled();
+    expect(dashboardRepo.findRecentlyAddedGroups).not.toHaveBeenCalled();
     expect(dashboardRepo.countBooksAddedThisMonth).not.toHaveBeenCalled();
     expect(bookReadService.findCardsByBookIds).not.toHaveBeenCalled();
   });
@@ -136,7 +148,7 @@ describe('DashboardService', () => {
     const { service, dashboardRepo, bookReadService, libraryService } = makeService();
     const user = makeUser({ id: 5 });
     libraryService.findAccessibleLibraryIds.mockResolvedValue([100, 200]);
-    dashboardRepo.findRecentlyAddedBookIds.mockResolvedValue([9, 3]);
+    dashboardRepo.findRecentlyAddedGroups.mockResolvedValue(standaloneGroups([9, 3]));
     bookReadService.findCardsByBookIds.mockResolvedValue({
       ...makeFindCardsResult([3, 9]),
       statusRows: [
@@ -153,7 +165,7 @@ describe('DashboardService', () => {
 
     const result = await service.getScroller(ScrollerType.RECENTLY_ADDED, user, 0);
 
-    expect(dashboardRepo.findRecentlyAddedBookIds).toHaveBeenCalledWith([100, 200], 1, EMPTY_CONTENT_FILTER_RULES);
+    expect(dashboardRepo.findRecentlyAddedGroups).toHaveBeenCalledWith([100, 200], 1, EMPTY_CONTENT_FILTER_RULES);
     expect(bookReadService.findCardsByBookIds).toHaveBeenCalledWith([9, 3], 5);
     expect(dashboardRepo.countBooksAddedThisMonth).toHaveBeenCalledWith([100, 200], EMPTY_CONTENT_FILTER_RULES);
     expect(result.books.map((card) => card.id)).toEqual([9, 3]);
@@ -262,7 +274,7 @@ describe('DashboardService', () => {
     const { service, dashboardRepo, bookReadService, libraryService } = makeService();
     const user = makeUser({ id: 8 });
     libraryService.findAccessibleLibraryIds.mockResolvedValue([10]);
-    dashboardRepo.findRecentlyAddedBookIds.mockResolvedValue([9, 3]);
+    dashboardRepo.findRecentlyAddedGroups.mockResolvedValue(standaloneGroups([9, 3]));
     dashboardRepo.findWantToReadBookIds.mockResolvedValue([3, 7]);
     bookReadService.findCardsByBookIds.mockResolvedValue(makeFindCardsResult([3, 7, 9]));
 
@@ -288,7 +300,7 @@ describe('DashboardService', () => {
     const { service, dashboardRepo, bookReadService, libraryService, smartScopeService } = makeService();
     const user = makeUser({ id: 8, settings: { dashboardConfig: { libraryIds: [11] } } });
     libraryService.findAccessibleLibraryIds.mockResolvedValue([10, 11]);
-    dashboardRepo.findRecentlyAddedBookIds.mockResolvedValue([]);
+    dashboardRepo.findRecentlyAddedGroups.mockResolvedValue(standaloneGroups([]));
     smartScopeService.executeSmartScopeBookIds.mockResolvedValue([]);
 
     await service.getScrollers(
@@ -302,7 +314,7 @@ describe('DashboardService', () => {
     );
 
     expect(libraryService.findAccessibleLibraryIds).toHaveBeenCalledOnce();
-    expect(dashboardRepo.findRecentlyAddedBookIds).toHaveBeenCalledWith([11], 20, EMPTY_CONTENT_FILTER_RULES);
+    expect(dashboardRepo.findRecentlyAddedGroups).toHaveBeenCalledWith([11], 20, EMPTY_CONTENT_FILTER_RULES);
     expect(smartScopeService.executeSmartScopeBookIds).toHaveBeenCalledWith(7, user, 20, [11]);
     expect(bookReadService.findCardsByBookIds).not.toHaveBeenCalled();
   });
@@ -311,7 +323,7 @@ describe('DashboardService', () => {
     const { service, dashboardRepo, bookReadService, libraryService, smartScopeService } = makeService();
     const user = makeUser({ id: 8 });
     libraryService.findAccessibleLibraryIds.mockResolvedValue([10]);
-    dashboardRepo.findRecentlyAddedBookIds.mockResolvedValue([9]);
+    dashboardRepo.findRecentlyAddedGroups.mockResolvedValue(standaloneGroups([9]));
     smartScopeService.executeSmartScopeBookIds.mockRejectedValue(new Error('scope unavailable'));
     bookReadService.findCardsByBookIds.mockResolvedValue(makeFindCardsResult([9]));
 
@@ -328,6 +340,43 @@ describe('DashboardService', () => {
     expect(result.items[0]).toMatchObject({ id: 'recent', failed: false });
     expect(result.items[0]?.books.map((book) => book.id)).toEqual([9]);
     expect(result.items[1]).toEqual({ id: 'scope', books: [], failed: true });
+  });
+
+  it('folds a whole series drop into one recently added card, counting past the scanned entries', async () => {
+    const { service, dashboardRepo, bookReadService, libraryService } = makeService();
+    const user = makeUser({ id: 8 });
+    libraryService.findAccessibleLibraryIds.mockResolvedValue([10]);
+    dashboardRepo.findRecentlyAddedGroups.mockResolvedValue([
+      { bookId: 21, seriesId: 4, bookIds: [421, 422, 423], bookCount: 600, lastBookId: 620, latestAddedAt: new Date('2026-02-01T00:00:00.000Z') },
+      { bookId: 9, seriesId: null, bookIds: [9], bookCount: 1, lastBookId: 9, latestAddedAt: new Date('2026-01-01T00:00:00.000Z') },
+    ]);
+    dashboardRepo.findWantToReadBookIds.mockResolvedValue([21]);
+    bookReadService.findCardsByBookIds.mockResolvedValue(makeFindCardsResult([9, 21]));
+
+    const result = await service.getScrollers(
+      {
+        items: [
+          { id: 'recent', type: 'recently-added', limit: 20 },
+          { id: 'wanted', type: 'want-to-read', limit: 20 },
+        ],
+      },
+      user,
+    );
+
+    const [recent, wanted] = result.items;
+    expect(recent?.books.map((book) => book.id)).toEqual([21, 9]);
+    expect(recent?.books[0]?.collapsedSeries).toMatchObject({ bookCount: 600, firstVolumeBookId: 21, latestVolumeBookId: 620 });
+    expect(recent?.books[1]?.collapsedSeries).toBeUndefined();
+    expect(wanted?.books[0]?.collapsedSeries).toBeUndefined();
+  });
+
+  it('keeps the flat recently added id list for id-only clients', async () => {
+    const { service, dashboardRepo, libraryService } = makeService();
+    libraryService.findAccessibleLibraryIds.mockResolvedValue([10]);
+    dashboardRepo.findRecentlyAddedBookIds.mockResolvedValue([23, 22, 21]);
+
+    await expect(service.getScrollerBookIds(ScrollerType.RECENTLY_ADDED, makeUser(), 20)).resolves.toEqual([23, 22, 21]);
+    expect(dashboardRepo.findRecentlyAddedGroups).not.toHaveBeenCalled();
   });
 
   it('rejects duplicate batch item ids', async () => {

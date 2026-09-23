@@ -19,7 +19,14 @@ import { readdir, stat } from 'fs/promises';
 
 import { SelfWriteRegistry } from '../../common/services/self-write-registry.service';
 import { ACHIEVEMENT_EVENT_LIBRARY_CATALOG_CHANGED } from '../achievement/achievement-events.service';
-import { ScannerService } from './scanner.service';
+import {
+  ScannerService,
+  buildScanHighlights,
+  formatBookCount,
+  formatScanSummaryMessage,
+  mergeScanSummaries,
+  type ScanNotificationSummary,
+} from './scanner.service';
 import { ScanJobStore } from './scan-job-store.service';
 import { DEFAULT_FORMAT_PRIORITY } from './lib/classify';
 import type { BookCandidate, FileStat } from './lib/walk';
@@ -88,6 +95,7 @@ function makeRepo(overrides: Record<string, unknown> = {}) {
       organizationMode: 'book_per_folder',
     }),
     findLibraryAccessibleUserIds: vi.fn().mockResolvedValue([]),
+    findLibraryName: vi.fn().mockResolvedValue('Serials'),
     createScanJob: vi.fn().mockResolvedValue({ id: 100 }),
     completeScanJob: vi.fn().mockResolvedValue(undefined),
     failScanJob: vi.fn().mockResolvedValue(undefined),
@@ -608,7 +616,7 @@ describe('scan completed notification significance', () => {
     expect(scanCompletedCalls(notificationService)).toHaveLength(0);
   });
 
-  it('still confirms a manual scan that changed nothing, because the user asked', async () => {
+  it('stays silent when a manual scan changes nothing, since the scan panel already reports it', async () => {
     emptyScan();
     const repo = makeRepo();
     const done = awaitScan(repo);
@@ -618,29 +626,46 @@ describe('scan completed notification significance', () => {
     await done;
     await settle(jobStore);
 
-    const calls = scanCompletedCalls(notificationService);
-    expect(calls).toHaveLength(1);
-    expect(calls[0][0].meta).toMatchObject({ triggeredBy: 'manual' });
+    expect(scanCompletedCalls(notificationService)).toHaveLength(0);
   });
 
-  it('notifies a scheduled scan that actually found books', async () => {
+  it('names what a scan added and links to the single new book', async () => {
     mockFindCandidates.mockResolvedValue({
       candidates: [makeCandidate('/library/Author/New Book', [makeFileStat({ absolutePath: '/library/Author/New Book/book.epub' })])],
       skippedDirs: new Set(),
       unchangedDirs: new Set(),
       dirMtimes: new Map(),
     });
-    const repo = makeRepo({ findBookCardData: vi.fn().mockResolvedValue({ rows: [], authorRows: [], fileRows: [], genreRows: [] }) });
+    const repo = makeRepo({
+      findBookCardData: vi.fn().mockResolvedValue({
+        rows: [{ id: 1, title: 'Chapter 12', seriesName: 'Chrysalis' }],
+        authorRows: [],
+        fileRows: [],
+        genreRows: [],
+      }),
+    });
     const done = awaitScan(repo);
     const { service, notificationService, jobStore } = makeService(repo);
 
     await service.startScan(1, 'schedule');
     await done;
     await settle(jobStore);
+    await vi.waitFor(() => expect(scanCompletedCalls(notificationService)).toHaveLength(1));
 
-    const calls = scanCompletedCalls(notificationService);
-    expect(calls).toHaveLength(1);
-    expect(calls[0][0].meta).toMatchObject({ triggeredBy: 'schedule' });
+    const [payload] = scanCompletedCalls(notificationService)[0];
+    expect(payload).toMatchObject({
+      title: 'New in Serials',
+      message: 'Added 1 book: Chrysalis.',
+      actionUrl: '/book/1',
+      meta: { triggeredBy: 'schedule', summary: { addedCount: 1, singleBookId: 1 } },
+    });
+
+    const folded = payload.collapse({
+      title: 'New in Serials',
+      message: 'Added 3 books: Chrysalis (3).',
+      meta: { summary: { libraryId: 1, addedCount: 3, changedCount: 0, highlights: [{ label: 'Chrysalis', count: 3 }], singleBookId: null } },
+    });
+    expect(folded).toMatchObject({ message: 'Added 4 books: Chrysalis (4).', actionUrl: '/library/1' });
   });
 });
 
@@ -3877,5 +3902,61 @@ describe('incremental scan — settings invalidation', () => {
     await done;
 
     expect(repo.clearDirScanState).not.toHaveBeenCalled();
+  });
+});
+
+// ── library change notification text ─────────────────────────────────────────
+
+describe('scan notification summaries', () => {
+  const summary = (overrides: Partial<ScanNotificationSummary> = {}): ScanNotificationSummary => ({
+    libraryId: 1,
+    addedCount: 0,
+    changedCount: 0,
+    highlights: [],
+    singleBookId: null,
+    ...overrides,
+  });
+
+  it('groups added entries by series and caps the list', () => {
+    const rows = [
+      ...Array.from({ length: 3 }, () => ({ title: 'Chapter', seriesName: 'Chrysalis' })),
+      { title: 'Standalone', seriesName: null },
+      ...['A', 'B', 'C', 'D', 'E'].map((seriesName) => ({ title: 'x', seriesName })),
+    ];
+    const highlights = buildScanHighlights(rows);
+
+    expect(highlights).toHaveLength(5);
+    expect(highlights[0]).toEqual({ label: 'Chrysalis', count: 3 });
+    expect(formatScanSummaryMessage(summary({ addedCount: 9, highlights }))).toBe('Added 9 books: Chrysalis (3), Standalone, A, B, C and 2 more.');
+  });
+
+  it('uses singular and plural book counts', () => {
+    expect(formatBookCount(1)).toBe('1 book');
+    expect(formatBookCount(3)).toBe('3 books');
+    expect(formatScanSummaryMessage(summary({ changedCount: 1 }))).toBe('Updated 1 book.');
+  });
+
+  it('adds counts together when folding into an unread summary instead of replacing them', () => {
+    const merged = mergeScanSummaries(
+      summary({ addedCount: 3, highlights: [{ label: 'Chrysalis', count: 3 }] }),
+      summary({ addedCount: 1, changedCount: 2, highlights: [{ label: 'Chrysalis', count: 1 }], singleBookId: 9 }),
+    );
+
+    expect(merged).toMatchObject({ addedCount: 4, changedCount: 2, highlights: [{ label: 'Chrysalis', count: 4 }], singleBookId: null });
+    expect(formatScanSummaryMessage(merged)).toBe('Added 4 books: Chrysalis (4). Updated 2 books.');
+  });
+
+  it('names sampled series without per-series counts that would undercount a large import', () => {
+    const sampled = summary({
+      addedCount: 4300,
+      highlights: [
+        { label: 'Chrysalis', count: 150 },
+        { label: 'Mother of Learning', count: 50 },
+      ],
+      sampled: true,
+    });
+
+    expect(formatScanSummaryMessage(sampled)).toBe('Added 4300 books, including Chrysalis, Mother of Learning.');
+    expect(mergeScanSummaries(summary({ addedCount: 2, highlights: [{ label: 'Chrysalis', count: 2 }] }), sampled).sampled).toBe(true);
   });
 });

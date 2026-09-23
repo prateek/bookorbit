@@ -24,7 +24,7 @@ import { NotificationType } from '@bookorbit/types';
 import { AchievementEventsService, ACHIEVEMENT_EVENT_LIBRARY_CATALOG_CHANGED } from '../achievement/achievement-events.service';
 import { BookMetadataFetchOrchestratorService } from '../book-metadata-fetch/book-metadata-fetch-orchestrator.service';
 import { MetadataService } from '../metadata/metadata.service';
-import { NotificationService } from '../notification/notification.service';
+import { NotificationService, type NotificationContent } from '../notification/notification.service';
 import { ScanGateway } from './scan.gateway';
 import { ScanJobStore } from './scan-job-store.service';
 import { basename, dirname, relative, sep } from 'path';
@@ -132,6 +132,12 @@ interface ScanCounts {
   missingCount: number;
 }
 
+/** Which books a scan created or changed, for the notification. The counts above tally files. */
+interface ScanChangeLog {
+  importedBookIds: number[];
+  changedBookCount: number;
+}
+
 type ScannerMetadataSource = (typeof SCANNER_METADATA_SOURCES)[number];
 
 interface RegisteredFile {
@@ -217,6 +223,106 @@ function formatBooksRestoredMessage(count: number): string {
 }
 
 const SCAN_HISTORY_LIMIT = 10;
+const SCAN_NOTIFICATION_HIGHLIGHT_LIMIT = 5;
+// Titles for the "what was added" line come from one bounded card lookup, not every import.
+const SCAN_NOTIFICATION_TITLE_SAMPLE = 200;
+
+interface ScanNotificationHighlight {
+  label: string;
+  count: number;
+}
+
+/** What a library-change notification says, kept in its meta so an unread one can be folded into. */
+export interface ScanNotificationSummary {
+  libraryId: number;
+  addedCount: number;
+  changedCount: number;
+  highlights: ScanNotificationHighlight[];
+  /** Set while exactly one book is new, so tapping the notification can open it directly. */
+  singleBookId: number | null;
+  /** Highlights came from a title sample, so their per-series counts undercount and are not shown. */
+  sampled?: boolean;
+}
+
+export function formatBookCount(count: number): string {
+  return count === 1 ? '1 book' : `${count} books`;
+}
+
+function topHighlights(counts: Map<string, number>): ScanNotificationHighlight[] {
+  return [...counts]
+    .map(([label, count]) => ({ label, count }))
+    .sort((left, right) => right.count - left.count)
+    .slice(0, SCAN_NOTIFICATION_HIGHLIGHT_LIMIT);
+}
+
+/** Series names stand in for their entries, so eleven new chapters of one serial read as one line. */
+export function buildScanHighlights(rows: Array<{ title: string | null; seriesName: string | null }>): ScanNotificationHighlight[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const label = row.seriesName?.trim() || row.title?.trim();
+    if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return topHighlights(counts);
+}
+
+export function mergeScanSummaries(previous: ScanNotificationSummary, next: ScanNotificationSummary): ScanNotificationSummary {
+  const counts = new Map<string, number>();
+  for (const highlight of [...previous.highlights, ...next.highlights]) {
+    counts.set(highlight.label, (counts.get(highlight.label) ?? 0) + highlight.count);
+  }
+  const addedCount = previous.addedCount + next.addedCount;
+  return {
+    libraryId: next.libraryId,
+    addedCount,
+    changedCount: previous.changedCount + next.changedCount,
+    highlights: topHighlights(counts),
+    singleBookId: addedCount === 1 ? (next.singleBookId ?? previous.singleBookId) : null,
+    sampled: previous.sampled === true || next.sampled === true,
+  };
+}
+
+export function formatScanSummaryMessage(summary: ScanNotificationSummary): string {
+  const sentences: string[] = [];
+  if (summary.addedCount > 0) {
+    let added = `Added ${formatBookCount(summary.addedCount)}`;
+    if (summary.highlights.length > 0 && summary.sampled) {
+      added += `, including ${summary.highlights.map((highlight) => highlight.label).join(', ')}`;
+    } else if (summary.highlights.length > 0) {
+      const listed = summary.highlights.map((highlight) => (highlight.count > 1 ? `${highlight.label} (${highlight.count})` : highlight.label));
+      const remaining = summary.addedCount - summary.highlights.reduce((sum, highlight) => sum + highlight.count, 0);
+      added += `: ${listed.join(', ')}${remaining > 0 ? ` and ${remaining} more` : ''}`;
+    }
+    sentences.push(added);
+  }
+  if (summary.changedCount > 0) sentences.push(`Updated ${formatBookCount(summary.changedCount)}`);
+  return sentences.length > 0 ? `${sentences.join('. ')}.` : '';
+}
+
+function parseScanSummary(meta: Record<string, unknown> | null | undefined, libraryId: number): ScanNotificationSummary | null {
+  const summary = meta?.summary as Partial<ScanNotificationSummary> | undefined;
+  if (!summary || summary.libraryId !== libraryId) return null;
+  if (typeof summary.addedCount !== 'number' || typeof summary.changedCount !== 'number' || !Array.isArray(summary.highlights)) return null;
+  const highlights = summary.highlights.filter(
+    (highlight): highlight is ScanNotificationHighlight => typeof highlight?.label === 'string' && typeof highlight?.count === 'number',
+  );
+  return {
+    libraryId,
+    addedCount: summary.addedCount,
+    changedCount: summary.changedCount,
+    highlights,
+    singleBookId: typeof summary.singleBookId === 'number' ? summary.singleBookId : null,
+    sampled: summary.sampled === true,
+  };
+}
+
+function scanSummaryContent(summary: ScanNotificationSummary, libraryLabel: string, extraMeta: Record<string, unknown>): NotificationContent {
+  return {
+    title: summary.addedCount > 0 ? `New in ${libraryLabel}` : `${libraryLabel} updated`,
+    message: formatScanSummaryMessage(summary),
+    actionUrl: summary.singleBookId != null ? `/book/${summary.singleBookId}` : `/library/${summary.libraryId}`,
+    meta: { ...extraMeta, libraryId: summary.libraryId, summary },
+  };
+}
 
 @Injectable()
 export class ScannerService implements OnApplicationBootstrap {
@@ -279,7 +385,7 @@ export class ScannerService implements OnApplicationBootstrap {
   private readonly bookEmitTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
   // ── Watcher change notification buffer (debounced, 30s) ───────────────────
-  private readonly watcherNotifyBuffer = new Map<number, { added: number; removed: number }>();
+  private readonly watcherNotifyBuffer = new Map<number, { addedBookIds: Set<number>; changed: number }>();
   private readonly watcherNotifyTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
   // ── Missing book notification buffer (debounced, 1s) ──────────────────────
@@ -452,10 +558,10 @@ export class ScannerService implements OnApplicationBootstrap {
     }
   }
 
-  bufferWatcherNotification(libraryId: number, delta: { added?: number; removed?: number }): void {
-    const current = this.watcherNotifyBuffer.get(libraryId) ?? { added: 0, removed: 0 };
-    current.added += delta.added ?? 0;
-    current.removed += delta.removed ?? 0;
+  bufferWatcherNotification(libraryId: number, delta: { addedBookIds?: number[]; changed?: number }): void {
+    const current = this.watcherNotifyBuffer.get(libraryId) ?? { addedBookIds: new Set<number>(), changed: 0 };
+    for (const bookId of delta.addedBookIds ?? []) current.addedBookIds.add(bookId);
+    current.changed += delta.changed ?? 0;
     this.watcherNotifyBuffer.set(libraryId, current);
 
     const existing = this.watcherNotifyTimers.get(libraryId);
@@ -613,26 +719,53 @@ export class ScannerService implements OnApplicationBootstrap {
     this.watcherNotifyTimers.delete(libraryId);
     const delta = this.watcherNotifyBuffer.get(libraryId);
     this.watcherNotifyBuffer.delete(libraryId);
-    if (!delta || (delta.added === 0 && delta.removed === 0)) return;
+    if (!delta || (delta.addedBookIds.size === 0 && delta.changed === 0)) return;
 
-    this.scannerRepo
-      .findLibraryName(libraryId)
-      .then((name) => {
-        const label = name ?? `Library ${libraryId}`;
-        const parts: string[] = [];
-        if (delta.added > 0) parts.push(`${delta.added} added`);
-        if (delta.removed > 0) parts.push(`${delta.removed} removed`);
-        return this.notificationService.notify({
-          type: NotificationType.ScanCompleted,
-          title: `${label} updated`,
-          message: parts.join(', '),
-          scope: { kind: 'library', libraryId },
-          meta: { libraryId },
-        });
-      })
-      .catch(() => {});
-
+    void this.notifyLibraryChanges(libraryId, [...delta.addedBookIds], delta.changed, { triggeredBy: 'watcher' });
     this.emitLibraryCatalogChangedForLibrary(libraryId);
+  }
+
+  /**
+   * One "what changed in this library" notification for full scans and watcher batches alike. They
+   * share a group, so an unread one is folded into rather than overwritten.
+   */
+  private async notifyLibraryChanges(
+    libraryId: number,
+    addedBookIds: number[],
+    changedCount: number,
+    extraMeta: Record<string, unknown>,
+  ): Promise<void> {
+    if (addedBookIds.length === 0 && changedCount === 0) return;
+    const startedAt = Date.now();
+    try {
+      const [libraryName, cardData] = await Promise.all([
+        this.scannerRepo.findLibraryName(libraryId),
+        addedBookIds.length > 0 ? this.scannerRepo.findBookCardData(addedBookIds.slice(0, SCAN_NOTIFICATION_TITLE_SAMPLE)) : null,
+      ]);
+      const libraryLabel = libraryName ?? `Library ${libraryId}`;
+      const summary: ScanNotificationSummary = {
+        libraryId,
+        addedCount: addedBookIds.length,
+        changedCount,
+        highlights: buildScanHighlights(cardData?.rows ?? []),
+        singleBookId: addedBookIds.length === 1 ? addedBookIds[0] : null,
+        sampled: addedBookIds.length > SCAN_NOTIFICATION_TITLE_SAMPLE,
+      };
+
+      await this.notificationService.notify({
+        type: NotificationType.ScanCompleted,
+        ...scanSummaryContent(summary, libraryLabel, extraMeta),
+        scope: { kind: 'library', libraryId },
+        collapse: (unread) => {
+          const previous = parseScanSummary(unread.meta, libraryId);
+          return scanSummaryContent(previous ? mergeScanSummaries(previous, summary) : summary, libraryLabel, extraMeta);
+        },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `[scanner.notify_library_changes] [fail] libraryId=${libraryId} added=${addedBookIds.length} changed=${changedCount} durationMs=${Date.now() - startedAt} errorClass=${err instanceof Error ? err.name : 'Error'} error="${sanitizeLogValue(err instanceof Error ? err.message : String(err))}" - library change notification failed`,
+      );
+    }
   }
 
   private emitLibraryCatalogChangedForUsers(libraryId: number, userIds: number[]): void {
@@ -1047,13 +1180,15 @@ export class ScannerService implements OnApplicationBootstrap {
     );
   }
 
-  private emitTargetedScanResult(libraryId: number, result: { becameVisible: boolean; added: number; bookId: number }): void {
+  private emitTargetedScanResult(libraryId: number, result: { becameVisible: boolean; added: number; bookId: number; created: boolean }): void {
     if (result.becameVisible) {
       this.bufferBookForEmit(libraryId, result.bookId);
       this.flushBookEmitBuffer(libraryId);
     }
-    if (result.added > 0) {
-      this.bufferWatcherNotification(libraryId, { added: result.added });
+    if (result.created) {
+      this.bufferWatcherNotification(libraryId, { addedBookIds: [result.bookId] });
+    } else if (result.added > 0) {
+      this.bufferWatcherNotification(libraryId, { changed: 1 });
     }
   }
 
@@ -1312,6 +1447,7 @@ export class ScannerService implements OnApplicationBootstrap {
     const allowed = allowedFormats.length > 0 ? new Set(allowedFormats) : null;
 
     const totals: ScanCounts = { addedCount: 0, updatedCount: 0, missingCount: 0 };
+    const changes: ScanChangeLog = { importedBookIds: [], changedBookCount: 0 };
 
     try {
       this.scanJobStore.setTotal(libraryId, 0);
@@ -1385,6 +1521,7 @@ export class ScannerService implements OnApplicationBootstrap {
           addedAtSource,
           skippedDirs,
           unchangedDirs,
+          changes,
         );
         totals.addedCount += counts.addedCount;
         totals.updatedCount += counts.updatedCount;
@@ -1411,21 +1548,11 @@ export class ScannerService implements OnApplicationBootstrap {
       this.emitFromStore(libraryId, jobId, 'completed');
 
       const scanChangedSomething = totals.addedCount > 0 || totals.updatedCount > 0 || totals.missingCount > 0;
-      // A scheduled scan that found nothing has nothing to report; announcing it every cron tick is
-      // what buried real failures under ~96 notifications a day. A manual scan still confirms, because
-      // the user asked a question and the live progress toast only fires when books were added.
+      // Only books that arrived or changed are worth a bell, whoever started the scan: an empty
+      // scan announced every cron tick buried real failures, and the scan panel already reports a
+      // manual scan's result. Missing books raise their own BooksUnavailable notification.
       const triggeredBy = this.scanJobStore.get(libraryId)?.triggeredBy ?? 'manual';
-      if (scanChangedSomething || triggeredBy === 'manual') {
-        this.notificationService
-          .notify({
-            type: NotificationType.ScanCompleted,
-            title: 'Library scan completed',
-            message: `Added ${totals.addedCount} books, updated ${totals.updatedCount}, ${totals.missingCount} missing`,
-            scope: { kind: 'library', libraryId },
-            meta: { libraryId, jobId, ...totals, triggeredBy },
-          })
-          .catch(() => {});
-      }
+      void this.notifyLibraryChanges(libraryId, changes.importedBookIds, changes.changedBookCount, { jobId, triggeredBy });
 
       if (scanChangedSomething) {
         this.emitLibraryCatalogChangedForLibrary(libraryId);
@@ -1471,6 +1598,7 @@ export class ScannerService implements OnApplicationBootstrap {
     addedAtSource: AddedAtSource,
     skippedDirs: Set<string> = new Set(),
     unchangedDirs: Set<string> = new Set(),
+    changes?: ScanChangeLog,
   ): Promise<ScanCounts> {
     const event = 'scanner.scan_folder_candidates';
     const startedAt = Date.now();
@@ -1506,6 +1634,7 @@ export class ScannerService implements OnApplicationBootstrap {
         );
         seenBookIds.add(result.bookId);
         if (result.created) importedBookIds.push(result.bookId);
+        else if (changes && result.updated > 0) changes.changedBookCount++;
         for (const fid of result.retainedFileIds) allRetainedFileIds.add(fid);
         counts.addedCount += result.added;
         counts.updatedCount += result.updated;
@@ -1560,6 +1689,7 @@ export class ScannerService implements OnApplicationBootstrap {
       }
 
       await this.scheduleImportedBookMetadataFetch(libraryId, importedBookIds);
+      changes?.importedBookIds.push(...importedBookIds);
 
       this.logger.log(
         `[${event}] [end] libraryId=${libraryId} jobId=${jobId} libraryFolderId=${libraryFolderId} durationMs=${Date.now() - startedAt} addedCount=${counts.addedCount} updatedCount=${counts.updatedCount} missingCount=${counts.missingCount} - folder candidate scan completed`,

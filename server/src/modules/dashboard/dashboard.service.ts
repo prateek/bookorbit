@@ -8,12 +8,42 @@ import { BookReadService } from '../book/book-read.service';
 import { assembleBookCards } from '../book/utils/assemble-book-cards';
 import { SmartScopeService } from '../smart-scope/smart-scope.service';
 import { LibraryService } from '../library/library.service';
-import { DashboardRepository } from './dashboard.repository';
+import { DashboardRepository, type RecentlyAddedGroup } from './dashboard.repository';
 import { resolveDashboardLibraryIds } from './dashboard-library-scope';
 import { DASHBOARD_SCROLLER_MAX_LIMIT, type DashboardScrollerBatchDto, type DashboardScrollerBatchItemDto } from './dto/dashboard-scroller-batch.dto';
 import { ScrollerType } from './dto/scroller-type.enum';
 
 const SCROLLER_QUERY_CONCURRENCY = 3;
+
+interface ScrollerSelection {
+  bookIds: number[];
+  /** Recently added only: the series each listed book stands for, keyed by that book's id. */
+  groupsByBookId?: Map<number, RecentlyAddedGroup>;
+}
+
+function toSelection(groups: RecentlyAddedGroup[]): ScrollerSelection {
+  return { bookIds: groups.map((group) => group.bookId), groupsByBookId: new Map(groups.map((group) => [group.bookId, group])) };
+}
+
+/**
+ * A recently added card that stands for several new entries of one series carries them as a
+ * collapsed series, the same shape library grids use, so clients can say how many are new.
+ */
+function withRecentlyAddedGroup(card: BookCard, group: RecentlyAddedGroup | undefined): BookCard {
+  if (!group || group.seriesId == null || group.bookCount < 2) return card;
+  return {
+    ...card,
+    collapsedSeries: {
+      bookCount: group.bookCount,
+      readCount: 0,
+      coverBookIds: group.bookIds.slice(0, 4),
+      seriesLatestAddedAt: group.latestAddedAt.toISOString(),
+      firstVolumeBookId: group.bookId,
+      latestVolumeBookId: group.lastBookId,
+      firstUnreadBookId: null,
+    },
+  };
+}
 
 @Injectable()
 export class DashboardService {
@@ -50,15 +80,15 @@ export class DashboardService {
     const selections = await mapWithConcurrency(dto.items, SCROLLER_QUERY_CONCURRENCY, async (item) => {
       const selectionStartedAt = Date.now();
       try {
-        const bookIds = await this.findBatchScrollerBookIds(item, user, accessibleLibraryIds);
-        return { item, bookIds, failed: false };
+        const selection = await this.findBatchScrollerBookIds(item, user, accessibleLibraryIds);
+        return { item, ...selection, failed: false };
       } catch (error) {
         const errorClass = error instanceof Error ? error.constructor.name : typeof error;
         const message = sanitizeLogValue(error instanceof Error ? error.message : error);
         this.logger.warn(
           `[dashboard.scroller_query] [fail] userId=${user.id} type=${item.type} smartScopeId=${item.smartScopeId ?? 0} durationMs=${Date.now() - selectionStartedAt} errorClass=${errorClass} error="${message}" - scroller selection failed`,
         );
-        return { item, bookIds: [] as number[], failed: true };
+        return { item, bookIds: [] as number[], groupsByBookId: undefined, failed: true };
       }
     });
 
@@ -80,9 +110,12 @@ export class DashboardService {
       throw error;
     }
     const cardsById = new Map(cards.map((card) => [card.id, card]));
-    const items = selections.map(({ item, bookIds, failed }) => ({
+    const items = selections.map(({ item, bookIds, groupsByBookId, failed }) => ({
       id: item.id,
-      books: bookIds.map((id) => cardsById.get(id)).filter((card): card is BookCard => card != null),
+      books: bookIds
+        .map((id) => cardsById.get(id))
+        .filter((card): card is BookCard => card != null)
+        .map((card) => withRecentlyAddedGroup(card, groupsByBookId?.get(card.id))),
       failed,
     }));
 
@@ -92,24 +125,46 @@ export class DashboardService {
     return { items };
   }
 
-  private async findBatchScrollerBookIds(item: DashboardScrollerBatchItemDto, user: RequestUser, accessibleLibraryIds: number[]): Promise<number[]> {
+  private async findBatchScrollerBookIds(
+    item: DashboardScrollerBatchItemDto,
+    user: RequestUser,
+    accessibleLibraryIds: number[],
+  ): Promise<ScrollerSelection> {
     const startedAt = Date.now();
     this.logger.debug(
       `[dashboard.scroller_query] [start] userId=${user.id} type=${item.type} smartScopeId=${item.smartScopeId ?? 0} limit=${item.limit} - scroller selection started`,
     );
 
-    let bookIds: number[];
+    let selection: ScrollerSelection;
     if (item.type === ScrollerType.SMART_SCOPE) {
       const smartScopeId = this.assertSmartScopeId(item.smartScopeId);
-      bookIds = await this.smartScopeService.executeSmartScopeBookIds(smartScopeId, user, item.limit, accessibleLibraryIds);
+      selection = { bookIds: await this.smartScopeService.executeSmartScopeBookIds(smartScopeId, user, item.limit, accessibleLibraryIds) };
     } else {
-      bookIds = await this.findScrollerBookIdsForLibraries(item.type, user, item.limit, accessibleLibraryIds);
+      selection = await this.findShelfSelection(item.type, user, item.limit, accessibleLibraryIds);
     }
 
     this.logger.debug(
-      `[dashboard.scroller_query] [end] userId=${user.id} type=${item.type} smartScopeId=${item.smartScopeId ?? 0} resultCount=${bookIds.length} durationMs=${Date.now() - startedAt} - scroller selection completed`,
+      `[dashboard.scroller_query] [end] userId=${user.id} type=${item.type} smartScopeId=${item.smartScopeId ?? 0} resultCount=${selection.bookIds.length} durationMs=${Date.now() - startedAt} - scroller selection completed`,
     );
-    return bookIds;
+    return selection;
+  }
+
+  /**
+   * The web shelves fold recently added series into one card each. The flat id list stays for
+   * clients that read {@link getScrollerBookIds}, whose feeds list every new book.
+   */
+  private async findShelfSelection(
+    type: Exclude<ScrollerType, 'smart-scope'>,
+    user: RequestUser,
+    clampedLimit: number,
+    accessibleLibraryIds: number[],
+  ): Promise<ScrollerSelection> {
+    if (type === ScrollerType.RECENTLY_ADDED) {
+      if (accessibleLibraryIds.length === 0) return { bookIds: [] };
+      const contentFilters = user.isSuperuser ? undefined : user.contentFilters;
+      return toSelection(await this.dashboardRepo.findRecentlyAddedGroups(accessibleLibraryIds, clampedLimit, contentFilters));
+    }
+    return { bookIds: await this.findScrollerBookIdsForLibraries(type, user, clampedLimit, accessibleLibraryIds) };
   }
 
   async getScroller(type: ScrollerType, user: RequestUser, limit: number, smartScopeId?: number): Promise<DashboardScrollerResponse> {
@@ -127,10 +182,10 @@ export class DashboardService {
     // Resolved once and handed to both halves. The selection and the count have to agree about
     // which libraries are in play, and asking twice invites them to disagree.
     const accessibleLibraryIds = resolveDashboardLibraryIds(await this.libraryService.findAccessibleLibraryIds(user), user);
-    const bookIds = await this.findScrollerBookIdsForLibraries(type, user, clampedLimit, accessibleLibraryIds);
-    const [books, total] = await Promise.all([this.loadCardsByIds(bookIds, user.id), this.countScroller(type, user, accessibleLibraryIds)]);
+    const { bookIds, groupsByBookId } = await this.findShelfSelection(type, user, clampedLimit, accessibleLibraryIds);
+    const [cards, total] = await Promise.all([this.loadCardsByIds(bookIds, user.id), this.countScroller(type, user, accessibleLibraryIds)]);
 
-    return { books, total };
+    return { books: cards.map((card) => withRecentlyAddedGroup(card, groupsByBookId?.get(card.id))), total };
   }
 
   /**

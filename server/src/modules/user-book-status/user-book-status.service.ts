@@ -261,6 +261,7 @@ export class UserBookStatusService {
         occurredOn: this.dayKeyFor(activity.occurredAt, timeZone),
         origin: activity.origin ?? 'bookorbit',
         progress: normalizedPercentage,
+        readThreshold,
         finishThreshold: normalizedFinishThreshold,
         strongRereadEvidence: activity.strongRereadEvidence === true,
         meaningfulActivity: activity.meaningfulActivity === true,
