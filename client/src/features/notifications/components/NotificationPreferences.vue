@@ -11,6 +11,7 @@ import { api } from '@/lib/api'
 import SettingsPageHeader from '@/features/settings/SettingsPageHeader.vue'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import NotificationLevelSegmented from './NotificationLevelSegmented.vue'
+import PushNotificationToggle from '@/features/push/components/PushNotificationToggle.vue'
 import { NOTIFICATION_CATEGORY_GROUPS, NOTIFICATION_CATEGORY_ICONS } from '../lib/notification-category-groups'
 
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
@@ -154,6 +155,8 @@ async function handleSave() {
         </div>
       </div>
     </section>
+
+    <PushNotificationToggle />
 
     <section aria-labelledby="notification-group-app" class="space-y-2">
       <h2 id="notification-group-app" class="settings-group-label">{{ t('notifications.preferences.groups.app') }}</h2>

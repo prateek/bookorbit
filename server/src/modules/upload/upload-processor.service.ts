@@ -12,6 +12,7 @@ import * as schema from '../../db/schema';
 import { bookFiles, bookMetadata, books, uploadSessions } from '../../db/schema';
 import { BookMetadataFetchOrchestratorService } from '../book-metadata-fetch/book-metadata-fetch-orchestrator.service';
 import { MetadataService } from '../metadata/metadata.service';
+import { NewBooksPushNotifier } from '../push/new-books-push.notifier';
 import { computeFileHash } from '../scanner/lib/hash';
 import { inspectEpubMediaOverlayFields } from '../reader/epub/epub-media-overlay-capability';
 
@@ -77,6 +78,7 @@ export class UploadProcessorService {
     @Inject(DB) private readonly db: Db,
     private readonly metadataService: MetadataService,
     @Optional() private readonly autoFetchOrchestrator?: BookMetadataFetchOrchestratorService,
+    @Optional() private readonly newBooksPush?: NewBooksPushNotifier,
   ) {}
 
   private async inspectMediaOverlayFields(absolutePath: string, format: string | null) {
@@ -137,7 +139,7 @@ export class UploadProcessorService {
     const measured: MeasuredFile[] = [];
     for (const file of files) measured.push(await this.measureFile(file.absolutePath, file.format));
 
-    return this.db.transaction(async (tx) => {
+    const records = await this.db.transaction(async (tx) => {
       const bookIds: number[] = [];
       const createdBookIds: number[] = [];
       const attachedFileIds: number[] = [];
@@ -154,6 +156,9 @@ export class UploadProcessorService {
 
       return { bookIds, createdBookIds, attachedFileIds };
     });
+    // Safe even if the caller rolls the unit back: the push batch only counts books still present when it flushes.
+    this.newBooksPush?.enqueue(libraryId, records.createdBookIds);
+    return records;
   }
 
   /**
@@ -308,6 +313,7 @@ export class UploadProcessorService {
     if (METADATA_FORMATS.has(format)) {
       await this.runMetadataExtraction(bookId, absolutePath, format, 'upload.extract_metadata', startedAt);
     }
+    this.newBooksPush?.enqueue(libraryId, [bookId]);
 
     if (!this.autoFetchOrchestrator) {
       this.logger.debug(

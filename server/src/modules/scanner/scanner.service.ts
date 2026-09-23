@@ -25,6 +25,7 @@ import { AchievementEventsService, ACHIEVEMENT_EVENT_LIBRARY_CATALOG_CHANGED } f
 import { BookMetadataFetchOrchestratorService } from '../book-metadata-fetch/book-metadata-fetch-orchestrator.service';
 import { MetadataService } from '../metadata/metadata.service';
 import { NotificationService, type NotificationContent } from '../notification/notification.service';
+import { NewBooksPushNotifier } from '../push/new-books-push.notifier';
 import { ScanGateway } from './scan.gateway';
 import { ScanJobStore } from './scan-job-store.service';
 import { basename, dirname, relative, sep } from 'path';
@@ -337,6 +338,7 @@ export class ScannerService implements OnApplicationBootstrap {
     private readonly selfWriteRegistry: SelfWriteRegistry,
     @Optional() private readonly autoFetchOrchestrator?: BookMetadataFetchOrchestratorService,
     @Optional() private readonly achievementEvents?: AchievementEventsService,
+    @Optional() private readonly newBooksPush?: NewBooksPushNotifier,
   ) {}
 
   /**
@@ -513,7 +515,8 @@ export class ScannerService implements OnApplicationBootstrap {
     });
   }
 
-  private bufferBookForEmit(libraryId: number, bookId: number): void {
+  private bufferBookForEmit(libraryId: number, bookId: number, options: { push?: boolean } = {}): void {
+    if (options.push !== false) this.newBooksPush?.enqueue(libraryId, [bookId]);
     let ids = this.bookEmitBuffer.get(libraryId);
     if (!ids) {
       ids = [];
@@ -1639,7 +1642,8 @@ export class ScannerService implements OnApplicationBootstrap {
         counts.addedCount += result.added;
         counts.updatedCount += result.updated;
         if (result.becameVisible) {
-          this.bufferBookForEmit(libraryId, result.bookId);
+          // A folder's first scan is a bulk import; pushing every few minutes while it runs is noise.
+          this.bufferBookForEmit(libraryId, result.bookId, { push: !isFirstScan });
           this.flushBookEmitBuffer(libraryId);
         }
 

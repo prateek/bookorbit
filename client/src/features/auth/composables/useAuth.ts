@@ -14,6 +14,7 @@ import { resetSmartScopes } from '@/features/smart-scope/composables/useSmartSco
 import { resetCollections } from '@/features/collection/composables/useCollections'
 import { resetBrowseCounts } from '@/composables/useBrowseCounts'
 import { resetBookRequestSummary } from '@/features/book-requests/composables/useBookRequestSummary'
+import { detachDevicePushSubscription } from '@/features/push/composables/usePushNotifications'
 
 const SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
@@ -214,6 +215,7 @@ export function useAuth() {
 
   async function logout(): Promise<void> {
     try {
+      await detachDevicePushSubscription()
       await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined)
     } finally {
       clearAuth()

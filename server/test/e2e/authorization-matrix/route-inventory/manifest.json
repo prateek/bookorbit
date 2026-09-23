@@ -1,5 +1,5 @@
 {
-  "totalRoutes": 613,
+  "totalRoutes": 616,
   "byPermission": {
     "(none)": 261,
     "Permission.ManageMetadataConfig": 34,
@@ -11,8 +11,8 @@
     "Permission.ManageUsers": 13,
     "Permission.ManageEmail": 8,
     "Permission.KoboSync": 7,
-    "Permission.NotificationAccess": 6,
-    "Permission.DemoRestricted": 6,
+    "Permission.NotificationAccess": 9,
+    "Permission.DemoRestricted": 9,
     "Permission.KoreaderSync": 8,
     "Permission.OpdsAccess": 4,
     "Permission.ViewAuditLog": 1,
