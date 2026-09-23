@@ -9272,8 +9272,6 @@
       "resultCount": "{shown} jostakin {total}",
       "noMatches": "Ei osumia",
       "noMatchesHint": "Kokeile toista hakutermiä.",
-      "bookCount": "Kirjat: {count}",
-      "showCount": "Shows: {count}",
       "librariesEmptyHint": "Luo kirjasto aloittaaksesi kirjojen lisäämisen.",
       "podcastLibrariesEmptyHint": "Create a podcast library to start following shows.",
       "smartScopesEmptyHint": "Smart scopes tallentaa joukon suodattimia, joita käytät usein.",

@@ -5777,6 +5777,10 @@
       "showMore": "Show more",
       "lookingUpMetadata": "Looking up author metadata...",
       "noBiography": "No biography available. Use the menu to refresh metadata.",
+      "noBiographyLabel": "No biography",
+      "actionsFor": "Actions for {name}",
+      "latestChapter": "latest chapter {when}",
+      "latestBook": "last added {when}",
       "previewFrom": "Preview from {provider}. Save metadata to persist it.",
       "booksLabel": "Books",
       "lastAdded": "Last Added",
@@ -5808,6 +5812,11 @@
         "bookCount": "Book Count",
         "recentAdditions": "Recent Additions",
         "lastEnriched": "Last Enriched"
+      },
+      "quickSort": {
+        "recent": "Recently updated",
+        "name": "Name",
+        "mostBooks": "Most books"
       },
       "empty": {
         "title": "No authors found",
@@ -5892,6 +5901,25 @@
       },
       "books": {
         "heading": "Books",
+        "headingSerials": "Serials",
+        "sortButton": "Sort",
+        "sortSheetTitle": "Sort by",
+        "sortOptions": {
+          "recent": "Recently updated",
+          "oldest": "First added",
+          "title": "Title",
+          "published": "Newest published"
+        },
+        "viewGrid": "Grid view",
+        "viewList": "List view",
+        "caughtUp": "Caught up",
+        "unreadCount": "{count, plural, one {# unread} other {# unread}}",
+        "latestChapter": "latest Ch {index}",
+        "latestNumber": "latest #{index}",
+        "continue": "Continue",
+        "start": "Start",
+        "continueAria": "Continue {name}",
+        "startAria": "Start {name}",
         "allLibraries": "All Libraries",
         "asc": "Asc",
         "desc": "Desc",
@@ -5931,6 +5959,9 @@
     "index": {
       "bookCount": "{count, plural, =0 {no books} one {# book} other {# books}}",
       "rowLabel": "{name}, {count, plural, =0 {no books} one {# book} other {# books}}",
+      "rowLabelSummary": "{name}, {summary}",
+      "serialSummary": "{series, plural, one {# serial} other {# serials}} · {chapters, plural, one {# chapter} other {# chapters}}",
+      "seriesSummary": "{series, plural, one {# series} other {# series}} · {books, plural, one {# book} other {# books}}",
       "actionsFor": "Actions for {name}",
       "refreshing": "Refreshing metadata for {name}",
       "deleting": "Deleting {name}"
@@ -9475,8 +9506,13 @@
       "resultCount": "{shown} of {total}",
       "noMatches": "No matches",
       "noMatchesHint": "Try a different search term.",
-      "bookCount": "Books: {count}",
-      "showCount": "Shows: {count}",
+      "bookCount": "{count, plural, one {# book} other {# books}}",
+      "chapterCount": "{count, plural, one {# chapter} other {# chapters}}",
+      "seriesCount": "{count, plural, one {# series} other {# series}}",
+      "unreadCount": "{count, plural, one {# unread} other {# unread}}",
+      "allRead": "All read",
+      "sortAria": "Sort: {sort}",
+      "showCount": "{count, plural, one {# show} other {# shows}}",
       "librariesEmptyHint": "Create a library to start adding books.",
       "podcastLibrariesEmptyHint": "Create a podcast library to start following shows.",
       "smartScopesEmptyHint": "Smart scopes save a set of filters you use often.",
@@ -13173,7 +13209,8 @@
         "noSearchMatch": "No books match this search",
         "noSearchMatchHint": "Try a different search term or clear the search.",
         "noBooks": "No books in this collection",
-        "noBooksHint": "Select books from your library and add them here."
+        "noBooksHint": "Select books from your library and add them here.",
+        "browseSeries": "Browse series"
       }
     },
     "library": {

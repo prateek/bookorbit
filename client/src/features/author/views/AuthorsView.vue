@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useMediaQuery } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { formatNumber } from '@/i18n/formatters'
 import { useRoute, useRouter } from 'vue-router'
@@ -94,7 +95,17 @@ const sortLabels = computed<Record<AuthorListSort, string>>(() => ({
   lastEnrichedAt: t('author.list.sort.lastEnriched'),
 }))
 
-const isDefaultSort = computed(() => sort.value === 'name' && order.value === 'asc')
+/**
+ * Touch screens open on the authors who posted most recently, since that is what a reader
+ * scanning for new chapters wants; desktop keeps the alphabetical index. The URL only records a
+ * sort that differs from this device's default.
+ */
+const prefersRecent = useMediaQuery('(pointer: coarse)')
+const defaultSort = computed<{ sort: AuthorListSort; order: SortDirection }>(() =>
+  prefersRecent.value ? { sort: 'lastAddedAt', order: 'desc' } : { sort: 'name', order: 'asc' },
+)
+const isDefaultSort = computed(() => sort.value === defaultSort.value.sort && order.value === defaultSort.value.order)
+
 const AUTHOR_SORT_FIELDS: AuthorListSort[] = ['name', 'sortName', 'bookCount', 'lastAddedAt', 'lastEnrichedAt']
 const AUTHOR_QUICK_FILTERS: AuthorQuickFilter[] = ['all', 'noPortrait', 'multipleBooks', 'recentlyAdded', 'noSortName']
 
@@ -175,8 +186,10 @@ const coverFallback = computed(() => authorCoverFallback.value && quickFilter.va
 /* ── sectioning ─────────────────────────────────────────────────────────────
    Only the two alphabetical sorts have letter sections, and each one is its own
    <section> so the sticky heading is bounded by it. Sharing a containing block
-   stacks every heading at the top of the scroller instead of replacing it. */
-const sectioned = computed(() => isLetterSort(sort.value))
+   stacks every heading at the top of the scroller instead of replacing it. A short
+   list reads better flat: seven authors under seven headings is mostly headings. */
+const SECTION_MIN_AUTHORS = 30
+const sectioned = computed(() => isLetterSort(sort.value) && total.value > SECTION_MIN_AUTHORS)
 
 const sections = computed(() => {
   if (!sectioned.value) return [{ letter: '', authors: items.value }]
@@ -243,11 +256,13 @@ function showRefreshResultToast(updated: { imageUrl?: string | null }) {
 }
 
 function parseSort(value: unknown): AuthorListSort {
-  return value === 'sortName' || value === 'bookCount' || value === 'lastAddedAt' || value === 'lastEnrichedAt' || value === 'name' ? value : 'name'
+  return value === 'sortName' || value === 'bookCount' || value === 'lastAddedAt' || value === 'lastEnrichedAt' || value === 'name'
+    ? value
+    : defaultSort.value.sort
 }
 
 function parseOrder(value: unknown): SortDirection {
-  return value === 'desc' || value === 'asc' ? value : 'asc'
+  return value === 'desc' || value === 'asc' ? value : defaultSort.value.order
 }
 
 function parseLibraryId(value: unknown): number | null {
@@ -264,8 +279,8 @@ function syncRouteQuery() {
     name: 'authors',
     query: {
       q: q.value.trim() || undefined,
-      sort: sort.value !== 'name' ? sort.value : undefined,
-      order: order.value !== 'asc' ? order.value : undefined,
+      sort: isDefaultSort.value ? undefined : sort.value,
+      order: isDefaultSort.value ? undefined : order.value,
       libraryId: libraryId.value ? String(libraryId.value) : undefined,
       filter: quickFilter.value !== 'all' ? quickFilter.value : undefined,
     },
@@ -282,8 +297,8 @@ function setSortField(field: AuthorListSort) {
 }
 
 function resetSort() {
-  sort.value = 'name'
-  order.value = 'asc'
+  sort.value = defaultSort.value.sort
+  order.value = defaultSort.value.order
 }
 
 function handleSearchUpdate(value: string) {
@@ -326,8 +341,8 @@ async function clearFilters() {
 
   suppressAutoReload.value = true
   q.value = ''
-  sort.value = 'name'
-  order.value = 'asc'
+  sort.value = defaultSort.value.sort
+  order.value = defaultSort.value.order
   libraryId.value = null
   applyQuickFilter('all')
 
@@ -482,7 +497,7 @@ function handleScroll() {
 onMounted(async () => {
   q.value = typeof route.query.q === 'string' ? route.query.q : ''
   sort.value = parseSort(route.query.sort)
-  order.value = parseOrder(route.query.order)
+  order.value = route.query.sort === undefined ? defaultSort.value.order : parseOrder(route.query.order)
   libraryId.value = parseLibraryId(route.query.libraryId)
   applyQuickFilter(parseQuickFilter(route.query.filter))
 
@@ -719,11 +734,10 @@ defineOptions({ name: 'AuthorsView' })
             <h2
               v-if="sectioned && section.letter"
               :data-letter="section.letter"
-              class="sticky top-0 z-10 mb-1 flex h-7 items-center gap-2.5 bg-linear-to-b from-background from-65% to-transparent"
+              class="sticky top-0 z-10 mb-1 flex h-7 items-center gap-2.5 bg-background"
             >
               <span class="min-w-[0.9rem] font-serif text-[15px] font-semibold leading-none text-foreground">{{ section.letter }}</span>
               <span class="h-px flex-1 bg-border" />
-              <span class="text-[10.5px] font-bold tabular-nums text-muted-foreground">{{ formatNumber(section.authors.length) }}</span>
             </h2>
 
             <div v-if="isGallery" class="grid" :style="gridStyle">

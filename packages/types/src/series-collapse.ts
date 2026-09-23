@@ -1,3 +1,5 @@
+import type { SeriesIndex } from "./series-index";
+
 export type SeriesCollapsePreferences = {
   global: boolean;
   libraries: Record<string, boolean>;
@@ -20,6 +22,8 @@ export type CollapsedSeriesInfo = {
   seriesLatestAddedAt: string | null;
   firstVolumeBookId?: number | null;
   latestVolumeBookId?: number | null;
+  /** The series number of {@link CollapsedSeriesInfo.latestVolumeBookId}, so a serial row can say how far it has run. */
+  latestSeriesIndex?: SeriesIndex | null;
   firstUnreadBookId?: number | null;
 };
 

@@ -9275,8 +9275,6 @@
       "resultCount": "{shown} van {total}",
       "noMatches": "Geen overeenkomsten",
       "noMatchesHint": "Probeer een andere zoekterm.",
-      "bookCount": "Boeken: {count}",
-      "showCount": "Toont: {count}",
       "librariesEmptyHint": "Maak een bibliotheek aan om boeken toe te voegen.",
       "podcastLibrariesEmptyHint": "Maak een podcastbibliotheek om shows te volgen.",
       "smartScopesEmptyHint": "Slimme scopes slaan een reeks filters op die je vaak gebruikt.",

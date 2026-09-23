@@ -7,7 +7,7 @@ function makeService() {
     findPrimaryFilesByBookIds: vi.fn(),
     findCards: vi.fn(),
     findCardsByBookIds: vi.fn(),
-    countWhere: vi.fn(),
+    summarizeWhere: vi.fn(),
     findLibraryIdsByBookIds: vi.fn(),
     findRecommendationTitlesByBookIds: vi.fn(),
     findById: vi.fn(),
@@ -61,11 +61,12 @@ describe('BookReadService', () => {
     const where = {} as never;
     const patch = { title: 'Updated' };
 
-    bookRepo.countWhere.mockResolvedValue(12);
+    const summary = { bookCount: 12, seriesCount: 2, unreadCount: 5 };
+    bookRepo.summarizeWhere.mockResolvedValue(summary);
     bookRepo.updateMetadataFields.mockResolvedValue(undefined);
 
-    await expect(service.countWhere(where)).resolves.toBe(12);
-    expect(bookRepo.countWhere).toHaveBeenCalledWith(where);
+    await expect(service.summarizeWhere(where, 9)).resolves.toBe(summary);
+    expect(bookRepo.summarizeWhere).toHaveBeenCalledWith(where, 9);
 
     await expect(service.updateMetadataFields(3, patch)).resolves.toBeUndefined();
     expect(bookRepo.updateMetadataFields).toHaveBeenCalledWith(3, patch);

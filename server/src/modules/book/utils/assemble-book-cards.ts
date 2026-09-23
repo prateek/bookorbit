@@ -47,6 +47,7 @@ type CollapsedBookRow = BookRow & {
   seriesLatestAddedAt: Date | null;
   firstVolumeBookId: number | null;
   latestVolumeBookId: number | null;
+  latestSeriesIndex?: string | null;
   firstUnreadBookId: number | null;
 };
 
@@ -295,6 +296,7 @@ export function assembleCollapsedBookCards(
         seriesLatestAddedAt: row.seriesLatestAddedAt?.toISOString() ?? null,
         firstVolumeBookId: row.firstVolumeBookId ?? null,
         latestVolumeBookId: row.latestVolumeBookId ?? null,
+        latestSeriesIndex: row.latestSeriesIndex ?? null,
         firstUnreadBookId: row.firstUnreadBookId ?? null,
       };
       base[i] = { ...base[i]!, collapsedSeries: collapsed };
@@ -358,6 +360,7 @@ export function collapseBookCards(cards: BookCard[]): BookCard[] {
       seriesLatestAddedAt,
       firstVolumeBookId: sorted[0]!.id,
       latestVolumeBookId: (lastWithIndex ?? sorted[sorted.length - 1]!).id,
+      latestSeriesIndex: lastWithIndex?.seriesIndex ?? null,
       firstUnreadBookId: firstUnread?.id ?? null,
     };
     result.push({ index: firstIndex, card: representative });
