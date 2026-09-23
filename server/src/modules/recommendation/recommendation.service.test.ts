@@ -443,7 +443,7 @@ describe('RecommendationService', () => {
           readStatus: null,
         },
       ]);
-      expect(recRepo.findSeriesBooks).toHaveBeenCalledWith(42, [5, 6], EMPTY_CONTENT_FILTER_RULES);
+      expect(recRepo.findSeriesBooks).toHaveBeenCalledWith(42, [5, 6], EMPTY_CONTENT_FILTER_RULES, 2);
     });
 
     it('uses findAccessibleLibraryIds instead of findAll', async () => {
@@ -621,7 +621,7 @@ describe('RecommendationService', () => {
 
       await service.getSeriesBooks(1, user);
 
-      expect(recRepo.findSeriesBooks).toHaveBeenCalledWith(17, [5], filters);
+      expect(recRepo.findSeriesBooks).toHaveBeenCalledWith(17, [5], filters, 1);
     });
 
     it('passes undefined to findSeriesBooks for superuser', async () => {
@@ -636,7 +636,7 @@ describe('RecommendationService', () => {
 
       await service.getSeriesBooks(1, user);
 
-      expect(recRepo.findSeriesBooks).toHaveBeenCalledWith(17, [5], undefined);
+      expect(recRepo.findSeriesBooks).toHaveBeenCalledWith(17, [5], undefined, 1);
     });
 
     it('passes contentFilters to findAuthorBooks for non-superuser', async () => {

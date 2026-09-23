@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, inArray, ne, and, isNotNull, sql, asc, desc } from 'drizzle-orm';
+import { eq, inArray, ne, and, isNotNull, sql, asc, desc, type SQL } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { ContentFilterRules } from '@bookorbit/types';
@@ -8,11 +8,13 @@ import { DB } from '../../db';
 import * as schema from '../../db/schema';
 import { authors, bookAuthors, bookFiles, bookGenres, bookMetadata, bookTags, books, genres, libraries, tags } from '../../db/schema';
 import { buildContentFilterClauses } from '../../common/utils/content-filter-sql.utils';
-import { seriesIndexOrderBy } from '../../common/utils/series-index-sql.utils';
+import { seriesReadingOrderBy } from '../../common/utils/series-index-sql.utils';
 
 type Db = NodePgDatabase<typeof schema>;
 const ANN_CANDIDATE_FETCH_LIMIT = 100;
-const SERIES_BOOKS_LIMIT = 50;
+const SERIES_WINDOW_BEFORE = 10;
+const SERIES_WINDOW_AFTER = 40;
+const SERIES_BOOKS_LIMIT = SERIES_WINDOW_BEFORE + 1 + SERIES_WINDOW_AFTER;
 const AUTHOR_BOOKS_LIMIT = 25;
 
 export interface SeriesBookRow {
@@ -164,10 +166,27 @@ export class RecommendationRepository {
     }));
   }
 
-  async findSeriesBooks(seriesId: number, libraryIds: number[], contentFilters?: ContentFilterRules): Promise<SeriesBookRow[]> {
+  /**
+   * Returns a window of the series in reading order. With an anchor book the window holds up to
+   * SERIES_WINDOW_BEFORE entries ahead of it and SERIES_WINDOW_AFTER after it, shifted so the page stays
+   * full at either end of the series; long serials have far more entries than one window can show.
+   */
+  async findSeriesBooks(
+    seriesId: number,
+    libraryIds: number[],
+    contentFilters?: ContentFilterRules,
+    anchorBookId?: number,
+  ): Promise<SeriesBookRow[]> {
     if (libraryIds.length === 0) return [];
 
     const filterClauses = contentFilters ? buildContentFilterClauses(contentFilters, this.db) : [];
+    const scope = and(inArray(books.libraryId, libraryIds), eq(bookMetadata.seriesId, seriesId), ...filterClauses);
+    const readingOrder = [
+      ...seriesReadingOrderBy(bookMetadata.seriesIndex, bookMetadata.publishedDate, 'ASC'),
+      asc(bookMetadata.title),
+      asc(books.id),
+    ];
+    const offset = anchorBookId == null ? 0 : await this.findSeriesWindowOffset(scope, readingOrder, anchorBookId);
 
     const rows = await this.db
       .select({
@@ -183,8 +202,9 @@ export class RecommendationRepository {
       .innerJoin(libraries, eq(libraries.id, books.libraryId))
       .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .leftJoin(bookFiles, eq(bookFiles.id, books.primaryFileId))
-      .where(and(inArray(books.libraryId, libraryIds), eq(bookMetadata.seriesId, seriesId), ...filterClauses))
-      .orderBy(...seriesIndexOrderBy(bookMetadata.seriesIndex, 'ASC'), asc(bookMetadata.title), asc(books.id))
+      .where(scope)
+      .orderBy(...readingOrder)
+      .offset(offset)
       .limit(SERIES_BOOKS_LIMIT);
 
     const bookIds = rows.map((r) => r.bookId);
@@ -262,6 +282,28 @@ export class RecommendationRepository {
     }));
   }
 
+  private async findSeriesWindowOffset(scope: SQL | undefined, readingOrder: SQL[], anchorBookId: number): Promise<number> {
+    const ranked = this.db
+      .select({
+        bookId: books.id,
+        position: sql<number>`(row_number() over (order by ${sql.join(readingOrder, sql`, `)}))::int`.as('position'),
+        total: sql<number>`(count(*) over ())::int`.as('total'),
+      })
+      .from(books)
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .where(scope)
+      .as('ranked');
+
+    const [anchor] = await this.db
+      .select({ position: ranked.position, total: ranked.total })
+      .from(ranked)
+      .where(eq(ranked.bookId, anchorBookId))
+      .limit(1);
+
+    if (!anchor) return 0;
+    return seriesWindowOffset(Number(anchor.position), Number(anchor.total));
+  }
+
   private groupNamesByBook(rows: Array<{ bookId: number; name: string }>): Map<number, string[]> {
     const grouped = new Map<number, string[]>();
     for (const row of rows) {
@@ -271,4 +313,9 @@ export class RecommendationRepository {
     }
     return grouped;
   }
+}
+
+/** Zero-based offset of a series window around the 1-based `position`, kept full near either end. */
+export function seriesWindowOffset(position: number, total: number): number {
+  return Math.max(0, Math.min(position - 1 - SERIES_WINDOW_BEFORE, total - SERIES_BOOKS_LIMIT));
 }
