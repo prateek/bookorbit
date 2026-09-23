@@ -1,10 +1,13 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import BookListRow from '../BookListRow.vue'
 import type { BookCard } from '@bookorbit/types'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 
 const routerPushMock = vi.hoisted(() => vi.fn<(...args: unknown[]) => unknown>())
+const toastErrorMock = vi.hoisted(() => vi.fn<(message: string) => void>())
+
+vi.mock('vue-sonner', () => ({ toast: { error: toastErrorMock, success: vi.fn<() => void>(), info: vi.fn<() => void>() } }))
 
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-router')>()
@@ -13,6 +16,14 @@ vi.mock('vue-router', async (importOriginal) => {
 vi.mock('@/features/book/composables/useCoverVersions', () => ({
   useCoverVersions: () => ({ coverUrl: (bookId: number) => `/cover-${bookId}.jpg`, bumpVersion: vi.fn<(...args: unknown[]) => void>() }),
 }))
+const setStatusMock = vi.hoisted(() => vi.fn<(bookId: number, status: string) => Promise<unknown>>())
+vi.mock('@/features/book/composables/useBookStatus', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/book/composables/useBookStatus')>()
+  return {
+    ...actual,
+    useBookStatus: () => ({ setStatus: setStatusMock, updateStatus: vi.fn<() => Promise<void>>(), STATUS_OPTIONS: actual.STATUS_OPTIONS }),
+  }
+})
 vi.mock('@/features/book/lib/book-cover', () => ({
   bookCoverStyle: () => ({ background: 'oklch(0.22 0.07 200)', color: 'oklch(0.92 0.03 200)' }),
   bookCoverPalette: () => ({
@@ -42,6 +53,9 @@ const { bookSpineOverlay, thumbnailClickAction } = useDisplaySettings()
 
 beforeEach(() => {
   routerPushMock.mockClear()
+  toastErrorMock.mockClear()
+  setStatusMock.mockReset()
+  setStatusMock.mockResolvedValue({})
 })
 
 afterEach(() => {
@@ -289,11 +303,26 @@ describe('BookListRow collapsed series', () => {
   })
 
   it('caps collapsed series cover thumbnails to a bounded set', () => {
-    const wrapper = mount(BookListRow, { props: { book: collapsedSeriesBook }, global: globalStubs })
+    const wrapper = mount(BookListRow, { props: { book: { ...collapsedSeriesBook, hasCover: true } }, global: globalStubs })
     const covers = wrapper.findAll('[data-testid="collapsed-series-cover"]')
 
     expect(covers).toHaveLength(3)
     expect(wrapper.findAll('img').map((img) => img.attributes('src'))).toEqual(['/cover-20.jpg', '/cover-21.jpg', '/cover-22.jpg'])
+  })
+
+  it('draws a generated cover instead of requesting a known-missing representative thumbnail', () => {
+    const wrapper = mount(BookListRow, { props: { book: collapsedSeriesBook }, global: globalStubs })
+
+    expect(wrapper.findAll('[data-testid="collapsed-series-cover"]')).toHaveLength(3)
+    expect(wrapper.findAll('img').map((img) => img.attributes('src'))).toEqual(['/cover-21.jpg', '/cover-22.jpg'])
+  })
+
+  it('swaps a thumbnail that fails to load for the generated cover', async () => {
+    const wrapper = mount(BookListRow, { props: { book: { ...collapsedSeriesBook, hasCover: true } }, global: globalStubs })
+
+    await wrapper.findAll('img')[1]!.trigger('error')
+
+    expect(wrapper.findAll('img').map((img) => img.attributes('src'))).toEqual(['/cover-20.jpg', '/cover-22.jpg'])
   })
 
   it('opens the series detail route on row click', async () => {
@@ -355,9 +384,152 @@ describe('BookListRow collapsed series', () => {
     })
     const cover = wrapper.get('[data-testid="collapsed-series-cover"]')
 
-    expect(cover.classes()).toContain('w-16')
-    expect(cover.classes()).not.toContain('w-12')
+    expect(cover.classes()).toContain('sm:w-16')
+    expect(cover.classes()).toContain('w-9')
+    expect(cover.classes()).not.toContain('sm:w-12')
     expect(wrapper.get('[data-testid="collapsed-series-list-row"]').text()).toContain('1 book')
     expect(wrapper.find('[data-testid="collapsed-series-progress"]').exists()).toBe(false)
+  })
+})
+
+function touchPointer(type: string, x = 100, y = 100) {
+  return new MouseEvent(type, { bubbles: true, clientX: x, clientY: y })
+}
+
+async function dispatchTouch(el: Element, type: string, x = 100, y = 100) {
+  const event = touchPointer(type, x, y)
+  Object.defineProperty(event, 'pointerType', { value: 'touch' })
+  Object.defineProperty(event, 'pointerId', { value: 1 })
+  el.dispatchEvent(event)
+}
+
+describe('BookListRow - phone ergonomics', () => {
+  it('shows a compact series and date line and decodes HTML entities in titles', () => {
+    const wrapper = mount(BookListRow, {
+      props: { book: { ...presentBook, title: 'It&#39;s Hard to Break a Slug&#39;s Back', seriesName: 'Slugs', seriesIndex: '12' } },
+      global: globalStubs,
+    })
+
+    expect(wrapper.text()).toContain("It's Hard to Break a Slug's Back")
+    expect(wrapper.text()).not.toContain('&#39;')
+    expect(wrapper.get('[data-testid="book-list-row-compact-meta"]').text()).toBe('Slugs #12 · 2024')
+  })
+
+  it('shows the read state on the row', () => {
+    const wrapper = mount(BookListRow, {
+      props: { book: { ...presentBook, readStatus: { status: 'read' } as BookCard['readStatus'] } },
+      global: globalStubs,
+    })
+
+    expect(wrapper.get('[data-testid="book-list-row-read-status"]').attributes('aria-label')).toBe('Read')
+  })
+
+  it('marks an unread book as read from the row menu', async () => {
+    const wrapper = mount(BookListRow, { props: { book: presentBook }, global: globalStubs })
+    const item = wrapper.get('[data-testid="book-list-row-toggle-read"]')
+
+    expect(item.text()).toBe('Mark as read')
+    await item.trigger('click')
+
+    expect(setStatusMock).toHaveBeenCalledWith(2, 'read')
+    expect(wrapper.get('[data-testid="book-list-row-toggle-read"]').text()).toBe('Mark as unread')
+  })
+
+  it('emits the saved read status so the host list keeps it after a re-render', async () => {
+    const saved = { status: 'read', source: 'manual', startedAt: null, finishedAt: null, updatedAt: '2026-09-23T00:00:00.000Z' }
+    setStatusMock.mockResolvedValueOnce(saved)
+    const wrapper = mount(BookListRow, { props: { book: presentBook }, global: globalStubs })
+
+    await wrapper.get('[data-testid="book-list-row-toggle-read"]').trigger('click')
+    await flushPromises()
+
+    const updates = wrapper.emitted('update:book') as [BookCard][]
+    expect(updates).toHaveLength(1)
+    expect(updates[0]![0]).toMatchObject({ id: 2, readStatus: saved })
+  })
+
+  it('does not emit a book update when saving the read status fails', async () => {
+    setStatusMock.mockRejectedValueOnce(new Error('offline'))
+    const wrapper = mount(BookListRow, { props: { book: presentBook }, global: globalStubs })
+
+    await wrapper.get('[data-testid="book-list-row-toggle-read"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.emitted('update:book')).toBeUndefined()
+  })
+
+  it('marks a read book as unread and reverts when the request fails', async () => {
+    setStatusMock.mockRejectedValueOnce(new Error('offline'))
+    const wrapper = mount(BookListRow, {
+      props: { book: { ...presentBook, readStatus: { status: 'read' } as BookCard['readStatus'] } },
+      global: globalStubs,
+    })
+
+    await wrapper.get('[data-testid="book-list-row-toggle-read"]').trigger('click')
+    await flushPromises()
+
+    expect(setStatusMock).toHaveBeenCalledWith(2, 'unread')
+    expect(wrapper.get('[data-testid="book-list-row-toggle-read"]').text()).toBe('Mark as unread')
+    expect(toastErrorMock).toHaveBeenCalledWith('Could not update the read status')
+  })
+
+  it('gives the row menu a labelled 44px touch target', () => {
+    const wrapper = mount(BookListRow, { props: { book: presentBook }, global: globalStubs })
+    const trigger = wrapper.get('[data-testid="book-list-row-menu"]')
+
+    expect(trigger.classes()).toContain('size-11')
+    expect(trigger.attributes('aria-label')).toContain('Available Book')
+  })
+
+  it('toggles read state when a row is swiped left past the threshold', async () => {
+    const wrapper = mount(BookListRow, { props: { book: presentBook }, global: globalStubs })
+    const row = wrapper.get('[data-testid="book-list-row"] > .flex.items-center').element
+
+    await dispatchTouch(row, 'pointerdown', 200)
+    await dispatchTouch(row, 'pointermove', 180)
+    await dispatchTouch(row, 'pointermove', 100)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="book-list-row-swipe-action"]').exists()).toBe(true)
+    await dispatchTouch(row, 'pointerup', 100)
+    row.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    expect(setStatusMock).toHaveBeenCalledWith(2, 'read')
+    expect(wrapper.emitted('action')).toBeUndefined()
+  })
+
+  it('range-selects on long press while in selection mode', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = mount(BookListRow, { props: { book: presentBook, selectionMode: true }, global: globalStubs })
+      const row = wrapper.get('[data-testid="book-list-row"] > .flex.items-center').element
+
+      await dispatchTouch(row, 'pointerdown')
+      vi.advanceTimersByTime(500)
+      await dispatchTouch(row, 'pointerup')
+      row.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+      const selects = wrapper.emitted('select') as [MouseEvent][]
+      expect(selects).toHaveLength(1)
+      expect(selects[0]![0].shiftKey).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not open the book on the click that trails a long press', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = mount(BookListRow, { props: { book: presentBook }, global: globalStubs })
+      const row = wrapper.get('[data-testid="book-list-row"] > .flex.items-center').element
+
+      await dispatchTouch(row, 'pointerdown')
+      vi.advanceTimersByTime(500)
+      await dispatchTouch(row, 'pointerup')
+      row.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+      expect(wrapper.emitted('action')).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

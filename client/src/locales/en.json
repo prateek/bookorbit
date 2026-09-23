@@ -4809,7 +4809,11 @@
       "sendViaEmail": "Send via Email",
       "rate": "Rate {star}",
       "openAs": "Open as {format}",
-      "openReadAlong": "Open read-along EPUB"
+      "openReadAlong": "Open read-along EPUB",
+      "markAsRead": "Mark as read",
+      "markAsUnread": "Mark as unread",
+      "readStatusUpdateFailed": "Could not update the read status",
+      "moreActions": "More actions for {title}"
     },
     "readStatus": {
       "unread": "Unread",
@@ -7519,7 +7523,11 @@
       "fieldPlaceholder": "Leave blank to clear",
       "fieldPlaceholderArray": "Comma-separated (leave blank to clear)",
       "deleteConfirm": "{count, plural, =0 {Delete # book?} one {Delete # book?} other {Delete # books?}}",
-      "typeDelete": "Type DELETE"
+      "typeDelete": "Type DELETE",
+      "typeDeleteToConfirm": "Type DELETE to confirm. This cannot be undone.",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all",
+      "selectedCount": "{count} selected"
     },
     "viewHeader": {
       "select": "Select",
@@ -7538,7 +7546,8 @@
         "grid": "Grid",
         "list": "List",
         "select": "Select",
-        "exitSelect": "Exit Select"
+        "exitSelect": "Exit Select",
+        "moreOptions": "More options"
       },
       "displayControls": {
         "display": "Display",
@@ -7714,6 +7723,7 @@
     },
     "scroller": {
       "failedToLoad": "Failed to load.",
+      "newInSeries": "{count} new",
       "empty": {
         "continueReading": "No books in progress yet. Start reading one to see it here.",
         "continueListening": "No audiobooks in progress yet. Start listening to one to see it here.",
@@ -10540,6 +10550,9 @@
       "showControlsAria": "Show Smart Scope controls",
       "hideFilter": "Hide filter",
       "showFilter": "Show filter",
+      "ruleSummary": "{count, plural, one {# rule} other {# rules}}",
+      "showRules": "Show rules",
+      "hideRules": "Hide rules",
       "confirmDelete": "Confirm?",
       "loadError": "Could not load this SmartScope",
       "toast": {

@@ -245,7 +245,7 @@ function handleClick() {
         :class="
           alwaysShowOpenLinkIcon
             ? 'opacity-100'
-            : 'pointer-events-none opacity-0 group-hover/text-cell:pointer-events-auto group-hover/text-cell:opacity-100 group-focus-within/text-cell:pointer-events-auto group-focus-within/text-cell:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100'
+            : 'pointer-events-none opacity-0 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100 group-hover/text-cell:pointer-events-auto group-hover/text-cell:opacity-100 group-focus-within/text-cell:pointer-events-auto group-focus-within/text-cell:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100'
         "
         :aria-label="openLinkLabel ?? t('book.table.text.openDetails')"
         :title="openLinkLabel ?? t('book.table.text.openDetails')"

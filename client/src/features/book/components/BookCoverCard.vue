@@ -54,6 +54,10 @@ import BookCoverSurface from './BookCoverSurface.vue'
 import { fetchAuthors } from '@/features/author/api/author'
 import { useI18n } from 'vue-i18n'
 import { hasReadAlong, READ_ALONG_FORMAT_COLOR, READ_ALONG_FORMAT_TITLE } from '@/features/book/lib/file-capabilities'
+import { useGridCardLabels } from '../composables/useGridCardLabels'
+import { useTouchRowGestures, type LongPressSource } from '../composables/useTouchRowGestures'
+import { bookCoverSeed } from '../lib/cover-seed'
+import { decodeHtmlEntities } from '../lib/display-text'
 
 const { t } = useI18n()
 
@@ -77,6 +81,9 @@ const emit = defineEmits<{
   'update:book': [updated: BookCard]
 }>()
 
+const displayTitle = computed(() => decodeHtmlEntities(props.book.title) ?? null)
+const displaySeriesName = computed(() => decodeHtmlEntities(props.book.seriesName?.trim()) || null)
+const coverSeed = computed(() => bookCoverSeed(props.book))
 const authorLine = computed(() => props.book.authors.join(', ') || null)
 const authorQuery = computed(() => props.book.authors[0] ?? null)
 
@@ -127,7 +134,12 @@ async function handleRefreshMetadata() {
   if (updated) emit('update:book', mergeBookCardWithDetail(props.book, updated))
 }
 const { hasPermission } = usePermissions()
-const { cardOverlays, bookCoverDisplayMode, gridCardPrimaryLabel, gridCardSecondaryLabel, cardInfoMode, thumbnailClickAction } = useDisplaySettings()
+const { cardOverlays, bookCoverDisplayMode, thumbnailClickAction } = useDisplaySettings()
+const {
+  effectiveCardInfoMode: cardInfoMode,
+  effectivePrimaryLabel: gridCardPrimaryLabel,
+  effectiveSecondaryLabel: gridCardSecondaryLabel,
+} = useGridCardLabels()
 const injectedCoverAspectRatio = inject(COVER_ASPECT_RATIO_KEY, ref(DEFAULT_COVER_ASPECT_RATIO))
 const effectiveCoverAspectRatio = computed<CoverAspectRatio>(
   () => props.coverAspectRatio ?? props.book.coverAspectRatio ?? injectedCoverAspectRatio.value,
@@ -151,7 +163,7 @@ const seriesPositionLabel = computed(() => {
 })
 const seriesPositionTooltip = computed(() => {
   const label = seriesPositionLabel.value
-  return props.book.seriesName ? `${props.book.seriesName} ${label}` : label
+  return displaySeriesName.value ? `${displaySeriesName.value} ${label}` : label
 })
 
 const ratingColor = computed(() => {
@@ -304,6 +316,7 @@ function openPrimaryFileExplicit() {
 }
 
 function handleCardClick(event: MouseEvent) {
+  if (consumeSuppressedClick()) return
   const target = event.target
   if (target instanceof Element && target.closest('button, [data-card-click-blocker]')) return
   if (props.selectionMode) {
@@ -343,6 +356,21 @@ function openQuickView() {
   emit('action', 'quick-view')
 }
 
+const menuOpen = ref(false)
+
+function handleLongPress(source: LongPressSource) {
+  if (props.selectionMode) {
+    if (source === 'touch') emit('select', new MouseEvent('click', { shiftKey: true }))
+    return
+  }
+  showMobileOverlay.value = false
+  menuOpen.value = true
+}
+
+const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerCancel, handleContextMenu, consumeSuppressedClick } = useTouchRowGestures(
+  { onLongPress: handleLongPress },
+)
+
 function openAuthorBrowse() {
   if (!authorQuery.value) return
   void router.push({ name: 'authors', query: { q: authorQuery.value } })
@@ -379,6 +407,9 @@ function handleExportAll() {
 const { setStatus } = useBookStatus()
 
 const localReadStatus = ref<ReadStatus | null>(props.book.readStatus?.status ?? null)
+const isRead = computed(() => localReadStatus.value === 'read')
+const toggleReadLabel = computed(() => (isRead.value ? t('book.actions.markAsUnread') : t('book.actions.markAsRead')))
+const toggleReadIcon = computed(() => (isRead.value ? STATUS_ICONS.unread : STATUS_ICONS.read))
 watch(
   () => props.book.readStatus?.status,
   (val) => {
@@ -393,18 +424,24 @@ async function handleSetStatus(status: ReadStatus) {
   const prev = localReadStatus.value
   localReadStatus.value = status
   try {
-    await setStatus(props.book.id, status)
+    const readStatus = await setStatus(props.book.id, status)
+    // Grid cards are virtualized; patching the host list keeps the new state when this card remounts.
+    if (readStatus?.status) emit('update:book', { ...props.book, readStatus })
   } catch {
     localReadStatus.value = prev
   }
 }
 
+function handleToggleRead() {
+  void handleSetStatus(isRead.value ? 'unread' : 'read')
+}
+
 function resolveBookLabel(field: GridCardLabelField): string | null {
   if (field === 'hidden') return null
-  if (field === 'book-title') return props.book.title?.trim() || null
-  if (field === 'series-title') return props.book.seriesName?.trim() || null
+  if (field === 'book-title') return displayTitle.value?.trim() || null
+  if (field === 'series-title') return displaySeriesName.value
   if (field === 'series-title-position') {
-    const name = props.book.seriesName?.trim()
+    const name = displaySeriesName.value
     if (!name) return null
     return props.book.seriesIndex != null ? `${name} #${props.book.seriesIndex}` : name
   }
@@ -419,10 +456,14 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
 <template>
   <div
     ref="root"
-    class="flex flex-col @container touch-manipulation"
+    class="flex flex-col @container touch-manipulation [-webkit-touch-callout:none] [@media(pointer:coarse)]:select-none"
     :class="[selectionMode || isPrimaryClickAvailable ? 'cursor-pointer' : 'cursor-default', selectionMode ? 'select-none' : '']"
     @click="handleCardClick"
-    @contextmenu.prevent
+    @pointerdown="handlePointerDown"
+    @pointermove="handlePointerMove"
+    @pointerup="handlePointerUp"
+    @pointercancel="handlePointerCancel"
+    @contextmenu="handleContextMenu"
   >
     <!-- Cover -->
     <div class="group">
@@ -440,11 +481,11 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
         <BookCoverArtwork
           :src="coverSrc"
           :has-cover="book.hasCover"
-          :title="book.title"
+          :title="displayTitle"
           :author-line="authorLine"
           :is-audio="isAudiobook"
-          :seed="book.title ?? String(book.id)"
-          :alt="book.title ?? ''"
+          :seed="coverSeed"
+          :alt="displayTitle ?? ''"
           :frame-aspect-ratio="effectiveCoverAspectRatio"
           :image-class="isMissing ? 'brightness-50' : ''"
           :spine="!isAudiobook"
@@ -556,6 +597,7 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
           <!-- Hover overlay -->
           <div
             v-if="!selectionMode"
+            data-testid="card-hover-overlay"
             class="absolute inset-0 flex flex-col p-2 transition-opacity duration-150"
             :class="[
               overlayBackground,
@@ -612,7 +654,7 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
             <div class="shrink-0 flex flex-col pr-10">
               <div class="flex items-start justify-between gap-2">
                 <p v-if="showHoverTitle" class="text-xs font-semibold text-white leading-tight min-w-0 flex-1" :class="hoverTitleClampClass">
-                  {{ book.title ?? '-' }}
+                  {{ displayTitle ?? '-' }}
                 </p>
                 <div v-else class="flex-1" />
               </div>
@@ -626,9 +668,12 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
 
             <!-- Kebab menu anchored to lower-right (not in below-cover mode, where it lives in the label row) -->
             <div v-if="!showBelowCoverLabelArea" class="absolute bottom-2 right-2 z-20">
-              <DropdownMenu>
+              <DropdownMenu v-model:open="menuOpen">
                 <DropdownMenuTrigger as-child>
-                  <button class="px-0.75 py-1.5 rounded-md bg-black/40 hover:bg-white/30 transition-colors text-white shrink-0">
+                  <button
+                    class="relative px-0.75 py-1.5 rounded-md bg-black/40 hover:bg-white/30 transition-colors text-white shrink-0 after:absolute after:-inset-3 after:content-['']"
+                    :aria-label="t('book.actions.moreActions', { title: displayTitle ?? '' })"
+                  >
                     <MoreVertical class="size-3.5" />
                   </button>
                 </DropdownMenuTrigger>
@@ -718,6 +763,10 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
                     <FolderInput class="size-4 mr-2" />
                     {{ t('book.move.action') }}
                   </DropdownMenuItem>
+                  <DropdownMenuItem data-testid="grid-card-toggle-read" @click="handleToggleRead">
+                    <component :is="toggleReadIcon" class="size-4 mr-2" />
+                    {{ toggleReadLabel }}
+                  </DropdownMenuItem>
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
                       <component
@@ -769,9 +818,13 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
           {{ primaryLabelText }}
         </button>
         <div v-else class="flex-1" />
-        <DropdownMenu>
+        <DropdownMenu v-model:open="menuOpen">
           <DropdownMenuTrigger as-child>
-            <button class="shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors" data-testid="grid-card-kebab">
+            <button
+              class="relative shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors after:absolute after:-inset-3.5 after:content-['']"
+              data-testid="grid-card-kebab"
+              :aria-label="t('book.actions.moreActions', { title: displayTitle ?? '' })"
+            >
               <MoreVertical class="size-3.5" />
             </button>
           </DropdownMenuTrigger>
@@ -856,6 +909,10 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
               <FolderPlus class="size-4 mr-2" />
               {{ t('book.actions.addToCollection') }}
             </DropdownMenuItem>
+            <DropdownMenuItem data-testid="grid-card-toggle-read" @click="handleToggleRead">
+              <component :is="toggleReadIcon" class="size-4 mr-2" />
+              {{ toggleReadLabel }}
+            </DropdownMenuItem>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <component :is="STATUS_ICONS[localReadStatus ?? 'unread']" class="size-4 mr-2" :class="STATUS_COLORS[localReadStatus ?? 'unread']" />
@@ -903,7 +960,7 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
     :selection-payload="{ bookIds: [book.id] }"
     :selected-count="1"
     :book-files="book.files"
-    :book-title="book.title ?? undefined"
+    :book-title="displayTitle ?? undefined"
     @update:open="showSendDialog = $event"
   />
 </template>

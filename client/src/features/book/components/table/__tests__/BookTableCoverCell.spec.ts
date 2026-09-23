@@ -43,3 +43,16 @@ describe('BookTableCoverCell comic flag', () => {
     expect(wrapper.find('[data-testid="surface"]').attributes('data-comic')).toBe('false')
   })
 })
+
+describe('BookTableCoverCell generated cover', () => {
+  it('seeds from the series and decodes the title so table covers match the grid', () => {
+    const wrapper = mount(BookTableCoverCell, {
+      props: { bookId: 1, title: 'It&#39;s Chapter 4', seriesName: 'Slugs', hasCover: false, isAudio: false, isComic: false },
+      global: { stubs: { BookCoverSurface: CoverSurfaceStub, BookCoverImage: true, Teleport: true } },
+    })
+    const artwork = wrapper.findComponent({ name: 'BookCoverArtwork' })
+
+    expect(artwork.props('seed')).toBe('series:slugs')
+    expect(artwork.props('title')).toBe("It's Chapter 4")
+  })
+})

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { enableAutoUnmount, mount, flushPromises } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import type { BookScrollerType } from '@bookorbit/types'
 
@@ -21,6 +21,7 @@ vi.mock('@/features/book/composables/useBookEvents', () => ({
 }))
 
 import { api } from '@/lib/api'
+import { APP_RESUMED_EVENT } from '@/components/sidebar/useAppResume'
 import { useDashboardScroller } from '../useDashboardScroller'
 
 const mockApi = vi.mocked(api)
@@ -56,6 +57,8 @@ function mountComposable(type: BookScrollerType, limit = 20, smartScopeId?: numb
   )
   return result
 }
+
+enableAutoUnmount(afterEach)
 
 describe('useDashboardScroller', () => {
   beforeEach(() => {
@@ -164,5 +167,52 @@ describe('useDashboardScroller', () => {
     await flushPromises()
     expect(mockApi).toHaveBeenCalledOnce()
     expect(batchBody().items[0]).toMatchObject({ type: 'continue-reading', limit: 5 })
+  })
+
+  it('reloads the shelf in place when the app resumes, without the loading skeleton', async () => {
+    mockSuccessfulBatch([{ id: 1 }])
+    const state = mountComposable('continue-reading', 5)
+    await flushPromises()
+
+    mockSuccessfulBatch([{ id: 2 }, { id: 1 }])
+    const loadingStates: boolean[] = []
+    window.dispatchEvent(new CustomEvent(APP_RESUMED_EVENT))
+    loadingStates.push(state.loading.value)
+    await flushPromises()
+
+    expect(loadingStates).toEqual([false])
+    expect(state.books.value).toEqual([{ id: 2 }, { id: 1 }])
+  })
+
+  it('keeps the current shelf when the resume reload fails', async () => {
+    mockSuccessfulBatch([{ id: 1 }])
+    const state = mountComposable('continue-reading', 5)
+    await flushPromises()
+
+    mockApi.mockResolvedValue(mockResponse({}, false))
+    window.dispatchEvent(new CustomEvent(APP_RESUMED_EVENT))
+    await flushPromises()
+
+    expect(state.error.value).toBe(false)
+    expect(state.books.value).toEqual([{ id: 1 }])
+  })
+
+  it('lets a newer load win over a resume reload that resolves later', async () => {
+    mockSuccessfulBatch([{ id: 1 }])
+    const state = mountComposable('continue-reading', 5)
+    await flushPromises()
+
+    let resolveResume!: (response: Response) => void
+    mockApi.mockImplementationOnce(() => new Promise((resolve) => (resolveResume = resolve)))
+    window.dispatchEvent(new CustomEvent(APP_RESUMED_EVENT))
+    await flushPromises()
+
+    mockSuccessfulBatch([{ id: 3 }])
+    await state.refresh()
+    const staleId = String(Number(batchBody().items[0]!.id) - 1)
+    resolveResume(mockResponse({ items: [{ id: staleId, books: [{ id: 2 }], failed: false }] }))
+    await flushPromises()
+
+    expect(state.books.value).toEqual([{ id: 3 }])
   })
 })
