@@ -323,15 +323,27 @@ describe('BookCarousel', () => {
     expect(scrollBy).toHaveBeenNthCalledWith(2, { left: 240, behavior: 'smooth' })
   })
 
-  it('auto-scrolls current book into view when currentBookId is provided', async () => {
+  it('centers the current book horizontally without scrolling the page', async () => {
     const scrollIntoView = vi.fn<(options?: ScrollIntoViewOptions) => void>()
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
       value: scrollIntoView,
       configurable: true,
     })
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.dataset.bookId === '10') return { left: 500, width: 100 } as DOMRect
+      return { left: 0, width: 300 } as DOMRect
+    })
 
-    mountCarousel([makeBook({ id: 9 }), makeBook({ id: 10 })], { currentBookId: 10 })
+    const wrapper = mountCarousel([makeBook({ id: 9 }), makeBook({ id: 10 })], { currentBookId: 10 })
     await Promise.resolve()
-    expect(scrollIntoView).toHaveBeenCalledWith({ inline: 'center', behavior: 'instant', block: 'nearest' })
+    await Promise.resolve()
+
+    const scroller = wrapper.find('[data-book-id="10"]').element.parentElement as HTMLElement
+    expect(scroller.scrollLeft).toBe(400)
+    expect(scrollIntoView).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-book-id="10"]').attributes('aria-current')).toBe('true')
+    expect(wrapper.find('[data-book-id="10"] [data-test="current-book-marker"]').exists()).toBe(true)
+    expect(wrapper.find('[data-book-id="9"]').attributes('aria-current')).toBeUndefined()
+    rectSpy.mockRestore()
   })
 })
