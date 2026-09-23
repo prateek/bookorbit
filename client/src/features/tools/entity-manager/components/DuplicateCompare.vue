@@ -85,7 +85,7 @@ function handleBack(): void {
     <div class="flex flex-none items-center gap-3 border-b border-border px-5 py-3">
       <button
         type="button"
-        class="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+        class="touch-target grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
         :aria-label="t('tools.entityManager.duplicates.backToList')"
         @click="handleBack"
       >

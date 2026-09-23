@@ -269,7 +269,7 @@ function toggleDescription() {
     <LoadErrorPanel v-else-if="loadError" :message="loadError" class="mt-6" @retry="retryLoad" />
     <template v-else-if="show">
       <header class="pt-4">
-        <Button variant="ghost" size="sm" class="-ml-2 gap-1 text-muted-foreground hover:text-foreground" @click="goBack">
+        <Button variant="ghost" size="sm" class="touch-target -ml-2 gap-1 text-muted-foreground hover:text-foreground" @click="goBack">
           <ArrowLeft :size="14" /> {{ backLabel }}
         </Button>
         <section class="mt-2 border-b border-border/70 pb-5">

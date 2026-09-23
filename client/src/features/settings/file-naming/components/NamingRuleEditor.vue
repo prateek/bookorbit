@@ -93,7 +93,7 @@ function handleBack() {
         variant="ghost"
         size="icon-sm"
         type="button"
-        class="md:hidden"
+        class="touch-target md:hidden"
         :aria-label="t('settings.reader.fileNaming.backToRules')"
         @click="handleBack"
       >
