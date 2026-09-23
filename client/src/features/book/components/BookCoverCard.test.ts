@@ -81,7 +81,7 @@ vi.mock('@/features/book/composables/useBookDownload', () => ({
   useBookDownload: () => ({ downloadFile: mockDownloadFile, exportBooks: mockExportBooks }),
 }))
 
-const mockSetStatus = vi.fn<() => void>()
+const mockSetStatus = vi.fn<(...args: unknown[]) => unknown>()
 vi.mock('@/features/book/composables/useBookStatus', () => ({
   useBookStatus: () => ({ setStatus: mockSetStatus }),
   STATUS_OPTIONS: [
@@ -220,7 +220,12 @@ function mountCard(
 }
 
 function setTouchMode(value: boolean) {
-  vi.stubGlobal('matchMedia', vi.fn<() => { matches: boolean }>().mockReturnValue({ matches: value }))
+  vi.stubGlobal(
+    'matchMedia',
+    vi
+      .fn<() => { matches: boolean }>()
+      .mockReturnValue({ matches: value, addEventListener: vi.fn<() => void>(), removeEventListener: vi.fn<() => void>() } as never),
+  )
 }
 
 // -- tests -------------------------------------------------------------------
@@ -785,6 +790,84 @@ describe('BookCoverCard', () => {
       expect(badge.exists()).toBe(true)
       await badge.trigger('click')
       expect(mockRouterPush).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'reader' }))
+    })
+  })
+
+  describe('touch ergonomics', () => {
+    it('labels the cover with title and series position below it on touch devices', () => {
+      setTouchMode(true)
+      const wrapper = mountCard({
+        showLabel: true,
+        book: makeBook({ title: 'It&#39;s Chapter 12', seriesName: 'Slugs', seriesIndex: '12' }),
+      })
+      expect(wrapper.get('[data-testid="grid-card-label-primary"]').text()).toBe("It's Chapter 12")
+      expect(wrapper.get('[data-testid="grid-card-label-secondary"]').text()).toBe('Slugs #12')
+    })
+
+    it('keeps the hover overlay title on hover-capable devices', () => {
+      setTouchMode(false)
+      const wrapper = mountCard({ showLabel: true })
+      expect(wrapper.find('[data-testid="grid-card-label"]').exists()).toBe(false)
+    })
+
+    it('seeds the generated cover from the series so chapters share a color', () => {
+      const wrapper = mountCard({ book: makeBook({ title: 'Chapter 4', seriesName: 'Slugs' }) })
+      expect(wrapper.findComponent({ name: 'BookCoverPlaceholder' }).props('seed')).toBe('series:slugs')
+    })
+
+    it('offers a top-level mark as read action', async () => {
+      const wrapper = mountCard()
+      const item = wrapper.get('[data-testid="grid-card-toggle-read"]')
+      expect(item.text()).toBe('Mark as read')
+      await item.trigger('click')
+      expect(mockSetStatus).toHaveBeenCalledWith(1, 'read')
+    })
+
+    it('offers mark as unread for a read book', async () => {
+      const wrapper = mountCard({ book: makeBook({ readStatus: { status: 'read' } as BookCard['readStatus'] }) })
+      const item = wrapper.get('[data-testid="grid-card-toggle-read"]')
+      expect(item.text()).toBe('Mark as unread')
+      await item.trigger('click')
+      expect(mockSetStatus).toHaveBeenCalledWith(1, 'unread')
+    })
+
+    it('emits the saved read status so the virtualized grid keeps it after a remount', async () => {
+      const saved = { status: 'read', source: 'manual', startedAt: null, finishedAt: null, updatedAt: '2026-09-23T00:00:00.000Z' }
+      mockSetStatus.mockResolvedValueOnce(saved)
+      const wrapper = mountCard()
+      await wrapper.get('[data-testid="grid-card-toggle-read"]').trigger('click')
+      await flushPromises()
+      const updates = wrapper.emitted('update:book') as [BookCard][]
+      expect(updates).toHaveLength(1)
+      expect(updates[0]![0]).toMatchObject({ id: 1, readStatus: saved })
+    })
+
+    it('opens actions instead of the book on right click', async () => {
+      const wrapper = mountCard()
+      const root = wrapper.get('.\\@container')
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+      root.element.dispatchEvent(event)
+      expect(event.defaultPrevented).toBe(true)
+      expect(mockRouterPush).not.toHaveBeenCalled()
+    })
+
+    it('range-selects on a touch long press in selection mode', async () => {
+      vi.useFakeTimers()
+      try {
+        const onSelect = vi.fn<(e: MouseEvent) => void>()
+        const wrapper = mountCard({ selectionMode: true, onSelect })
+        const root = wrapper.get('.\\@container').element
+        const down = new MouseEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10 })
+        Object.defineProperty(down, 'pointerType', { value: 'touch' })
+        Object.defineProperty(down, 'pointerId', { value: 1 })
+        root.dispatchEvent(down)
+        vi.advanceTimersByTime(500)
+        root.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        expect(onSelect).toHaveBeenCalledTimes(1)
+        expect(onSelect.mock.calls[0]![0].shiftKey).toBe(true)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })

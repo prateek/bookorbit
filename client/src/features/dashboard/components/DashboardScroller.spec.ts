@@ -36,10 +36,10 @@ const deleteMocks = vi.hoisted(() => ({
 vi.mock('@/features/book/components/BookCoverCard.vue', () => ({
   default: {
     name: 'BookCoverCard',
-    props: ['book', 'coverAspectRatio'],
+    props: ['book', 'coverAspectRatio', 'showLabel'],
     emits: ['action'],
     template: `
-      <div class="book-card" :data-aspect="coverAspectRatio">
+      <div class="book-card" :data-aspect="coverAspectRatio" :data-show-label="String(showLabel)">
         <span>{{ book.title }}</span>
         <button class="quick-action" @click="$emit('action', 'quick-view')" />
         <button class="collection-action" @click="$emit('action', 'add-to-collection')" />
@@ -187,6 +187,33 @@ describe('DashboardScroller', () => {
     ['random', 'No books found.'],
   ] as const)('keeps existing empty-state copy for %s', (type, copy) => {
     expect(mountScroller({ type }).text()).toContain(copy)
+  })
+
+  it('asks cover cards for their labels so touch screens get titles below the cover', () => {
+    const wrapper = mountScroller({ type: 'continue-reading', books: [makeBook(1, 'epub')] })
+
+    expect(wrapper.get('.book-card').attributes('data-show-label')).toBe('true')
+  })
+
+  it('says how many new entries a folded series card stands for', () => {
+    const folded: BookCard = {
+      ...makeBook(2, 'epub'),
+      seriesName: 'Chrysalis',
+      seriesIndex: '1201',
+      collapsedSeries: { bookCount: 11, readCount: 0, coverBookIds: [2], seriesLatestAddedAt: null, firstVolumeBookId: 2 },
+    }
+    const wrapper = mountScroller({ type: 'recently-added', books: [folded, makeBook(3, 'epub')] })
+    const counts = wrapper.findAll('[data-testid="shelf-card-new-count"]')
+
+    expect(counts.map((count) => count.text())).toEqual(['11 new', ''])
+    expect(counts[0]?.classes()).not.toContain('invisible')
+    expect(counts[1]?.classes()).toContain('invisible')
+  })
+
+  it('leaves no count line on shelves without folded series', () => {
+    const wrapper = mountScroller({ type: 'recently-added', books: [makeBook(1, 'epub'), makeBook(2, 'epub')] })
+
+    expect(wrapper.find('[data-testid="shelf-card-new-count"]').exists()).toBe(false)
   })
 
   it('renders loading skeletons', () => {

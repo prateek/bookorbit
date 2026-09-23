@@ -317,6 +317,7 @@ describe('CollapsedSeriesCard', () => {
       const wrapper = mount(CollapsedSeriesCard, {
         props: {
           book: makeBook({
+            hasCover: true,
             collapsedSeries: { bookCount: 4, readCount: 0, coverBookIds: [1, 2, 3], seriesLatestAddedAt: null },
           }),
         },
@@ -368,6 +369,35 @@ describe('CollapsedSeriesCard', () => {
       expect(wrapper.findAll('[data-testid="series-stack-cover"]')).toHaveLength(0)
       expect(wrapper.find('[data-testid="series-cover-stack-fallback"]').exists()).toBe(true)
       expect(wrapper.findAll('.book-cover-placeholder')).toHaveLength(1)
+    })
+
+    it('skips the representative thumbnail when that book has no cover', () => {
+      const wrapper = mount(CollapsedSeriesCard, {
+        props: {
+          book: makeBook({
+            hasCover: false,
+            collapsedSeries: { bookCount: 2, readCount: 0, coverBookIds: [1, 20], seriesLatestAddedAt: null },
+          }),
+        },
+      })
+
+      const imgs = wrapper.findAll('[data-testid="series-stack-cover"] img')
+      expect(imgs.map((img) => img.attributes('src'))).toEqual([expectedCoverUrl(20)])
+    })
+
+    it('falls back to a titled cover with the count badge when every thumbnail fails', async () => {
+      const wrapper = mount(CollapsedSeriesCard, {
+        props: {
+          book: makeBook({
+            collapsedSeries: { bookCount: 7, readCount: 0, coverBookIds: [10], seriesLatestAddedAt: null },
+          }),
+        },
+      })
+
+      await wrapper.find('[data-testid="series-stack-cover"] img').trigger('error')
+
+      const fallback = wrapper.get('[data-testid="series-cover-stack-fallback"]')
+      expect(fallback.find('[data-testid="series-count-badge"]').text()).toBe('7')
     })
 
     it('keeps the count badge without legacy stack overlays', () => {

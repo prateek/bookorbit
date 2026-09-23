@@ -22,6 +22,8 @@ import BookCoverArtwork from './BookCoverArtwork.vue'
 import BookCoverSurface from './BookCoverSurface.vue'
 import { useI18n } from 'vue-i18n'
 import { hasReadAlong, isReadAlongFormat, READ_ALONG_FORMAT_COLOR, READ_ALONG_FORMAT_TITLE } from '@/features/book/lib/file-capabilities'
+import { decodeHtmlEntities } from '../lib/display-text'
+import { seriesCoverSeed } from '../lib/cover-seed'
 
 const { t } = useI18n()
 
@@ -62,8 +64,13 @@ watch(
 const { coverUrl } = useCoverVersions()
 const coverSrc = computed(() => (detail.value ? coverUrl(detail.value.id, 'cover', detail.value.updatedAt ?? detail.value.addedAt) : null))
 
-const coverSeed = computed(() => (detail.value ? (detail.value.title ?? detail.value.folderPath.split('/').pop() ?? String(detail.value.id)) : ''))
-const coverPlaceholderTitle = computed(() => (detail.value ? (detail.value.title ?? detail.value.folderPath.split('/').pop() ?? null) : null))
+const displayTitle = computed(() => decodeHtmlEntities(detail.value?.title) ?? null)
+const coverSeed = computed(() => {
+  if (!detail.value) return ''
+  if (detail.value.seriesName?.trim()) return seriesCoverSeed(detail.value.seriesName)
+  return detail.value.title ?? detail.value.folderPath.split('/').pop() ?? String(detail.value.id)
+})
+const coverPlaceholderTitle = computed(() => (detail.value ? (displayTitle.value ?? detail.value.folderPath.split('/').pop() ?? null) : null))
 
 const seriesLine = computed(() => {
   if (!detail.value?.seriesName) return null
@@ -198,7 +205,7 @@ function handleDelete() {
     <Sheet :open="props.open" @update:open="emit('update:open', $event)">
       <SheetContent side="right" class="sm:max-w-100 p-0 overflow-hidden">
         <SheetTitle class="sr-only">{{
-          detail?.title ? t('book.quickView.titleFor', { title: detail.title }) : t('book.quickView.title')
+          displayTitle ? t('book.quickView.titleFor', { title: displayTitle }) : t('book.quickView.title')
         }}</SheetTitle>
         <SheetDescription class="sr-only">{{ t('book.quickView.description') }}</SheetDescription>
         <div class="flex flex-col h-full">
@@ -244,7 +251,7 @@ function handleDelete() {
               <!-- Info -->
               <div class="flex-1 min-w-0 pr-2">
                 <h2 class="text-sm font-bold leading-snug line-clamp-3">
-                  {{ detail.title ?? t('book.untitled') }}
+                  {{ displayTitle ?? t('book.untitled') }}
                 </h2>
                 <p v-if="detail.subtitle" class="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                   {{ detail.subtitle }}

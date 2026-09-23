@@ -107,6 +107,20 @@ function coverWidthClass(book: BookCard): string {
 function coverAnimationDelay(index: number): string {
   return `${index * 35}ms`
 }
+
+// A recently added card can stand for several new entries of one series; the cover alone does not
+// say so, so the count sits under it on every screen.
+function newEntryCount(book: BookCard): number {
+  return book.collapsedSeries?.bookCount ?? 0
+}
+
+// Bands align cards at the bottom, so the count line is reserved on every card of a shelf that
+// shows one; otherwise folded covers sit a line higher than their neighbours.
+const reservesNewCountLine = computed(() => books.value.some((book) => newEntryCount(book) > 1))
+
+function newCountVisibilityClass(book: BookCard): string {
+  return newEntryCount(book) > 1 ? '' : 'invisible'
+}
 </script>
 
 <template>
@@ -187,7 +201,15 @@ function coverAnimationDelay(index: number): string {
             style="animation: dashboardFadeUp 0.35s ease both"
             :style="{ animationDelay: coverAnimationDelay(index) }"
           >
-            <BookCoverCard :book="book" :cover-aspect-ratio="book.coverAspectRatio" @action="handleBookAction(book, $event)" />
+            <BookCoverCard :book="book" :cover-aspect-ratio="book.coverAspectRatio" :show-label="true" @action="handleBookAction(book, $event)" />
+            <p
+              v-if="reservesNewCountLine"
+              class="mt-1 h-4 truncate text-[11px] font-semibold leading-4 text-primary"
+              :class="newCountVisibilityClass(book)"
+              data-testid="shelf-card-new-count"
+            >
+              <template v-if="newEntryCount(book) > 1">{{ t('dashboard.scroller.newInSeries', { count: newEntryCount(book) }) }}</template>
+            </p>
           </div>
         </div>
       </div>

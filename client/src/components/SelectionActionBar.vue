@@ -3,6 +3,7 @@ import { computed, ref, useSlots, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   BookOpen,
+  CheckCheck,
   Download,
   FileSpreadsheet,
   FolderInput,
@@ -22,6 +23,7 @@ import {
   Unlock,
   X,
 } from '@lucide/vue'
+import { useMediaQuery } from '@vueuse/core'
 import InputWithSuggestions from '@/components/ui/InputWithSuggestions.vue'
 import { usePublisherSearch, useSeriesNameSearch, useLanguageSearch } from '@/features/book/composables/useMetadataFieldSearch'
 import {
@@ -34,6 +36,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { STATUS_ICONS, STATUS_OPTIONS } from '@/features/book/composables/useBookStatus'
@@ -50,17 +53,22 @@ export type ExportScope = 'primary' | 'all' | 'audio'
 
 const ICON_SIZE = 17
 
-const BTN_ICON = 'text-foreground h-9 w-9 shrink-0 flex items-center justify-center rounded-full transition-colors'
+// Phones get 44px targets and only the always-needed controls; the rest move into the phone More menu.
+const BTN_BASE = 'text-foreground h-11 w-11 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full transition-colors'
+const BTN_ICON = `${BTN_BASE} inline-flex`
+const BTN_ICON_DESKTOP = `${BTN_BASE} hidden sm:inline-flex`
 const BTN_DISABLED = 'text-muted-foreground cursor-not-allowed'
 const BTN_PRIMARY = 'text-foreground hover:bg-primary hover:text-primary-foreground'
 const BTN_MUTED = 'text-foreground hover:bg-muted'
 const BTN_DESTRUCTIVE = 'text-destructive hover:bg-destructive hover:text-destructive-foreground'
 const BTN_TEXT_PRIMARY =
-  'flex items-center gap-1.5 h-8 px-3 rounded-full text-sm font-medium text-foreground hover:bg-primary hover:text-primary-foreground transition-colors'
-const BTN_TEXT_CANCEL = 'h-8 px-3 rounded-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors'
+  'flex items-center gap-1.5 h-11 sm:h-8 px-3 rounded-full text-sm font-medium text-foreground hover:bg-primary hover:text-primary-foreground transition-colors'
+const BTN_TEXT_CANCEL =
+  'h-11 sm:h-8 px-3 rounded-full text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors'
 const BTN_TEXT_DESTRUCTIVE =
-  'h-8 px-3 rounded-full text-sm font-medium text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors'
+  'h-11 sm:h-8 px-3 rounded-full text-sm font-medium text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors'
 const DIVIDER = 'w-px h-5 bg-border mx-1 shrink-0'
+const DIVIDER_DESKTOP = 'hidden sm:block w-px h-5 bg-border mx-1 shrink-0'
 
 const props = defineProps<{
   count: number
@@ -69,6 +77,9 @@ const props = defineProps<{
   inFlight?: InFlightOp | null
   // Selection is query-scoped (all matching across pages), so individual ids aren't enumerable.
   queryScoped?: boolean
+  /** Hosts that can select every loaded book pass this to show the Select all toggle. */
+  canSelectAll?: boolean
+  allSelected?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -88,6 +99,7 @@ const emit = defineEmits<{
   'move-to-library': []
   delete: []
   exit: []
+  'toggle-select-all': [checked: boolean]
 }>()
 
 const { t } = useI18n()
@@ -122,7 +134,13 @@ const typeaheadSearchFn = computed<((q: string) => Promise<string[]>) | null>(()
   return null
 })
 
-const canConfirmDelete = computed(() => props.count <= 50 || deleteInput.value === 'DELETE')
+const DELETE_TYPED_CONFIRM_THRESHOLD = 50
+const requiresTypedDelete = computed(() => props.count > DELETE_TYPED_CONFIRM_THRESHOLD)
+const canConfirmDelete = computed(() => !requiresTypedDelete.value || deleteInput.value === 'DELETE')
+// The typed-confirm row is wider than a phone, so narrow screens confirm in a bottom sheet instead.
+const isNarrowScreen = useMediaQuery('(max-width: 639px)')
+const deleteInSheet = computed(() => requiresTypedDelete.value && isNarrowScreen.value)
+const deleteSheetOpen = computed(() => confirmingDelete.value && deleteInSheet.value)
 const canApplyFieldValue = computed(() => {
   if (!numericFieldSelected.value) return true
   const trimmed = fieldValue.value.trim()
@@ -159,6 +177,10 @@ function cancelDelete() {
   deleteInput.value = ''
 }
 
+function onDeleteSheetOpenChange(open: boolean) {
+  if (!open) cancelDelete()
+}
+
 function lockAll() {
   emit('lock-metadata', true)
 }
@@ -185,6 +207,53 @@ function onReExtractCover() {
 function onMoveToLibrary() {
   if (props.count === 0) return
   emit('move-to-library')
+}
+
+function handleToggleSelectAll() {
+  emit('toggle-select-all', !props.allSelected)
+}
+
+function openRatingPicker() {
+  if (props.count === 0) return
+  ratingMenuOpen.value = true
+}
+
+function openExportPicker() {
+  if (props.count === 0) return
+  exportMenuOpen.value = true
+}
+
+function startDelete() {
+  if (props.count === 0) return
+  confirmingDelete.value = true
+}
+
+function emitEdit() {
+  emit('edit')
+}
+
+function emitEditIndividually() {
+  emit('edit-individually')
+}
+
+function emitAddToCollection() {
+  emit('add-to-collection')
+}
+
+function emitRemoveFromCollection() {
+  emit('remove-from-collection')
+}
+
+function emitSend() {
+  emit('send')
+}
+
+function emitExportMetadata() {
+  emit('export-metadata')
+}
+
+function emitExit() {
+  emit('exit')
 }
 
 function resetFieldEditor() {
@@ -242,7 +311,7 @@ watch(
   >
     <div
       v-if="visible"
-      class="fixed bottom-[max(1.5rem,var(--podcast-mini-player-clearance,0px))] left-1/2 -translate-x-1/2 z-50 max-w-[calc(100svw-24px)] rounded-full bg-card/90 backdrop-blur-xl border border-primary/40 shadow-[0_8px_32px_rgba(0,0,0,0.35)] overflow-hidden"
+      class="fixed bottom-[max(1.5rem,var(--podcast-mini-player-clearance,0px),calc(env(safe-area-inset-bottom)_+_0.5rem),calc(var(--app-bottom-nav-height,0px)_+_0.5rem))] left-1/2 -translate-x-1/2 z-50 max-w-[calc(100svw-24px)] rounded-full bg-card/90 backdrop-blur-xl border border-primary/40 shadow-[0_8px_32px_rgba(0,0,0,0.35)] overflow-hidden"
     >
       <div class="flex items-center gap-1 px-2.5 py-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <TooltipProvider :delay-duration="0">
@@ -258,10 +327,30 @@ watch(
             <slot name="content" :count="count" />
           </template>
 
-          <template v-else-if="!confirmingDelete && !exportMenuOpen && !ratingMenuOpen && !fieldMenuOpen">
-            <span class="px-2.5 py-0.5 text-sm font-semibold tabular-nums whitespace-nowrap rounded-full bg-primary/10 text-primary">{{
-              count
-            }}</span>
+          <template v-else-if="(!confirmingDelete || deleteInSheet) && !exportMenuOpen && !ratingMenuOpen && !fieldMenuOpen">
+            <span
+              data-testid="selection-count"
+              class="px-2.5 py-0.5 text-sm font-semibold tabular-nums whitespace-nowrap rounded-full bg-primary/10 text-primary"
+              :aria-label="t('components.selectionActionBar.selectedCount', { count })"
+              >{{ count }}</span
+            >
+
+            <Tooltip v-if="canSelectAll">
+              <TooltipTrigger as-child>
+                <button
+                  data-testid="action-toggle-select-all"
+                  :class="[BTN_ICON, allSelected ? 'text-primary bg-primary/10 hover:bg-primary/20' : BTN_MUTED]"
+                  :aria-label="allSelected ? t('components.selectionActionBar.deselectAll') : t('components.selectionActionBar.selectAll')"
+                  :aria-pressed="allSelected"
+                  @click="handleToggleSelectAll"
+                >
+                  <CheckCheck :size="ICON_SIZE" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{{
+                allSelected ? t('components.selectionActionBar.deselectAll') : t('components.selectionActionBar.selectAll')
+              }}</TooltipContent>
+            </Tooltip>
 
             <div :class="DIVIDER" />
 
@@ -296,8 +385,9 @@ watch(
                 <button
                   data-testid="action-bulk-set-rating"
                   :disabled="count === 0"
-                  :class="[BTN_ICON, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
-                  @click="ratingMenuOpen = true"
+                  :class="[BTN_ICON_DESKTOP, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
+                  :aria-label="t('components.selectionActionBar.setRating')"
+                  @click="openRatingPicker"
                 >
                   <Star :size="ICON_SIZE" />
                 </button>
@@ -305,15 +395,16 @@ watch(
               <TooltipContent side="top">{{ t('components.selectionActionBar.setRating') }}</TooltipContent>
             </Tooltip>
 
-            <div v-if="canEditMetadata" :class="DIVIDER" />
+            <div v-if="canEditMetadata" :class="DIVIDER_DESKTOP" />
 
             <Tooltip v-if="canEditMetadata">
               <TooltipTrigger as-child>
                 <button
                   data-testid="action-bulk-edit-metadata"
                   :disabled="count === 0"
-                  :class="[BTN_ICON, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
-                  @click="emit('edit')"
+                  :class="[BTN_ICON_DESKTOP, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
+                  :aria-label="t('components.selectionActionBar.openMetadataEditor')"
+                  @click="emitEdit"
                 >
                   <Pencil :size="ICON_SIZE" />
                 </button>
@@ -326,8 +417,9 @@ watch(
                 <button
                   data-testid="action-edit-individually"
                   :disabled="count === 0"
-                  :class="[BTN_ICON, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
-                  @click="emit('edit-individually')"
+                  :class="[BTN_ICON_DESKTOP, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
+                  :aria-label="t('components.selectionActionBar.editIndividually')"
+                  @click="emitEditIndividually"
                 >
                   <SquareArrowOutUpRight :size="ICON_SIZE" />
                 </button>
@@ -335,15 +427,16 @@ watch(
               <TooltipContent side="top">{{ t('components.selectionActionBar.editIndividually') }}</TooltipContent>
             </Tooltip>
 
-            <div v-if="canBulkActions" :class="DIVIDER" />
+            <div v-if="canBulkActions" :class="DIVIDER_DESKTOP" />
 
             <Tooltip>
               <TooltipTrigger as-child>
                 <button
                   data-testid="action-add-to-collection"
                   :disabled="count === 0"
-                  :class="[BTN_ICON, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
-                  @click="emit('add-to-collection')"
+                  :class="[BTN_ICON_DESKTOP, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
+                  :aria-label="t('components.selectionActionBar.addToCollection')"
+                  @click="emitAddToCollection"
                 >
                   <FolderPlus :size="ICON_SIZE" />
                 </button>
@@ -354,9 +447,11 @@ watch(
             <Tooltip v-if="inCollection">
               <TooltipTrigger as-child>
                 <button
+                  data-testid="action-remove-from-collection"
                   :disabled="count === 0"
-                  :class="[BTN_ICON, count > 0 ? BTN_DESTRUCTIVE : BTN_DISABLED]"
-                  @click="emit('remove-from-collection')"
+                  :class="[BTN_ICON_DESKTOP, count > 0 ? BTN_DESTRUCTIVE : BTN_DISABLED]"
+                  :aria-label="t('components.selectionActionBar.removeFromCollection')"
+                  @click="emitRemoveFromCollection"
                 >
                   <FolderMinus :size="ICON_SIZE" />
                 </button>
@@ -364,15 +459,16 @@ watch(
               <TooltipContent side="top">{{ t('components.selectionActionBar.removeFromCollection') }}</TooltipContent>
             </Tooltip>
 
-            <div v-if="canShare" :class="DIVIDER" />
+            <div v-if="canShare" :class="DIVIDER_DESKTOP" />
 
             <Tooltip v-if="hasPermission('email_send')">
               <TooltipTrigger as-child>
                 <button
                   data-testid="action-send-email"
                   :disabled="count === 0"
-                  :class="[BTN_ICON, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
-                  @click="emit('send')"
+                  :class="[BTN_ICON_DESKTOP, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
+                  :aria-label="t('components.selectionActionBar.sendViaEmail')"
+                  @click="emitSend"
                 >
                   <Mail :size="ICON_SIZE" />
                 </button>
@@ -385,8 +481,9 @@ watch(
                 <button
                   data-testid="action-download-files"
                   :disabled="count === 0"
-                  :class="[BTN_ICON, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
-                  @click="exportMenuOpen = true"
+                  :class="[BTN_ICON_DESKTOP, count > 0 ? BTN_PRIMARY : BTN_DISABLED]"
+                  :aria-label="t('components.selectionActionBar.downloadFilesZip')"
+                  @click="openExportPicker"
                 >
                   <Download :size="ICON_SIZE" />
                 </button>
@@ -394,11 +491,11 @@ watch(
               <TooltipContent side="top">{{ t('components.selectionActionBar.downloadFilesZip') }}</TooltipContent>
             </Tooltip>
 
-            <div v-if="canShowMoreMenu" :class="DIVIDER" />
+            <div v-if="canShowMoreMenu" :class="DIVIDER_DESKTOP" />
 
             <Tooltip v-if="canShowMoreMenu">
               <TooltipTrigger as-child>
-                <span class="inline-flex shrink-0">
+                <span class="hidden sm:inline-flex shrink-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                       <button
@@ -445,7 +542,7 @@ watch(
                       </template>
                       <template v-if="canDownload">
                         <DropdownMenuSeparator v-if="canEditMetadata" />
-                        <DropdownMenuItem data-testid="action-export-metadata" @click="emit('export-metadata')">
+                        <DropdownMenuItem data-testid="action-export-metadata" @click="emitExportMetadata">
                           <FileSpreadsheet :size="14" />
                           <span>{{ t('components.selectionActionBar.exportMetadata') }}</span>
                         </DropdownMenuItem>
@@ -464,15 +561,16 @@ watch(
               <TooltipContent side="top">{{ t('components.selectionActionBar.moreActions') }}</TooltipContent>
             </Tooltip>
 
-            <div v-if="hasPermission('library_delete_books')" :class="DIVIDER" />
+            <div v-if="hasPermission('library_delete_books')" :class="DIVIDER_DESKTOP" />
 
             <Tooltip v-if="hasPermission('library_delete_books')">
               <TooltipTrigger as-child>
                 <button
                   data-testid="action-delete"
                   :disabled="count === 0"
-                  :class="[BTN_ICON, count > 0 ? BTN_DESTRUCTIVE : BTN_DISABLED]"
-                  @click="confirmingDelete = true"
+                  :class="[BTN_ICON_DESKTOP, count > 0 ? BTN_DESTRUCTIVE : BTN_DISABLED]"
+                  :aria-label="t('components.selectionActionBar.deleteSelected')"
+                  @click="startDelete"
                 >
                   <Trash2 :size="ICON_SIZE" />
                 </button>
@@ -480,14 +578,102 @@ watch(
               <TooltipContent side="top">{{ t('components.selectionActionBar.deleteSelected') }}</TooltipContent>
             </Tooltip>
 
+            <!-- Phone More menu: every action the desktop bar shows inline, with text labels -->
+            <span class="inline-flex shrink-0 sm:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger as-child>
+                  <button
+                    data-testid="action-mobile-more"
+                    :disabled="count === 0"
+                    :class="[BTN_ICON, count > 0 ? BTN_MUTED : BTN_DISABLED]"
+                    :aria-label="t('components.selectionActionBar.moreActions')"
+                  >
+                    <MoreHorizontal :size="ICON_SIZE" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="top" align="end" class="w-60">
+                  <DropdownMenuItem @click="emitAddToCollection">
+                    <FolderPlus :size="14" />
+                    <span>{{ t('components.selectionActionBar.addToCollection') }}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem v-if="inCollection" data-testid="mobile-action-remove-from-collection" @click="emitRemoveFromCollection">
+                    <FolderMinus :size="14" />
+                    <span>{{ t('components.selectionActionBar.removeFromCollection') }}</span>
+                  </DropdownMenuItem>
+                  <template v-if="canEditMetadata">
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem @click="openRatingPicker">
+                      <Star :size="14" />
+                      <span>{{ t('components.selectionActionBar.setRating') }}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @click="emitEdit">
+                      <Pencil :size="14" />
+                      <span>{{ t('components.selectionActionBar.openMetadataEditor') }}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem v-if="!queryScoped" @click="emitEditIndividually">
+                      <SquareArrowOutUpRight :size="14" />
+                      <span>{{ t('components.selectionActionBar.editIndividually') }}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @click="openFieldEditor">
+                      <SquarePen :size="14" />
+                      <span>{{ t('components.selectionActionBar.setField') }}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @click="onRefreshMetadata">
+                      <RefreshCw :size="14" />
+                      <span>{{ t('components.selectionActionBar.refreshMetadata') }}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @click="onReExtractCover">
+                      <ImageDown :size="14" />
+                      <span>{{ t('components.selectionActionBar.reExtractCover') }}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @click="lockAll">
+                      <Lock :size="14" />
+                      <span>{{ t('components.selectionActionBar.lockAll') }}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @click="unlockAll">
+                      <Unlock :size="14" />
+                      <span>{{ t('components.selectionActionBar.unlockAll') }}</span>
+                    </DropdownMenuItem>
+                  </template>
+                  <template v-if="canShare">
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem v-if="hasPermission('email_send')" @click="emitSend">
+                      <Mail :size="14" />
+                      <span>{{ t('components.selectionActionBar.sendViaEmail') }}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem v-if="canDownload" @click="openExportPicker">
+                      <Download :size="14" />
+                      <span>{{ t('components.selectionActionBar.downloadFilesZip') }}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem v-if="canDownload" @click="emitExportMetadata">
+                      <FileSpreadsheet :size="14" />
+                      <span>{{ t('components.selectionActionBar.exportMetadata') }}</span>
+                    </DropdownMenuItem>
+                  </template>
+                  <DropdownMenuItem v-if="canMoveToLibrary" @click="onMoveToLibrary">
+                    <FolderInput :size="14" />
+                    <span>{{ t('book.move.action') }}</span>
+                  </DropdownMenuItem>
+                  <template v-if="hasPermission('library_delete_books')">
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem data-testid="mobile-action-delete" class="text-destructive focus:text-destructive" @click="startDelete">
+                      <Trash2 :size="14" />
+                      <span>{{ t('components.selectionActionBar.deleteSelected') }}</span>
+                    </DropdownMenuItem>
+                  </template>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </span>
+
             <div :class="DIVIDER" />
 
             <Tooltip>
               <TooltipTrigger as-child>
                 <button
+                  data-testid="action-exit-selection"
                   :class="[BTN_ICON, 'text-muted-foreground hover:text-foreground hover:bg-muted']"
                   :aria-label="t('components.selectionActionBar.exitSelection')"
-                  @click="emit('exit')"
+                  @click="emitExit"
                 >
                   <X :size="ICON_SIZE" />
                 </button>
@@ -529,7 +715,7 @@ watch(
             <div :class="DIVIDER" />
             <select
               v-model="bulkField"
-              class="h-8 rounded-full border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              class="h-10 sm:h-8 rounded-full border border-border bg-background px-3 text-base sm:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option v-for="opt in BULK_EDITABLE_FIELD_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
@@ -538,13 +724,13 @@ watch(
               v-model="fieldValue"
               :search-fn="typeaheadSearchFn"
               :placeholder="fieldValuePlaceholder"
-              :class="'h-8 min-w-28 rounded-full border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary'"
+              :class="'h-10 sm:h-8 min-w-28 rounded-full border border-border bg-background px-3 text-base sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary'"
             />
             <input
               v-else
               v-model="fieldValue"
               :type="numericFieldSelected ? 'number' : 'text'"
-              class="h-8 min-w-28 rounded-full border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              class="h-10 sm:h-8 min-w-28 rounded-full border border-border bg-background px-3 text-base sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               :placeholder="fieldValuePlaceholder"
             />
             <button
@@ -562,10 +748,10 @@ watch(
             <span class="px-3 text-sm font-semibold text-destructive whitespace-nowrap">
               {{ t('components.selectionActionBar.deleteConfirm', { count }) }}
             </span>
-            <template v-if="count > 50">
+            <template v-if="requiresTypedDelete">
               <input
                 v-model="deleteInput"
-                class="h-7 w-24 rounded border border-border bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-destructive"
+                class="h-9 sm:h-7 w-24 rounded border border-border bg-background px-2 text-base sm:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-destructive"
                 :placeholder="t('components.selectionActionBar.typeDelete')"
               />
             </template>
@@ -581,6 +767,49 @@ watch(
           </template>
         </TooltipProvider>
       </div>
+
+      <Sheet :open="deleteSheetOpen" @update:open="onDeleteSheetOpenChange">
+        <SheetContent side="bottom" hide-close class="rounded-t-2xl pb-[env(safe-area-inset-bottom)]" data-testid="delete-confirm-sheet">
+          <SheetHeader class="pb-0">
+            <SheetTitle class="text-destructive">{{ t('components.selectionActionBar.deleteConfirm', { count }) }}</SheetTitle>
+            <SheetDescription>{{ t('components.selectionActionBar.typeDeleteToConfirm') }}</SheetDescription>
+          </SheetHeader>
+          <div class="px-4">
+            <input
+              v-model="deleteInput"
+              data-testid="delete-confirm-sheet-input"
+              autocapitalize="characters"
+              autocomplete="off"
+              autocorrect="off"
+              spellcheck="false"
+              enterkeyhint="done"
+              class="h-11 w-full rounded-lg border border-border bg-background px-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-destructive"
+              :placeholder="t('components.selectionActionBar.typeDelete')"
+              @keydown.enter="onConfirmDelete"
+            />
+          </div>
+          <SheetFooter>
+            <button
+              data-testid="delete-confirm-sheet-delete"
+              :disabled="!canConfirmDelete"
+              :class="[
+                'h-11 w-full rounded-full bg-destructive text-sm font-medium text-destructive-foreground transition-opacity',
+                !canConfirmDelete && 'opacity-40 cursor-not-allowed',
+              ]"
+              @click="onConfirmDelete"
+            >
+              {{ t('common.delete') }}
+            </button>
+            <button
+              data-testid="delete-confirm-sheet-cancel"
+              class="h-11 w-full rounded-full text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              @click="cancelDelete"
+            >
+              {{ t('common.cancel') }}
+            </button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   </Transition>
 </template>

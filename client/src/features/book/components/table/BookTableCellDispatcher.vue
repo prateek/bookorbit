@@ -121,6 +121,7 @@ const isComic = computed(() => primaryFile.value?.format != null && FORMAT_TO_GR
     v-else-if="cellType === 'cover'"
     :book-id="book.id"
     :title="book.title"
+    :series-name="book.seriesName"
     :version="book.updatedAt ?? book.addedAt"
     :has-cover="book.hasCover"
     :is-audio="isAudiobook"

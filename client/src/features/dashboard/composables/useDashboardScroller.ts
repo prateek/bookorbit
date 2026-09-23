@@ -9,6 +9,7 @@ import {
   type DashboardScrollerBatchResult,
 } from '@bookorbit/types'
 import { api } from '@/lib/api'
+import { onAppResumed } from '@/components/sidebar/useAppResume'
 import { useBookProgressRefresh } from '@/features/book/composables/useBookProgressRefresh'
 
 type PendingScrollerRequest = {
@@ -76,21 +77,39 @@ export function useDashboardScroller(type: BookScrollerType, limit = 20, smartSc
   const loading = ref(true)
   const error = ref(false)
 
+  let requestToken = 0
+
   async function load() {
+    const token = ++requestToken
     loading.value = true
     error.value = false
     try {
       const result = await requestScroller(type, limit, smartScopeId)
+      if (token !== requestToken) return
       books.value = result.books
       error.value = result.failed
     } catch {
-      error.value = true
+      if (token === requestToken) error.value = true
     } finally {
-      loading.value = false
+      if (token === requestToken) loading.value = false
+    }
+  }
+
+  /** Swaps in fresh books without the skeleton, keeping the current shelf if the request fails. */
+  async function reloadInPlace() {
+    if (loading.value) return
+    if (error.value) return load()
+    const token = ++requestToken
+    try {
+      const result = await requestScroller(type, limit, smartScopeId)
+      if (token === requestToken && !result.failed) books.value = result.books
+    } catch {
+      // The shelf on screen is still usable.
     }
   }
 
   useBookProgressRefresh(load)
+  onAppResumed(reloadInPlace)
   onMounted(load)
   return { books, loading, error, refresh: load }
 }
