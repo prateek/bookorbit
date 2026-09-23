@@ -314,4 +314,38 @@ describe('useDashboardConfig', () => {
 
     setItemSpy.mockRestore()
   })
+
+  it('drops Continue Listening from an unsaved default layout when no library can hold audiobooks', async () => {
+    const { useDashboardConfig } = await import('../useDashboardConfig')
+    const { scrollers, defaultScrollers, setAudiobooksAvailable, reset } = useDashboardConfig()
+    const listeningEnabled = () => scrollers.value.find((scroller) => scroller.type === 'continue-listening')?.enabled
+
+    setAudiobooksAvailable(false)
+
+    expect(listeningEnabled()).toBe(false)
+    expect(defaultScrollers().find((scroller) => scroller.type === 'continue-listening')?.enabled).toBe(false)
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+
+    reset()
+    expect(listeningEnabled()).toBe(false)
+
+    setAudiobooksAvailable(true)
+    expect(listeningEnabled()).toBe(true)
+  })
+
+  it('keeps a saved layout as the reader left it when no library can hold audiobooks', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([{ id: '5', type: 'continue-listening', label: 'Continue Listening', enabled: true, order: 1, limit: 20 }]),
+    )
+
+    const { useDashboardConfig } = await import('../useDashboardConfig')
+    const { scrollers, setAudiobooksAvailable } = useDashboardConfig()
+
+    setAudiobooksAvailable(false)
+
+    expect(scrollers.value).toEqual([
+      { id: '5', type: 'continue-listening', label: 'Continue Listening', enabled: true, order: 1, limit: 20, rows: 1 },
+    ])
+  })
 })

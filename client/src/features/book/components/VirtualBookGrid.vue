@@ -9,6 +9,7 @@ import CollapsedSeriesCard from './CollapsedSeriesCard.vue'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '../lib/cover-aspect-ratio'
 import { isBookPlaceholder, type BookSlot } from '../composables/useBookWindow'
 import { useGridCardLabels } from '../composables/useGridCardLabels'
+import { hasUniformFormat } from '../lib/uniform-format'
 
 type BookActionType = 'quick-view' | 'add-to-collection' | 'move-to-library' | 'delete'
 
@@ -147,6 +148,7 @@ const staticVariableWrapStyle = computed(() => ({
 const useVariableStaticWidths = computed(() => !props.virtualized && squareCoverScale.value > 1)
 
 const staticBooks = computed(() => props.books.filter((slot): slot is BookCard => !isBookPlaceholder(slot)))
+const hideFormatBadges = computed(() => hasUniformFormat(props.books))
 
 function asBook(slot: BookSlot): BookCard {
   return slot as BookCard
@@ -286,6 +288,7 @@ defineExpose({ scrollToIndex })
           :selection-mode="selectionMode"
           :selected="isSelected?.(book.id) ?? false"
           :allow-move-to-library="allowMoveToLibrary"
+          :hide-format-badge="hideFormatBadges"
           @action="emit('action', book, $event)"
           @select="emit('select', book.id, $event)"
           @update:book="emit('update:book', $event)"
@@ -303,6 +306,7 @@ defineExpose({ scrollToIndex })
           :selection-mode="selectionMode"
           :selected="isSelected?.(book.id) ?? false"
           :allow-move-to-library="allowMoveToLibrary"
+          :hide-format-badge="hideFormatBadges"
           @action="emit('action', book, $event)"
           @select="emit('select', book.id, $event)"
           @update:book="emit('update:book', $event)"
@@ -341,6 +345,7 @@ defineExpose({ scrollToIndex })
             :selection-mode="selectionMode"
             :selected="isSelected?.(item.id) ?? false"
             :allow-move-to-library="allowMoveToLibrary"
+            :hide-format-badge="hideFormatBadges"
             @action="emit('action', asBook(item), $event)"
             @select="emit('select', item.id, $event)"
             @update:book="emit('update:book', $event)"
