@@ -304,8 +304,21 @@ describe('PdfV4ReaderView', () => {
   })
 
   it('routes back from the BookOrbit reader shell', async () => {
+    window.history.replaceState({ back: '/book/7' }, '')
+    try {
+      const wrapper = await mountReader()
+      wrapper.getComponent({ name: 'PdfReaderContent' }).vm.$emit('back')
+      expect(mockRouterBack).toHaveBeenCalledOnce()
+    } finally {
+      window.history.replaceState(null, '')
+    }
+  })
+
+  it('lands on the book page when the reader was opened without in-app history', async () => {
+    window.history.replaceState(null, '')
     const wrapper = await mountReader()
     wrapper.getComponent({ name: 'PdfReaderContent' }).vm.$emit('back')
-    expect(mockRouterBack).toHaveBeenCalledOnce()
+    expect(mockRouterBack).not.toHaveBeenCalled()
+    expect(mockRouterReplace).toHaveBeenCalledWith({ name: 'book-detail', params: { bookId: expect.any(Number) } })
   })
 })

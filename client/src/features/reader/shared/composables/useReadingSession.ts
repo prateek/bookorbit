@@ -110,7 +110,8 @@ export function useReadingSession(bookFileId: number, getProgress: () => Progres
     resetIdleTimer()
   }
 
-  function endSession(useBeacon = false) {
+  /** `keepalive` lets the request outlive a page that is being closed or unloaded. */
+  function endSession(keepalive = false) {
     if (!canTrack()) {
       clearIdleTimer()
       stopElapsedInterval()
@@ -153,11 +154,9 @@ export function useReadingSession(bookFileId: number, getProgress: () => Progres
 
     const url = `/api/v1/books/files/${bookFileId}/sessions`
 
-    if (useBeacon && typeof navigator.sendBeacon === 'function') {
-      navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }))
-    } else {
-      api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }).catch(() => {})
-    }
+    api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, ...(keepalive ? { keepalive: true } : {}) }).catch(
+      () => {},
+    )
   }
 
   function onVisibilityChange() {
@@ -168,18 +167,19 @@ export function useReadingSession(bookFileId: number, getProgress: () => Progres
     }
   }
 
-  function onBeforeUnload() {
+  // iOS Home Screen apps never fire beforeunload; pagehide is the last event they reliably send.
+  function onPageHide() {
     endSession(true)
   }
 
   document.addEventListener('visibilitychange', onVisibilityChange)
-  window.addEventListener('beforeunload', onBeforeUnload)
+  window.addEventListener('pagehide', onPageHide)
 
   onUnmounted(() => {
     endSession()
     stopElapsedInterval()
     document.removeEventListener('visibilitychange', onVisibilityChange)
-    window.removeEventListener('beforeunload', onBeforeUnload)
+    window.removeEventListener('pagehide', onPageHide)
   })
 
   return { onActivity, endSession, elapsedMinutes }

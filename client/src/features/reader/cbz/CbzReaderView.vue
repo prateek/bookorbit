@@ -23,6 +23,7 @@ import { useReaderProgress } from '../shared/composables/useReaderProgress'
 import { useReadingSession } from '../shared/composables/useReadingSession'
 import { useCbz } from './composables/useCbz'
 import { useSeriesNextBook } from '../shared/composables/useSeriesNextBook'
+import { useReaderBack } from '../shared/composables/useReaderBack'
 import { useCbzSettings } from './composables/useCbzSettings'
 import { useReaderSettings } from '../shared/composables/useReaderSettings'
 import { useFullscreen } from '../shared/composables/useFullscreen'
@@ -62,6 +63,7 @@ const { onActivity, elapsedMinutes } = useReadingSession(
 )
 const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes, 0, { trackingEnabled })
 const { pageCount, bookTitle, seriesId, loading, error, pageUrl, load } = useCbz(props.fileId, props.bookId)
+const { goBack } = useReaderBack(props.bookId, () => ({ seriesId: seriesId.value, seriesMemberships: [] }))
 const {
   fitMode,
   viewMode,
@@ -795,7 +797,7 @@ onUnmounted(() => {
       :class="headerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'"
     >
       <div class="h-12 flex items-center gap-1 px-3 bg-background/90 backdrop-blur-md border-b border-border">
-        <button class="viewer-btn" @click="router.back()"><ArrowLeft :size="16" /></button>
+        <button class="viewer-btn" @click="goBack"><ArrowLeft :size="16" /></button>
         <div class="flex-1 min-w-0 flex flex-col justify-center px-2">
           <span v-if="bookTitle" class="text-sm font-serif text-foreground truncate leading-tight">{{ bookTitle }}</span>
           <span class="text-xs text-muted-foreground tabular-nums">{{ pageLabel }}</span>
