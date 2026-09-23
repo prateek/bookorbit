@@ -23,9 +23,7 @@ onMounted(load)
 </script>
 
 <template>
-  <div
-    class="[&_.settings-hint]:overflow-hidden [&_.settings-hint]:text-ellipsis [&_.settings-hint]:whitespace-nowrap md:[&_.settings-hint]:overflow-visible md:[&_.settings-hint]:whitespace-normal"
-  >
+  <div>
     <SettingsPageHeader v-if="!props.embedded" :title="t('settings.reader.audio.title')" :subtitle="t('settings.reader.audio.subtitle')" />
 
     <!-- Playback -->

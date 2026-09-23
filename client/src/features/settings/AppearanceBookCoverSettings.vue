@@ -257,7 +257,7 @@ onMounted(async () => {
           <p class="settings-label">
             {{ t('settings.appearance.bookCovers.showSpineOnComics.label') }}
           </p>
-          <p class="settings-hint overflow-hidden text-ellipsis whitespace-nowrap md:whitespace-normal md:overflow-visible">
+          <p class="settings-hint">
             {{ t('settings.appearance.bookCovers.showSpineOnComics.hint') }}
           </p>
         </div>
@@ -300,11 +300,11 @@ onMounted(async () => {
             {{ t('settings.appearance.bookCovers.shadow.hint') }}
           </p>
         </div>
-        <div class="mt-3 flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/50 self-start">
+        <div class="mt-3 flex flex-wrap items-center gap-1 p-1 rounded-lg border border-border bg-muted/50 self-start">
           <button
             v-for="opt in bookShadowOptions"
             :key="opt.id"
-            class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors pointer-coarse:min-h-11 pointer-coarse:text-sm"
             :class="bookShadowStrength === opt.id ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
             @click="setBookShadowStrength(opt.id)"
           >
@@ -326,7 +326,7 @@ onMounted(async () => {
       <div v-for="opt in overlayOptions" :key="opt.key" class="flex items-center justify-between gap-3 px-4 py-3 md:px-5 md:py-3.5 bg-card">
         <div class="min-w-0">
           <p class="settings-label">{{ opt.label }}</p>
-          <p class="settings-hint overflow-hidden text-ellipsis whitespace-nowrap md:whitespace-normal md:overflow-visible">
+          <p class="settings-hint">
             {{ opt.hint }}
           </p>
         </div>
