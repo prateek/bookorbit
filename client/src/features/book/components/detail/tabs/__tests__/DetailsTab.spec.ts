@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
-import type { BookDetail } from '@bookorbit/types'
+import type { BookDetail, SeriesBookRecommendation } from '@bookorbit/types'
 import DetailsTab from '../DetailsTab.vue'
+import DiscoverRow from '../../DiscoverRow.vue'
+import MetadataScoreBadge from '@/features/metadata-score/components/MetadataScoreBadge.vue'
+import { bookDetailBackFallback } from '../../book-detail-back-target'
 import BookReadingActivityCard from '../../details/BookReadingActivityCard.vue'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { useProviderLinkSettings } from '@/features/book/composables/useProviderLinkSettings'
@@ -10,6 +13,7 @@ import { useProviderLinkSettings } from '@/features/book/composables/useProvider
 const mocks = vi.hoisted(() => ({
   api: vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(),
   push: vi.fn<(to: unknown) => void>(),
+  replace: vi.fn<(to: unknown) => void>(),
   hasPermission: vi.fn<(...args: unknown[]) => boolean>(),
   user: { value: { settings: { timezone: 'UTC' } } },
 }))
@@ -18,7 +22,7 @@ vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-router')>()
   return {
     ...actual,
-    useRouter: () => ({ push: mocks.push, back: vi.fn<() => void>() }),
+    useRouter: () => ({ push: mocks.push, replace: mocks.replace, back: vi.fn<() => void>() }),
   }
 })
 
@@ -163,6 +167,7 @@ describe('DetailsTab cover surface', () => {
     resizeObserverCallbacks = []
     mocks.api.mockReset()
     mocks.push.mockReset()
+    mocks.replace.mockReset()
     mocks.hasPermission.mockReset()
     mocks.hasPermission.mockReturnValue(true)
     mocks.user.value.settings.timezone = 'UTC'
@@ -902,6 +907,95 @@ describe('DetailsTab cover surface', () => {
       expect(panel).toContain('Unavailable')
       expect(panel).toContain('Matching standalone audiobook files are required.')
       expect(panel).not.toContain('EPUB copies only')
+    })
+  })
+
+  describe('series chapters', () => {
+    function seriesBook(id: number, seriesIndex: string): SeriesBookRecommendation {
+      return {
+        id,
+        title: `Chapter ${seriesIndex}`,
+        coverAspectRatio: '2/3',
+        updatedAt: null,
+        seriesIndex,
+        hasCover: false,
+        authors: [],
+        readStatus: null,
+      }
+    }
+
+    const chapterBook = () => makeBook({ id: 12, seriesId: 20, seriesName: 'Serial', seriesIndex: '600', metadataScore: 58 })
+
+    it('steps to the neighbouring chapters from the series window without stacking history', async () => {
+      const wrapper = mountDetails(chapterBook())
+      await flushPromises()
+      expect(wrapper.find('[data-test="series-nav"]').exists()).toBe(false)
+
+      wrapper.findComponent(DiscoverRow).vm.$emit('series-books', [seriesBook(11, '599'), seriesBook(12, '600'), seriesBook(13, '601')])
+      await flushPromises()
+
+      const next = wrapper.get('[data-test="series-nav-next"]')
+      expect(next.text()).toContain('Next in series')
+      expect(next.text()).toContain('#601')
+      expect(next.attributes('aria-label')).toBe('Next in series: Chapter 601')
+      await next.trigger('click')
+      expect(mocks.replace).toHaveBeenCalledWith({ name: 'book-detail', params: { bookId: 13 } })
+
+      await wrapper.get('[data-test="series-nav-previous"]').trigger('click')
+      expect(mocks.replace).toHaveBeenLastCalledWith({ name: 'book-detail', params: { bookId: 11 } })
+    })
+
+    it('disables the next control on the last chapter', async () => {
+      const wrapper = mountDetails(chapterBook())
+      await flushPromises()
+
+      wrapper.findComponent(DiscoverRow).vm.$emit('series-books', [seriesBook(11, '599'), seriesBook(12, '600')])
+      await flushPromises()
+
+      expect(wrapper.get('[data-test="series-nav-next"]').attributes('disabled')).toBeDefined()
+      expect(wrapper.get('[data-test="series-nav-previous"]').attributes('disabled')).toBeUndefined()
+    })
+
+    it('collapses empty detail rows on narrow panes for series entries only', async () => {
+      const series = mountDetails(chapterBook())
+      await flushPromises()
+      const rowFor = (wrapper: ReturnType<typeof mountDetails>, label: string) =>
+        wrapper.findAll('dl > div').find((row) => row.find('dt').text() === label)!
+
+      expect(rowFor(series, 'Publisher').classes()).toContain('@max-[46rem]/book-detail:hidden')
+      expect(rowFor(series, 'ISBN').classes()).toContain('@max-[46rem]/book-detail:hidden')
+      expect(rowFor(series, 'Library').classes()).not.toContain('@max-[46rem]/book-detail:hidden')
+
+      const standalone = mountDetails(makeBook())
+      await flushPromises()
+      expect(rowFor(standalone, 'Publisher').classes()).not.toContain('@max-[46rem]/book-detail:hidden')
+    })
+
+    it('keeps the metadata score out of the compact identity for series entries', async () => {
+      const series = mountDetails(chapterBook())
+      await flushPromises()
+      expect(series.findAllComponents(MetadataScoreBadge)).toHaveLength(1)
+
+      const standalone = mountDetails(makeBook({ metadataScore: 58 }))
+      await flushPromises()
+      expect(standalone.findAllComponents(MetadataScoreBadge)).toHaveLength(2)
+    })
+
+    it('publishes the series as the back fallback for this book', async () => {
+      mountDetails(chapterBook())
+      await flushPromises()
+
+      expect(bookDetailBackFallback(12)).toEqual({ name: 'series-detail', params: { seriesId: 20 } })
+      expect(bookDetailBackFallback(99)).toEqual({ name: 'dashboard' })
+    })
+
+    it('passes the read status to the reading activity card', async () => {
+      const wrapper = mountDetails(
+        makeBook({ readStatus: { status: 'read', source: 'manual', startedAt: null, finishedAt: null } as BookDetail['readStatus'] }),
+      )
+      await flushPromises()
+
+      expect(wrapper.getComponent(BookReadingActivityCard).props('readStatus')).toBe('read')
     })
   })
 })

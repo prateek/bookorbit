@@ -8,6 +8,8 @@ import {
   BookOpen,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   Library,
   Headphones,
@@ -32,10 +34,19 @@ import { getProviderColor, PROVIDER_SHORT_LABELS } from '@/lib/provider-colors'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 import { COVER_ASPECT_RATIO_KEY, DEFAULT_COVER_ASPECT_RATIO } from '@/features/book/lib/cover-aspect-ratio'
 import { FORMAT_TO_GROUP, READER_OPENABLE_FORMATS } from '@bookorbit/types'
-import type { BookDetail, BookKoboState, CustomMetadataBookValue, ReadAloudProgressSync, ReadStatus, UserBookStatus } from '@bookorbit/types'
+import type {
+  BookDetail,
+  BookKoboState,
+  CustomMetadataBookValue,
+  ReadAloudProgressSync,
+  ReadStatus,
+  SeriesBookRecommendation,
+  UserBookStatus,
+} from '@bookorbit/types'
 import { STATUS_OPTIONS, STATUS_ICONS, STATUS_COLORS, useBookStatus } from '@/features/book/composables/useBookStatus'
 import BookDownloadButton from '@/features/book/components/BookDownloadButton.vue'
 import DiscoverRow from '@/features/book/components/detail/DiscoverRow.vue'
+import { setBookDetailBackTarget } from '@/features/book/components/detail/book-detail-back-target'
 import BookCoverArtwork from '@/features/book/components/BookCoverArtwork.vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -1018,6 +1029,63 @@ const seriesLinks = computed<SeriesDisplayLink[]>(() => {
   ]
 })
 
+const isInSeries = computed(() => seriesLinks.value.length > 0)
+
+watch(
+  () => [props.book.id, props.book.seriesId ?? null, props.book.libraryId ?? null] as const,
+  ([bookId, seriesId, libraryId]) => setBookDetailBackTarget({ bookId, seriesId, libraryId }),
+  { immediate: true },
+)
+
+const seriesWindow = ref<SeriesBookRecommendation[]>([])
+
+function handleSeriesBooks(books: SeriesBookRecommendation[]) {
+  seriesWindow.value = books
+}
+
+const seriesNeighbors = computed(() => {
+  const books = seriesWindow.value
+  const index = books.findIndex((b) => b.id === props.book.id)
+  if (index === -1) return { previous: null, next: null }
+  return { previous: books[index - 1] ?? null, next: books[index + 1] ?? null }
+})
+
+const hasSeriesNeighbors = computed(() => seriesNeighbors.value.previous != null || seriesNeighbors.value.next != null)
+
+function seriesNeighborTitle(book: SeriesBookRecommendation): string {
+  return book.title ?? (book.seriesIndex != null ? `#${book.seriesIndex}` : t('book.detail.details.untitled'))
+}
+
+const previousInSeriesLabel = computed(() => {
+  const book = seriesNeighbors.value.previous
+  return book ? t('book.detail.details.previousInSeriesAria', { title: seriesNeighborTitle(book) }) : t('book.detail.details.previousInSeries')
+})
+
+const nextInSeriesLabel = computed(() => {
+  const book = seriesNeighbors.value.next
+  return book ? t('book.detail.details.nextInSeriesAria', { title: seriesNeighborTitle(book) }) : t('book.detail.details.nextInSeries')
+})
+
+// Replace rather than push: stepping through a long serial should not stack one history entry per
+// chapter between the reader and the page they came from.
+function goToSeriesNeighbor(book: SeriesBookRecommendation | null) {
+  if (book) void router.replace({ name: 'book-detail', params: { bookId: book.id } })
+}
+
+function handlePreviousInSeries() {
+  goToSeriesNeighbor(seriesNeighbors.value.previous)
+}
+
+function handleNextInSeries() {
+  goToSeriesNeighbor(seriesNeighbors.value.next)
+}
+
+// Chapter-style series entries rarely carry publisher, page or ISBN data, so on narrow panes empty
+// rows are dropped instead of listing a column of dashes.
+function detailRowClass(hasValue: boolean): string {
+  return !hasValue && isInSeries.value ? '@max-[46rem]/book-detail:hidden' : ''
+}
+
 function formatDateTime(iso: string): string {
   return formatLocaleDate(new Date(iso), { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
@@ -1404,7 +1472,7 @@ watch(
             </template>
           </div>
           <div class="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <Popover :open="mobileScoreBreakdownOpen" @update:open="handleMobileScoreOpen">
+            <Popover v-if="!isInSeries" :open="mobileScoreBreakdownOpen" @update:open="handleMobileScoreOpen">
               <PopoverTrigger as-child>
                 <MetadataScoreBadge :score="book.metadataScore" />
               </PopoverTrigger>
@@ -1437,7 +1505,7 @@ watch(
         <div class="space-y-2">
           <div class="flex gap-2">
             <!-- Read/Play button: split when multiple files, plain when single -->
-            <div v-if="hasMultipleFiles" class="flex flex-1 h-9 rounded-md overflow-hidden">
+            <div v-if="hasMultipleFiles" class="flex flex-1 h-11 sm:h-9 rounded-md overflow-hidden">
               <button
                 class="flex flex-1 items-center justify-center gap-2 bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                 :disabled="!primaryFile"
@@ -1451,7 +1519,7 @@ watch(
               <Popover :open="readMenuOpen" @update:open="(v) => (readMenuOpen = v)">
                 <PopoverTrigger as-child>
                   <button
-                    class="w-8 shrink-0 flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                    class="w-11 sm:w-8 shrink-0 flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                     :title="t('book.detail.details.chooseFormat')"
                   >
                     <ChevronDown class="size-3.5" />
@@ -1484,7 +1552,7 @@ watch(
             </div>
             <button
               v-else
-              class="flex flex-1 items-center justify-center gap-2 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              class="flex flex-1 items-center justify-center gap-2 h-11 sm:h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
               :disabled="!primaryFile"
               @click="openBook"
             >
@@ -1496,7 +1564,7 @@ watch(
             <Tooltip>
               <TooltipTrigger as-child>
                 <button
-                  class="flex items-center justify-center h-9 w-12 shrink-0 rounded-md border border-input bg-background hover:bg-muted transition-colors disabled:opacity-50"
+                  class="flex items-center justify-center h-11 sm:h-9 w-12 shrink-0 rounded-md border border-input bg-background hover:bg-muted transition-colors disabled:opacity-50"
                   :disabled="!primaryFile"
                   :aria-label="t('book.detail.details.peek')"
                   @click="peekBook"
@@ -1506,6 +1574,35 @@ watch(
               </TooltipTrigger>
               <TooltipContent>{{ t('book.detail.details.peek') }}</TooltipContent>
             </Tooltip>
+          </div>
+
+          <div v-if="hasSeriesNeighbors" data-test="series-nav" class="flex gap-2">
+            <button
+              type="button"
+              data-test="series-nav-previous"
+              class="flex h-11 w-12 shrink-0 items-center justify-center rounded-md border border-input bg-background transition-colors hover:bg-muted disabled:opacity-50 sm:h-9"
+              :disabled="!seriesNeighbors.previous"
+              :title="previousInSeriesLabel"
+              :aria-label="previousInSeriesLabel"
+              @click="handlePreviousInSeries"
+            >
+              <ChevronLeft class="size-4" />
+            </button>
+            <button
+              type="button"
+              data-test="series-nav-next"
+              class="flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-50 sm:h-9"
+              :disabled="!seriesNeighbors.next"
+              :title="nextInSeriesLabel"
+              :aria-label="nextInSeriesLabel"
+              @click="handleNextInSeries"
+            >
+              <span class="truncate">{{ t('book.detail.details.nextInSeries') }}</span>
+              <span v-if="seriesNeighbors.next?.seriesIndex != null" class="shrink-0 tabular-nums opacity-70"
+                >#{{ seriesNeighbors.next.seriesIndex }}</span
+              >
+              <ChevronRight class="size-4 shrink-0" />
+            </button>
           </div>
 
           <div class="flex gap-2">
@@ -2041,6 +2138,7 @@ watch(
         :stats="readingStats"
         :sessions="readingSessions"
         :loading="readingLogLoading"
+        :read-status="localReadStatus"
       />
     </div>
 
@@ -2057,7 +2155,10 @@ watch(
         </h3>
 
         <dl class="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <div class="flex items-baseline justify-between gap-3 border-b border-border py-[6px] last:border-b-0">
+          <div
+            class="flex items-baseline justify-between gap-3 border-b border-border py-[6px] last:border-b-0"
+            :class="detailRowClass(!!book.publisher)"
+          >
             <dt class="shrink-0 text-[11px] font-medium text-muted-foreground">{{ t('book.detail.details.publisher') }}</dt>
             <template v-if="book.publisher">
               <Tooltip>
@@ -2069,17 +2170,26 @@ watch(
             </template>
             <dd v-else class="truncate text-[13px] font-medium">-</dd>
           </div>
-          <div class="flex items-baseline justify-between gap-3 border-b border-border py-[6px] last:border-b-0">
+          <div
+            class="flex items-baseline justify-between gap-3 border-b border-border py-[6px] last:border-b-0"
+            :class="detailRowClass(!!(book.publishedDate || book.publishedYear))"
+          >
             <dt class="shrink-0 text-[11px] font-medium text-muted-foreground">{{ t('book.detail.details.published') }}</dt>
             <dd class="truncate text-[13px] font-medium">
               {{ book.publishedDate ? formatDisplayDate(book.publishedDate) : book.publishedYear || '-' }}
             </dd>
           </div>
-          <div class="flex items-baseline justify-between gap-3 border-b border-border py-[6px] last:border-b-0">
+          <div
+            class="flex items-baseline justify-between gap-3 border-b border-border py-[6px] last:border-b-0"
+            :class="detailRowClass(!!book.language)"
+          >
             <dt class="shrink-0 text-[11px] font-medium text-muted-foreground">{{ t('book.detail.details.language') }}</dt>
             <dd class="truncate text-[13px] font-medium capitalize">{{ book.language || '-' }}</dd>
           </div>
-          <div class="flex items-baseline justify-between gap-3 border-b border-border py-[6px] last:border-b-0">
+          <div
+            class="flex items-baseline justify-between gap-3 border-b border-border py-[6px] last:border-b-0"
+            :class="detailRowClass(!!book.pageCount)"
+          >
             <dt class="shrink-0 text-[11px] font-medium text-muted-foreground">{{ t('book.detail.details.pages') }}</dt>
             <dd class="truncate text-[13px] font-medium">{{ book.pageCount || '-' }}</dd>
           </div>
@@ -2099,7 +2209,10 @@ watch(
               {{ book.audioMetadata.abridged ? t('book.detail.details.abridged') : t('book.detail.details.unabridged') }}
             </dd>
           </div>
-          <div class="flex items-baseline justify-between gap-3 border-b border-border py-[6px] last:border-b-0">
+          <div
+            class="flex items-baseline justify-between gap-3 border-b border-border py-[6px] last:border-b-0"
+            :class="detailRowClass(!!(book.isbn13 || book.isbn10))"
+          >
             <dt class="shrink-0 text-[11px] font-medium text-muted-foreground">{{ t('book.detail.details.isbn') }}</dt>
             <dd v-if="book.isbn13 || book.isbn10" class="truncate text-right text-[13px] font-medium font-mono">
               <div v-if="book.isbn13">{{ book.isbn13 }}</div>
@@ -2289,7 +2402,15 @@ watch(
 
     <!-- Discovery shelf -->
     <div data-test="discovery-shelf" class="min-w-0 @min-[46rem]/book-detail:col-span-3 @min-[46rem]/book-detail:row-start-2">
-      <DiscoverRow class="h-full" :book-id="book.id" :series-name="book.seriesName" :author-count="book.authors.length" size="lg" flush />
+      <DiscoverRow
+        class="h-full"
+        :book-id="book.id"
+        :series-name="book.seriesName"
+        :author-count="book.authors.length"
+        size="lg"
+        flush
+        @series-books="handleSeriesBooks"
+      />
     </div>
   </div>
 

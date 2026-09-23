@@ -22,6 +22,11 @@ const props = withDefaults(
   { size: 'md', flush: false },
 )
 
+const emit = defineEmits<{
+  /** The series window around this book, current book included, in reading order. */
+  'series-books': [books: SeriesBookRecommendation[]]
+}>()
+
 const { t } = useI18n()
 
 const seriesBooks = ref<SeriesBookRecommendation[]>([])
@@ -43,9 +48,9 @@ const activeCarouselRef = computed(() => {
   return similarCarouselRef.value
 })
 
-const filteredSeriesBooks = computed(() => seriesBooks.value.filter((b) => b.id !== props.bookId))
+const hasOtherSeriesBooks = computed(() => seriesBooks.value.some((b) => b.id !== props.bookId))
 
-const excludeFromSimilar = computed(() => [...filteredSeriesBooks.value.map((b) => b.id), ...authorBooks.value.map((b) => b.id)])
+const excludeFromSimilar = computed(() => [...seriesBooks.value.map((b) => b.id), ...authorBooks.value.map((b) => b.id)])
 
 const filteredSimilar = computed(() => {
   const excluded = new Set(excludeFromSimilar.value)
@@ -53,7 +58,7 @@ const filteredSimilar = computed(() => {
 })
 
 function booksForSection(section: Section) {
-  if (section === 'series') return filteredSeriesBooks.value
+  if (section === 'series') return hasOtherSeriesBooks.value ? seriesBooks.value : []
   if (section === 'author') return authorBooks.value
   return filteredSimilar.value
 }
@@ -62,7 +67,7 @@ function booksForSection(section: Section) {
 // when navigating to a book whose props suggest data that the fetch hasn't confirmed yet.
 const availablePills = computed<Section[]>(() => {
   const pills: Section[] = []
-  if (filteredSeriesBooks.value.length > 0) pills.push('series')
+  if (hasOtherSeriesBooks.value) pills.push('series')
   if (authorBooks.value.length > 0) pills.push('author')
   if (filteredSimilar.value.length > 0) pills.push('similar')
   return pills
@@ -137,6 +142,8 @@ watch(
     await initSection()
   },
 )
+
+watch(seriesBooks, (books) => emit('series-books', books))
 
 const hasAnyContent = computed(() => availablePills.value.length > 0 || Object.values(loading.value).some(Boolean))
 </script>

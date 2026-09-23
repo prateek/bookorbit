@@ -5130,7 +5130,8 @@
       },
       "header": {
         "previousBook": "Previous book",
-        "nextBook": "Next book"
+        "nextBook": "Next book",
+        "back": "Back"
       },
       "tabs": {
         "details": "Details",
@@ -5335,6 +5336,12 @@
         "yourReading": "Your reading",
         "lastRead": "last read {when}",
         "notStarted": "not started",
+        "markedStatus": "marked {status}",
+        "noSessionsRecorded": "No reading sessions recorded. Opening this book in the reader tracks time, pace and per-device progress.",
+        "previousInSeries": "Previous in series",
+        "previousInSeriesAria": "Previous in series: {title}",
+        "nextInSeries": "Next in series",
+        "nextInSeriesAria": "Next in series: {title}",
         "noSessionsYet": "No reading sessions yet. Opening this book in the reader tracks time, pace and per-device progress.",
         "activitySessions": "Sessions",
         "activityTime": "Time",
@@ -8650,6 +8657,8 @@
     }
   },
   "metadataScore": {
+    "badgeLabel": "Metadata {score}%",
+    "badgeAria": "Metadata score {score}%",
     "missingFields": "{count, plural, =0 {no fields missing - edit metadata} one {# field missing - edit metadata} other {# fields missing - edit metadata}}"
   },
   "migration": {

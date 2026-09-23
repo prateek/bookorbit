@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatNumber, formatPercent, formatRelativeFromNow } from '@/i18n/formatters'
 import { formatColorVar } from '@/features/book/lib/format-colors'
-import type { BookReadingSession, BookReadingSessionStats } from '@bookorbit/types'
+import type { BookReadingSession, BookReadingSessionStats, ReadStatus } from '@bookorbit/types'
 
 const props = withDefaults(
   defineProps<{
@@ -12,13 +12,27 @@ const props = withDefaults(
     loading?: boolean
     /** Recent sessions listed under the summary. 0 hides the list entirely. */
     sessionRows?: number
+    /** Stands in for the summary when no sessions exist, so a book marked read never reads "not started". */
+    readStatus?: ReadStatus | null
   }>(),
-  { sessions: () => [], loading: false, sessionRows: 4 },
+  { sessions: () => [], loading: false, sessionRows: 4, readStatus: null },
 )
 
 const { t } = useI18n()
 
 const hasActivity = computed(() => (props.stats?.totalSessions ?? 0) > 0)
+
+const markedStatus = computed(() => (props.readStatus && props.readStatus !== 'unread' ? props.readStatus : null))
+
+const idleLabel = computed(() => {
+  if (!markedStatus.value) return t('book.detail.details.notStarted')
+  const key = markedStatus.value.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
+  return t('book.detail.details.markedStatus', { status: t(`book.readStatus.${key}`) })
+})
+
+const idleMessage = computed(() =>
+  markedStatus.value && markedStatus.value !== 'want_to_read' ? t('book.detail.details.noSessionsRecorded') : t('book.detail.details.noSessionsYet'),
+)
 
 /**
  * The bar strip covers the span the book was actually read over, not a fixed window: a book read
@@ -102,14 +116,14 @@ function formatBadgeStyle(format: string) {
       </h3>
       <p class="ml-auto text-[11px] text-muted-foreground">
         <template v-if="hasActivity">{{ t('book.detail.details.lastRead', { when: relative(stats!.lastSessionAt) }) }}</template>
-        <template v-else>{{ t('book.detail.details.notStarted') }}</template>
+        <template v-else>{{ idleLabel }}</template>
       </p>
     </div>
 
     <p v-if="loading" class="mt-3 text-[13px] text-muted-foreground">{{ t('common.loading') }}</p>
 
     <p v-else-if="!hasActivity" class="mt-3 text-[13px] leading-relaxed text-muted-foreground">
-      {{ t('book.detail.details.noSessionsYet') }}
+      {{ idleMessage }}
     </p>
 
     <template v-else>
