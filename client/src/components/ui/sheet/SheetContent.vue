@@ -3,9 +3,10 @@ import type { DialogContentEmits, DialogContentProps } from 'reka-ui'
 import type { HTMLAttributes } from 'vue'
 import { reactiveOmit } from '@vueuse/core'
 import { X } from '@lucide/vue'
-import { DialogClose, DialogContent, DialogPortal, useForwardPropsEmits } from 'reka-ui'
+import { DialogClose, DialogContent, DialogPortal, injectDialogRootContext, useForwardPropsEmits } from 'reka-ui'
 import { cn } from '@/lib/utils'
 import SheetOverlay from './SheetOverlay.vue'
+import { useSheetSwipeDismiss } from './useSheetSwipeDismiss'
 
 interface SheetContentProps extends DialogContentProps {
   class?: HTMLAttributes['class']
@@ -26,6 +27,12 @@ const emits = defineEmits<DialogContentEmits>()
 const delegatedProps = reactiveOmit(props, 'class', 'side', 'hideClose')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+
+const rootContext = injectDialogRootContext()
+const { handleTouchStart, handleTouchMove, handleTouchEnd } = useSheetSwipeDismiss({
+  enabled: () => props.side === 'bottom',
+  dismiss: () => rootContext.onOpenChange(false),
+})
 </script>
 
 <template>
@@ -35,7 +42,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       data-slot="sheet-content"
       :class="
         cn(
-          'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-2 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500',
+          'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-2 shadow-lg transition ease-in-out data-[state=closed]:duration-200 data-[state=open]:duration-300 motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
           side === 'right' &&
             'data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm',
           side === 'left' &&
@@ -46,12 +53,16 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
         )
       "
       v-bind="{ ...$attrs, ...forwarded }"
+      @touchstart="handleTouchStart"
+      @touchmove="handleTouchMove"
+      @touchend="handleTouchEnd"
+      @touchcancel="handleTouchEnd"
     >
       <slot />
 
       <DialogClose
         v-if="!hideClose"
-        class="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none"
+        class="touch-target ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none"
       >
         <X class="size-4" />
         <span class="sr-only">Close</span>

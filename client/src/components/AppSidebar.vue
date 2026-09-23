@@ -16,6 +16,7 @@ import SidebarSectionPopover from '@/components/sidebar/SidebarSectionPopover.vu
 import SidebarGithubStar from '@/components/sidebar/SidebarGithubStar.vue'
 import SidebarAppLinks from '@/components/sidebar/SidebarAppLinks.vue'
 import { buildSidebarVersionUi } from '@/components/sidebar/versionUi'
+import { onAppResumed } from '@/components/sidebar/useAppResume'
 import { mergedMediaOrder, ownedInOrder, type DisplayOrderEntry } from '@/components/sidebar/sidebar-order'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSidebarNav } from '@/composables/useSidebarNav'
@@ -62,6 +63,13 @@ const outstandingRequestTotal = computed(() =>
   hasPermission(Permission.ManageBookRequests) ? (bookRequestSummary.value?.active ?? 0) : (bookRequestSummary.value?.mine ?? 0),
 )
 const { zones } = useSidebarNav(() => outstandingRequestTotal.value)
+
+/**
+ * On phones the drawer is a reading menu first: browse destinations and the entity lists lead, and
+ * the dashboard and admin tools (the primary zone) move below them.
+ */
+const leadingZones = computed(() => (isMobile.value ? zones.value.filter((zone) => zone.id !== 'primary') : zones.value))
+const trailingZones = computed(() => (isMobile.value ? zones.value.filter((zone) => zone.id === 'primary') : []))
 const requestProgress = hasPermission(Permission.BookRequestAccess) ? useBookRequestProgress() : null
 useLibraryScanRefresh()
 
@@ -294,6 +302,12 @@ const stopLibraryUploadListener = onLibraryUploadCompleted((event) => {
 })
 
 onUnmounted(() => stopLibraryUploadListener())
+
+onAppResumed(() => {
+  void refreshLibraries()
+  void refreshBrowseCounts()
+  if (hasPermission(Permission.BookRequestAccess)) void refreshBookRequestSummary()
+})
 </script>
 
 <template>
@@ -332,11 +346,11 @@ onUnmounted(() => stopLibraryUploadListener())
       <!-- Settings takes over the sidebar rather than adding a second one next to it. -->
       <SettingsSidebar v-if="isSettingsRoute" :is-rail="isRail" />
 
-      <template v-else>
+      <nav v-else :aria-label="t('components.sidebar.navLabel')" class="flex flex-col">
         <!-- Fixed destinations come first: they are a known height, so the variable-length
              entity sections below can never push them out of the first screenful. -->
         <SidebarZone
-          v-for="zone in zones"
+          v-for="zone in leadingZones"
           :key="zone.id"
           :label="zone.labelKey ? t(zone.labelKey) : null"
           :section-id="zone.sectionId ?? undefined"
@@ -643,7 +657,35 @@ onUnmounted(() => stopLibraryUploadListener())
             @navigate="handleNavigate"
           />
         </template>
-      </template>
+
+        <template v-if="trailingZones.length > 0">
+          <SidebarSeparator />
+          <SidebarZone
+            v-for="zone in trailingZones"
+            :key="zone.id"
+            :label="zone.labelKey ? t(zone.labelKey) : null"
+            :section-id="zone.sectionId ?? undefined"
+          >
+            <SidebarNavItem
+              v-for="entry in zone.entries"
+              :key="entry.id"
+              :is-active="entry.isActive"
+              :tooltip="entry.badge?.label ?? entry.label"
+              :to="entry.to"
+              :icon="entry.icon"
+              :label="entry.label"
+              :data-tour="entry.tourId"
+              @navigate="handleNavigate"
+            >
+              <template #badge>
+                <SidebarBadge v-if="entry.badge !== null" :tone="entry.badge.tone" :label="entry.badge.label">{{
+                  formatCompactNumber(entry.badge.value)
+                }}</SidebarBadge>
+              </template>
+            </SidebarNavItem>
+          </SidebarZone>
+        </template>
+      </nav>
     </SidebarContent>
 
     <SidebarFooter v-if="!isSettingsRoute" class="border-t border-sidebar-border px-4 py-2 group-data-[collapsible=icon]:px-2">
@@ -662,7 +704,7 @@ onUnmounted(() => stopLibraryUploadListener())
                 target="_blank"
                 rel="noopener noreferrer"
                 :aria-label="t('components.sidebar.supportAria')"
-                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-destructive outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                class="touch-target inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-destructive outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               >
                 <Heart :size="16" class="fill-current" aria-hidden="true" />
               </a>
@@ -693,7 +735,7 @@ onUnmounted(() => stopLibraryUploadListener())
                 target="_blank"
                 rel="noopener noreferrer"
                 :aria-label="t('components.sidebar.openUpdateRelease', { version: versionUi.updateVersionLabel })"
-                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-success outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                class="touch-target inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-success outline-hidden transition-colors duration-150 hover:bg-(--shell-accent-wash) focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               >
                 <CircleArrowUp :size="18" aria-hidden="true" />
               </a>

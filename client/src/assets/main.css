@@ -291,23 +291,11 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 
-  @supports (-webkit-touch-callout: none) {
-    @media (pointer: coarse) {
-      /* iOS Safari auto-zooms focused inputs below 16px. Keep editable controls at 16px on touch devices. */
-      input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='button']):not(
-          [type='submit']
-        ):not([type='reset']):not([data-ios-zoom-exempt]),
-      textarea:not([data-ios-zoom-exempt]),
-      select:not([data-ios-zoom-exempt]) {
-        font-size: 16px;
-      }
-    }
-  }
-
   @media (pointer: coarse) {
+    /* pinch-zoom keeps accessibility zoom working; pan-y alone disables it. */
     .app-shell-inset,
     .app-shell-scroll {
-      touch-action: pan-y;
+      touch-action: pan-y pinch-zoom;
     }
 
     /* Prevent double-tap zoom on tappable controls while preserving normal taps. */
@@ -353,6 +341,43 @@
 
   [data-sidebar='content']::-webkit-scrollbar-thumb {
     border-width: 1px;
+  }
+}
+
+/* Unlayered on purpose: Tailwind utilities (text-sm, text-[14px]) live in @layer utilities and would
+   otherwise win, leaving inputs below 16px so iOS Safari zooms the page on focus. */
+@supports (-webkit-touch-callout: none) {
+  @media (pointer: coarse) {
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='button']):not(
+        [type='submit']
+      ):not([type='reset']):not([data-ios-zoom-exempt]),
+    textarea:not([data-ios-zoom-exempt]),
+    select:not([data-ios-zoom-exempt]) {
+      font-size: 16px;
+    }
+  }
+}
+
+:root {
+  --app-bottom-nav-height: 0px;
+}
+
+@media (max-width: 47.99rem) {
+  :root:has([data-app-bottom-nav]) {
+    --app-bottom-nav-height: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* viewport-fit=cover lets the page run under the notch in landscape and under the status bar in
+   standalone mode, so the shell pads itself back inside the safe area. */
+.app-shell {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+@media (display-mode: standalone) {
+  .app-shell-inset {
+    padding-top: env(safe-area-inset-top, 0px);
   }
 }
 
@@ -472,6 +497,23 @@
      module for why type="password" cannot be used here. */
   .input-secret {
     -webkit-text-security: disc;
+  }
+
+  /* Grows the hit area to 44px on touch screens without changing the visual size. Utilities such as
+     `absolute` still override the `relative` here because this sits in the components layer. */
+  @media (pointer: coarse) {
+    .touch-target {
+      position: relative;
+    }
+    .touch-target::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
   }
 
   .no-scrollbar {
@@ -617,16 +659,30 @@
   }
 }
 
-/* Page route transitions */
+/* Page route transitions. The layout uses mode="out-in", so the leave phase is kept very short
+   (and skipped on phones) to avoid a blank frame between pages. */
 .page-enter-active {
-  transition: opacity 0.2s ease-out;
+  transition: opacity 0.14s ease-out;
 }
 .page-leave-active {
-  transition: opacity 0.15s ease-in;
+  transition: opacity 0.06s ease-in;
 }
 .page-enter-from,
 .page-leave-to {
   opacity: 0;
+}
+
+@media (max-width: 47.99rem) {
+  .page-leave-active {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-active,
+  .page-leave-active {
+    transition: none;
+  }
 }
 
 /* Tab content transitions */

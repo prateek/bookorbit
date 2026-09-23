@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick, ref, type Ref } from 'vue'
-import type { GlobalSearchResult } from '@/features/book/composables/useGlobalSearch'
+import type { GlobalSearchResult, GlobalSearchSeriesResult } from '@/features/book/composables/useGlobalSearch'
 import AppHeader from '../AppHeader.vue'
 
 const mocks = vi.hoisted(() => ({
   routerPush: vi.fn<(to: unknown) => void>(),
   results: null as unknown as Ref<GlobalSearchResult[]>,
   total: null as unknown as Ref<number>,
+  series: null as unknown as Ref<GlobalSearchSeriesResult[]>,
+  seriesTotal: null as unknown as Ref<number>,
   loading: null as unknown as Ref<boolean>,
   loadingMore: null as unknown as Ref<boolean>,
   settled: null as unknown as Ref<boolean>,
@@ -30,6 +32,8 @@ vi.mock('@/features/book/composables/useGlobalSearch', () => ({
   useGlobalSearch: () => ({
     results: mocks.results,
     total: mocks.total,
+    series: mocks.series,
+    seriesTotal: mocks.seriesTotal,
     loading: mocks.loading,
     loadingMore: mocks.loadingMore,
     settled: mocks.settled,
@@ -168,6 +172,28 @@ function makeResult(id: number, title = 'Prey'): GlobalSearchResult {
   }
 }
 
+function makeSeries(id: number, name: string): GlobalSearchSeriesResult {
+  return {
+    id,
+    name,
+    bookCount: 1700,
+    readCount: 0,
+    authors: ['Author'],
+    coverBookIds: [],
+    lastAddedAt: null,
+    readingCount: 0,
+    libraryNames: [],
+    expectedBookCount: null,
+    volumes: [],
+    volumesTruncated: false,
+    gaps: [],
+    gapCount: 0,
+    nextBookId: null,
+    nextIndex: null,
+    nextTitle: null,
+  }
+}
+
 function mountHeader() {
   return mount(AppHeader, {
     global: {
@@ -186,6 +212,8 @@ describe('AppHeader global search', () => {
     mocks.clearGlobalSearch.mockReset()
     mocks.results = ref([makeResult(101), makeResult(102, 'Predator')])
     mocks.total = ref(42)
+    mocks.series = ref([])
+    mocks.seriesTotal = ref(0)
     mocks.loading = ref(false)
     mocks.loadingMore = ref(false)
     mocks.settled = ref(true)
@@ -193,7 +221,7 @@ describe('AppHeader global search', () => {
     mocks.user = ref({ provisioningMethod: 'password', settings: {} })
   })
 
-  it('does not leave the dropdown for a separate search route on Enter when no result is selected', async () => {
+  it('opens the first result on Enter when no result is highlighted', async () => {
     const wrapper = mountHeader()
     const input = wrapper.get('input[placeholder="Search all books..."]')
 
@@ -201,7 +229,105 @@ describe('AppHeader global search', () => {
     await input.setValue('  Prey  ')
     await input.trigger('keydown', { key: 'Enter' })
 
+    expect(mocks.routerPush).toHaveBeenCalledWith({ name: 'book-detail', params: { bookId: 101 } })
+  })
+
+  it('does nothing on Enter while there are no results', async () => {
+    mocks.results = ref([])
+    const wrapper = mountHeader()
+    const input = wrapper.get('input[placeholder="Search all books..."]')
+
+    await input.trigger('focus')
+    await input.setValue('Prey')
+    await input.trigger('keydown', { key: 'Enter' })
+
     expect(mocks.routerPush).not.toHaveBeenCalled()
+  })
+
+  it('opens the first result once it arrives when Enter was pressed during the search', async () => {
+    mocks.results = ref([])
+    const wrapper = mountHeader()
+    const input = wrapper.get('input[placeholder="Search all books..."]')
+
+    await input.trigger('focus')
+    await input.setValue('chrysalis 18')
+    mocks.loading.value = true
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(mocks.routerPush).not.toHaveBeenCalled()
+
+    mocks.results.value = [makeResult(118, 'Chapter 18')]
+    mocks.loading.value = false
+    await nextTick()
+
+    expect(mocks.routerPush).toHaveBeenCalledWith({ name: 'book-detail', params: { bookId: 118 } })
+  })
+
+  it('drops a pending Enter when the query changes before results arrive', async () => {
+    mocks.results = ref([])
+    const wrapper = mountHeader()
+    const input = wrapper.get('input[placeholder="Search all books..."]')
+
+    await input.trigger('focus')
+    await input.setValue('chrysalis')
+    mocks.loading.value = true
+    await input.trigger('keydown', { key: 'Enter' })
+    await input.setValue('chrysalis 1')
+
+    mocks.results.value = [makeResult(118, 'Chapter 18')]
+    mocks.loading.value = false
+    await nextTick()
+
+    expect(mocks.routerPush).not.toHaveBeenCalled()
+  })
+
+  it('lists matching series above books and opens the series page', async () => {
+    mocks.series = ref([makeSeries(7, 'Chrysalis')])
+    mocks.seriesTotal = ref(1)
+    const wrapper = mountHeader()
+    const input = wrapper.get('input[placeholder="Search all books..."]')
+
+    await input.trigger('focus')
+    await input.setValue('chrysalis')
+
+    const dropdownText = wrapper.get('[data-testid="global-search-dropdown"]').text()
+    expect(dropdownText.indexOf('Chrysalis')).toBeLessThan(dropdownText.indexOf('Prey'))
+    expect(dropdownText).toContain('1,700 books')
+
+    await wrapper.get('[data-testid="global-search-series"]').trigger('click')
+
+    expect(mocks.routerPush).toHaveBeenCalledWith({ name: 'series-detail', params: { seriesId: 7 } })
+  })
+
+  it('opens a series first on Enter and walks from series into books with the arrow keys', async () => {
+    mocks.series = ref([makeSeries(7, 'Chrysalis')])
+    mocks.seriesTotal = ref(1)
+    const wrapper = mountHeader()
+    const input = wrapper.get('input[placeholder="Search all books..."]')
+
+    await input.trigger('focus')
+    await input.setValue('chrysalis')
+    await input.trigger('keydown', { key: 'ArrowDown' })
+    await input.trigger('keydown', { key: 'ArrowDown' })
+    await input.trigger('keydown', { key: 'Enter' })
+
+    expect(mocks.routerPush).toHaveBeenCalledWith({ name: 'book-detail', params: { bookId: 101 } })
+  })
+
+  it('configures the search input for touch keyboards', () => {
+    const wrapper = mountHeader()
+    const input = wrapper.get('input[placeholder="Search all books..."]')
+
+    expect(input.attributes('type')).toBe('search')
+    expect(input.attributes('enterkeyhint')).toBe('search')
+    expect(input.attributes('autocapitalize')).toBe('none')
+    expect(input.attributes('autocorrect')).toBe('off')
+    expect(input.attributes('spellcheck')).toBe('false')
+  })
+
+  it('labels the mobile overflow menu trigger', () => {
+    const wrapper = mountHeader()
+
+    expect(wrapper.find('button[aria-label="More actions"]').exists()).toBe(true)
   })
 
   it('keeps Enter-to-open behavior when a result is selected', async () => {

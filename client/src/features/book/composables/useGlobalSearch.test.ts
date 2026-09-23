@@ -1,11 +1,11 @@
 import { nextTick, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BookCard, BookQuery, BooksPage } from '@bookorbit/types'
+import type { BookCard, BookQuery, BooksPage, GlobalSearchResponse, SeriesSummary } from '@bookorbit/types'
 
 type ApiResponse = {
   ok: boolean
   status?: number
-  json: () => Promise<BooksPage>
+  json: () => Promise<BooksPage | GlobalSearchResponse>
 }
 
 const apiMock = vi.fn<(url: string, init?: RequestInit) => Promise<ApiResponse>>()
@@ -61,8 +61,53 @@ function pageFor(page: number, total: number, size = 20): BooksPage {
   }
 }
 
+function makeSeries(id: number, name: string): SeriesSummary {
+  return {
+    id,
+    name,
+    bookCount: 1700,
+    readCount: 0,
+    authors: [],
+    coverBookIds: [],
+    lastAddedAt: null,
+    readingCount: 0,
+    libraryNames: [],
+    expectedBookCount: null,
+    volumes: [],
+    volumesTruncated: false,
+    gaps: [],
+    gapCount: 0,
+    nextBookId: 12,
+    nextIndex: null,
+    nextTitle: null,
+  }
+}
+
+function searchResponse(series: SeriesSummary[]): GlobalSearchResponse {
+  return {
+    query: 'Prey',
+    books: { items: [], total: 0 },
+    authors: { items: [], total: 0 },
+    series: { items: series.map((item) => ({ item, matchedField: 'name', matchedText: item.name })), total: series.length },
+  }
+}
+
+function bookQueryCalls() {
+  return apiMock.mock.calls.filter(([url]) => url === '/api/v1/books/query')
+}
+
 function requestedBodies(): BookQuery[] {
-  return apiMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)) as BookQuery)
+  return bookQueryCalls().map(([, init]) => JSON.parse(String(init?.body)) as BookQuery)
+}
+
+function mockApi(bookPage: (body: BookQuery) => BooksPage, series: SeriesSummary[] = []) {
+  apiMock.mockImplementation((url, init) => {
+    if (url.startsWith('/api/v1/search?')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(searchResponse(series)) })
+    }
+    const body = JSON.parse(String(init?.body)) as BookQuery
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(bookPage(body)) })
+  })
 }
 
 async function flush() {
@@ -81,11 +126,8 @@ describe('useGlobalSearch', () => {
     vi.useRealTimers()
   })
 
-  it('loads the first page through the book query endpoint after the debounce', async () => {
-    apiMock.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(pageFor(0, 45)),
-    })
+  it('loads the first page by relevance through the book query endpoint after the debounce', async () => {
+    mockApi(() => pageFor(0, 45))
     const query = ref('')
     const search = useGlobalSearch(query)
 
@@ -94,11 +136,10 @@ describe('useGlobalSearch', () => {
     await vi.advanceTimersByTimeAsync(300)
     await flush()
 
-    expect(apiMock).toHaveBeenCalledOnce()
-    expect(apiMock.mock.calls[0]?.[0]).toBe('/api/v1/books/query')
+    expect(bookQueryCalls()).toHaveLength(1)
     expect(requestedBodies()[0]).toEqual({
       q: 'Prey',
-      sort: [{ field: 'title', dir: 'asc' }],
+      sort: [{ field: 'relevance', dir: 'desc' }],
       pagination: { page: 0, size: 20 },
     })
     expect(search.results.value).toHaveLength(20)
@@ -109,13 +150,7 @@ describe('useGlobalSearch', () => {
   })
 
   it('appends the next page when loading more results', async () => {
-    apiMock.mockImplementation((_url, init) => {
-      const body = JSON.parse(String(init?.body)) as BookQuery
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(pageFor(body.pagination.page, 45)),
-      })
-    })
+    mockApi((body) => pageFor(body.pagination.page, 45))
     const query = ref('')
     const search = useGlobalSearch(query)
 
@@ -132,5 +167,59 @@ describe('useGlobalSearch', () => {
     expect(search.results.value[39]?.id).toBe(40)
     expect(search.total.value).toBe(45)
     expect(search.hasMore.value).toBe(true)
+  })
+
+  it('loads matching series alongside the first page and clears them with the query', async () => {
+    mockApi(() => pageFor(0, 3), [makeSeries(7, 'Chrysalis'), makeSeries(8, 'Chrysalis Redux')])
+    const query = ref('')
+    const search = useGlobalSearch(query)
+
+    query.value = 'chrysalis 18'
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(300)
+    await flush()
+
+    const searchCall = apiMock.mock.calls.find(([url]) => url.startsWith('/api/v1/search?'))
+    expect(searchCall?.[0]).toBe('/api/v1/search?q=chrysalis+18&limit=5')
+    expect(search.series.value.map((item) => item.id)).toEqual([7, 8])
+    expect(search.seriesTotal.value).toBe(2)
+
+    await search.loadMore()
+    expect(apiMock.mock.calls.filter(([url]) => url.startsWith('/api/v1/search?'))).toHaveLength(1)
+
+    search.clear()
+    expect(search.series.value).toEqual([])
+    expect(search.seriesTotal.value).toBe(0)
+  })
+
+  it('holds the first book page until the series arrive so the list does not shift under the finger', async () => {
+    let releaseSeries: () => void = () => {}
+    apiMock.mockImplementation((url, init) => {
+      if (url.startsWith('/api/v1/search?')) {
+        return new Promise((resolve) => {
+          releaseSeries = () => resolve({ ok: true, json: () => Promise.resolve(searchResponse([makeSeries(7, 'Chrysalis')])) })
+        })
+      }
+      const body = JSON.parse(String(init?.body)) as BookQuery
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(pageFor(body.pagination.page, 3)) })
+    })
+    const query = ref('')
+    const search = useGlobalSearch(query)
+
+    query.value = 'chrysalis'
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(300)
+    await flush()
+
+    expect(search.results.value).toEqual([])
+    expect(search.loading.value).toBe(true)
+
+    releaseSeries()
+    await flush()
+    await flush()
+
+    expect(search.series.value.map((item) => item.id)).toEqual([7])
+    expect(search.results.value).toHaveLength(3)
+    expect(search.loading.value).toBe(false)
   })
 })
