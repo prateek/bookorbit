@@ -61,7 +61,9 @@ describe('reader schema', () => {
     expect(indexNames).toContain('rs_user_book_file_idx');
     expect(indexNames).toContain('rs_user_book_source_device_started_idx');
     expect(fkMap.get('user_id')?.onDelete).toBe('cascade');
-    expect(fkMap.get('book_file_id')?.onDelete).toBe('cascade');
+    // Retiring a file must not erase the reading minutes and streak days built from its sessions.
+    expect(fkMap.get('book_file_id')?.onDelete).toBe('set null');
+    expect(fkMap.get('book_id')?.onDelete).toBe('cascade');
   });
 
   it('keeps cumulative sync cursors isolated by user, book, source, and device', () => {
