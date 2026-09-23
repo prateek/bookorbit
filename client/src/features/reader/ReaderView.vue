@@ -10,7 +10,7 @@ import { useReaderProgress } from './shared/composables/useReaderProgress'
 import { useReadingSession } from './shared/composables/useReadingSession'
 import { useReaderPageTitle } from './shared/composables/useReaderPageTitle'
 import { useReaderState } from './epub/composables/useReaderState'
-import { useReaderSettings } from './shared/composables/useReaderSettings'
+import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
 import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
 import { primarySeriesId, useReaderBack } from './shared/composables/useReaderBack'
 import { useBookStatus } from '@/features/book/composables/useBookStatus'
@@ -91,6 +91,9 @@ const sidebarLocationMetaByCfi = ref<Record<string, { chapterTitle: string | nul
 let sidebarLocationResolveSeq = 0
 
 const bookSettings = useReaderSettings(fileId, fileFormat)
+// In-reader changes become the account default so they carry to the next chapter file; the
+// settings panel can narrow them to this book only.
+const settingsScope = ref<ReaderSettingsScope>('all')
 // False when overrideBookFormatting is off and the book has no per-book delta.
 // Prevents injecting any CSS so the book renders with its own embedded styles.
 const shouldApplyStyles = ref(true)
@@ -951,11 +954,16 @@ async function openReader() {
   if (effective.overrideBookFormatting) {
     shouldApplyStyles.value = true
     seedState(effective)
-  } else if (bookSettings.isCustomized.value) {
-    shouldApplyStyles.value = true
-    seedState(bookSettings.bookDelta.value as Partial<ReaderState>)
   } else {
-    shouldApplyStyles.value = false
+    // Without the override, a book with no per-book changes renders its own styles, so a change saved
+    // only as the default would not show up here: keep changes scoped to this book instead.
+    settingsScope.value = 'book'
+    if (bookSettings.isCustomized.value) {
+      shouldApplyStyles.value = true
+      seedState(bookSettings.bookDelta.value as Partial<ReaderState>)
+    } else {
+      shouldApplyStyles.value = false
+    }
   }
 
   const deepLinkCfi = typeof route.query.cfi === 'string' ? route.query.cfi : null
@@ -1131,7 +1139,7 @@ async function applyUpdate(partial: Partial<ReaderState>) {
   const shouldReopenForSpread = partial.fixedLayoutSpread !== undefined && partial.fixedLayoutSpread !== state.value.fixedLayoutSpread
   shouldApplyStyles.value = true
   seedState(partial)
-  bookSettings.updateBookSettings(partial)
+  bookSettings.updateSettings(partial, settingsScope.value)
   if (shouldReopenForSpread) {
     await reopenEpubAtCurrentLocation()
   }
@@ -1152,13 +1160,19 @@ async function resetSettings() {
 watch(
   () => footerMode.value,
   (mode) => {
-    bookSettings.updateBookSettings({ footerDisplayMode: mode })
+    if ((bookSettings.effective.value as EpubReaderSettings).footerDisplayMode !== mode) {
+      bookSettings.updateSettings({ footerDisplayMode: mode }, settingsScope.value)
+    }
     const renderer = getRenderer()
     if (renderer) {
       updateHeadsFeet(renderer, activeMode.value)
     }
   },
 )
+
+function setSettingsScope(scope: ReaderSettingsScope) {
+  settingsScope.value = scope
+}
 
 function setSettingsOpen(open: boolean) {
   showSettings.value = open
@@ -1417,7 +1431,9 @@ onUnmounted(() => {
           :customFonts="customFonts"
           :is-fixed-layout="isFixedLayout"
           :can-reset="bookSettings.isCustomized.value"
+          :settings-scope="settingsScope"
           @update="applyUpdate"
+          @update:settings-scope="setSettingsScope"
           @reset="resetSettings"
         />
       </template>

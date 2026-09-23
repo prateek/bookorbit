@@ -453,6 +453,72 @@ describe('useReaderSettings - updateDefaultSettings', () => {
   })
 })
 
+describe('useReaderSettings - updateSettings', () => {
+  it('saves an in-reader change as the default so the next file opens with it', async () => {
+    const s = useReaderSettings(BOOK_FILE_ID, 'epub')
+    s.updateSettings({ fontSize: 22 } as never)
+
+    expect(s.bookDelta.value).toBeNull()
+    expect(localStorage.getItem(`reader:book:${BOOK_FILE_ID}`)).toBeNull()
+
+    const nextChapter = useReaderSettings(BOOK_FILE_ID + 1, 'epub')
+    await nextChapter.load()
+    expect(nextChapter.effective.value).toMatchObject({ fontSize: 22 })
+  })
+
+  it('keeps a change to this book only when scoped to the book', async () => {
+    const s = useReaderSettings(BOOK_FILE_ID, 'epub')
+    s.updateSettings({ fontSize: 22 } as never, 'book')
+
+    expect(s.bookDelta.value).toEqual({ fontSize: 22 })
+    expect(localStorage.getItem('reader:default:epub')).toBeNull()
+  })
+
+  it('updates a field this book overrides so the override does not hide the change', async () => {
+    localStorage.setItem(`reader:book:${BOOK_FILE_ID}`, JSON.stringify({ fontSize: 30, isDark: true }))
+    const s = useReaderSettings(BOOK_FILE_ID, 'epub')
+    await s.load()
+
+    s.updateSettings({ fontSize: 22, lineHeight: 2 } as never)
+
+    expect(s.bookDelta.value).toEqual({ fontSize: 22, isDark: true })
+    expect(s.effective.value).toMatchObject({ fontSize: 22, lineHeight: 2, isDark: true })
+    expect(JSON.parse(localStorage.getItem('reader:default:epub') ?? 'null')).toMatchObject({ fontSize: 22, lineHeight: 2 })
+  })
+
+  it('patches the default and only the fields this book overrides when sync is enabled', () => {
+    useAuthMock.mockReturnValue({
+      user: ref({ settings: { syncReaderPreferences: true } }),
+    })
+    apiMock.mockResolvedValue({ ok: true })
+    const s = useReaderSettings(BOOK_FILE_ID, 'epub')
+    s.updateSettings({ fontSize: 30 } as never, 'book')
+    apiMock.mockClear()
+
+    s.updateSettings({ fontSize: 22, lineHeight: 2 } as never)
+
+    expect(apiMock).toHaveBeenCalledTimes(2)
+    expect(apiMock).toHaveBeenNthCalledWith(1, '/api/v1/reader/defaults/epub', expect.objectContaining({ method: 'PATCH' }))
+    expect(sentBody(0)).toEqual({ set: { fontSize: 22, lineHeight: 2 } })
+    expect(apiMock).toHaveBeenNthCalledWith(2, `/api/v1/reader/preferences/${BOOK_FILE_ID}`, expect.objectContaining({ method: 'PATCH' }))
+    expect(sentBody(1)).toEqual({ set: { fontSize: 22 } })
+  })
+
+  it('patches only this book when scoped to the book', () => {
+    useAuthMock.mockReturnValue({
+      user: ref({ settings: { syncReaderPreferences: true } }),
+    })
+    apiMock.mockResolvedValue({ ok: true })
+    const s = useReaderSettings(BOOK_FILE_ID, 'epub')
+
+    s.updateSettings({ fontSize: 22 } as never, 'book')
+
+    expect(apiMock).toHaveBeenCalledTimes(1)
+    expect(apiMock).toHaveBeenCalledWith(`/api/v1/reader/preferences/${BOOK_FILE_ID}`, expect.objectContaining({ method: 'PATCH' }))
+    expect(sentBody()).toEqual({ set: { fontSize: 22 } })
+  })
+})
+
 describe('useReaderSettings - resetDefaultSettings', () => {
   it('removes from localStorage', () => {
     localStorage.setItem('reader:default:epub', JSON.stringify({ fontSize: 18 }))

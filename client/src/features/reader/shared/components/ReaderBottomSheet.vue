@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { usePreferredReducedMotion } from '@vueuse/core'
+import { X } from '@lucide/vue'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 
 export type ReaderSheetSnap = 'peek' | 'full'
@@ -9,12 +10,17 @@ const PEEK_RATIO = 0.56
 const FULL_RATIO = 0.92
 const DISMISS_RATIO = 0.3
 const SNAP_MIDPOINT = (PEEK_RATIO + FULL_RATIO) / 2
+const FLICK_MIN_DISTANCE_PX = 48
+const FLICK_MIN_VELOCITY = 0.5
+const CLICK_SLOP_PX = 6
 
 const props = withDefaults(
   defineProps<{
     open: boolean
     label: string
     snap?: ReaderSheetSnap
+    /** Renders a close button beside the grabber when set. */
+    closeLabel?: string
   }>(),
   { snap: 'peek' },
 )
@@ -30,7 +36,9 @@ const dragging = ref(false)
 
 let pointerId: number | null = null
 let startY = 0
+let startTime = 0
 let startHeight = 0
+let suppressNextClick = false
 
 const snapRatio = computed(() => (props.snap === 'full' ? FULL_RATIO : PEEK_RATIO))
 
@@ -48,6 +56,18 @@ function setSnap(snap: ReaderSheetSnap) {
 
 function toggleSnap() {
   setSnap(props.snap === 'peek' ? 'full' : 'peek')
+}
+
+function handleGrabberClick() {
+  if (suppressNextClick) {
+    suppressNextClick = false
+    return
+  }
+  toggleSnap()
+}
+
+function closeSheet() {
+  emit('update:open', false)
 }
 
 function handleGrabberKeydown(event: KeyboardEvent) {
@@ -70,6 +90,8 @@ function handlePointerDown(event: PointerEvent) {
   if (!event.isPrimary) return
   pointerId = event.pointerId
   startY = event.clientY
+  startTime = event.timeStamp
+  suppressNextClick = false
   startHeight = snapRatio.value * viewportHeight()
   draggedHeight.value = startHeight
   dragging.value = true
@@ -90,6 +112,21 @@ function handlePointerUp(event: PointerEvent) {
   pointerId = null
   draggedHeight.value = null
   if (height === null) return
+
+  const distance = event.type === 'pointercancel' ? 0 : event.clientY - startY
+  if (Math.abs(distance) > CLICK_SLOP_PX) suppressNextClick = true
+
+  const elapsed = Math.max(event.timeStamp - startTime, 1)
+  const isFlick = Math.abs(distance) >= FLICK_MIN_DISTANCE_PX && Math.abs(distance) / elapsed >= FLICK_MIN_VELOCITY
+  if (isFlick && distance > 0) {
+    if (props.snap === 'full') setSnap('peek')
+    else emit('update:open', false)
+    return
+  }
+  if (isFlick) {
+    setSnap('full')
+    return
+  }
 
   const ratio = height / viewportHeight()
   if (ratio < DISMISS_RATIO) {
@@ -129,20 +166,32 @@ watch(
       :style="sheetStyle"
       :aria-label="props.label"
     >
-      <div
-        class="flex h-8 shrink-0 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
-        role="button"
-        tabindex="0"
-        :aria-label="props.snap === 'full' ? $t('reader.sheet.collapse') : $t('reader.sheet.expand')"
-        :aria-expanded="props.snap === 'full'"
-        @click="toggleSnap"
-        @keydown="handleGrabberKeydown"
-        @pointerdown="handlePointerDown"
-        @pointermove="handlePointerMove"
-        @pointerup="handlePointerUp"
-        @pointercancel="handlePointerUp"
-      >
-        <span aria-hidden="true" class="h-1 w-10 rounded-full bg-border" />
+      <div class="relative flex h-11 shrink-0">
+        <div
+          class="flex h-full flex-1 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
+          role="button"
+          tabindex="0"
+          :aria-label="props.snap === 'full' ? $t('reader.sheet.collapse') : $t('reader.sheet.expand')"
+          :aria-expanded="props.snap === 'full'"
+          data-sheet-grabber
+          @click="handleGrabberClick"
+          @keydown="handleGrabberKeydown"
+          @pointerdown="handlePointerDown"
+          @pointermove="handlePointerMove"
+          @pointerup="handlePointerUp"
+          @pointercancel="handlePointerUp"
+        >
+          <span aria-hidden="true" class="h-1 w-10 rounded-full bg-border" />
+        </div>
+        <button
+          v-if="props.closeLabel"
+          type="button"
+          class="absolute end-0.5 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
+          :aria-label="props.closeLabel"
+          @click="closeSheet"
+        >
+          <X :size="18" />
+        </button>
       </div>
       <slot />
     </SheetContent>
