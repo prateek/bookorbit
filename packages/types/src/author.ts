@@ -8,6 +8,13 @@ export type AuthorSummary = {
   description?: string | null;
   imageUrl?: string | null;
   bookCount: number;
+  /** Distinct series among those books. */
+  seriesCount?: number;
+  /**
+   * Those books that sit in a series inside a library counting a series as one book. When they
+   * are most of the author's books, the author writes serials and each book is a chapter.
+   */
+  serialBookCount?: number;
   lastAddedAt: string | null;
   /**
    * A book of theirs that has cover art, most recently added first. Only 19% of a

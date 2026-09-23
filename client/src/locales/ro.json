@@ -4907,7 +4907,6 @@
       "resultCount": "{shown} {total}",
       "noMatches": "Nicio potrivire",
       "noMatchesHint": "Încercați un alt termen de căutare.",
-      "bookCount": "Cărți: {count}",
       "librariesEmptyHint": "Creați o bibliotecă pentru a începe să adăugați cărți.",
       "smartScopesEmptyHint": "Sfera inteligentă salvează un set de filtre pe care le utilizezi frecvent.",
       "collectionsEmptyHint": "Colecții grupează cărțile pe care le alegeți de mână."

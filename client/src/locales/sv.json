@@ -4580,8 +4580,6 @@
       "resultCount": "{shown} av {total}",
       "noMatches": "Inga träffar",
       "noMatchesHint": "Prova en annan sökterm.",
-      "bookCount": "Böcker: {count}",
-      "showCount": "Shows: {count}",
       "librariesEmptyHint": "Skapa ett bibliotek för att börja lägga till böcker.",
       "podcastLibrariesEmptyHint": "Create a podcast library to start following shows.",
       "smartScopesEmptyHint": "Smart räckvidd spara en uppsättning filter som du använder ofta.",

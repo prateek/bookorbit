@@ -4705,7 +4705,6 @@
       "resultCount": "{shown} / {total}",
       "noMatches": "一致するものはありません",
       "noMatchesHint": "別の検索語を試してみてください。",
-      "bookCount": "本： {count}",
       "librariesEmptyHint": "図書の追加を開始するライブラリを作成します。",
       "smartScopesEmptyHint": "スマートスコープは、頻繁に使用するフィルタのセットを保存します。",
       "collectionsEmptyHint": "コレクションは、手で選ぶグループの本。"

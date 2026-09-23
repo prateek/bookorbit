@@ -7769,8 +7769,6 @@
       "resultCount": "{shown} de {total}",
       "noMatches": "Sin coincidencias",
       "noMatchesHint": "Prueba con otro término de búsqueda.",
-      "bookCount": "Libros: {count}",
-      "showCount": "Shows: {count}",
       "librariesEmptyHint": "Crea una biblioteca para empezar a añadir libros.",
       "podcastLibrariesEmptyHint": "Crear una librería de podcast para comenzar a seguir los espectáculos.",
       "smartScopesEmptyHint": "Los Alcances Inteligentes guardan un conjunto de filtros que usas a menudo.",

@@ -5148,8 +5148,6 @@
       "resultCount": "{shown} od {total}",
       "noMatches": "Ni zadetkov",
       "noMatchesHint": "Poskusite z drugačno poizvedbo.",
-      "bookCount": "Knjige: {count}",
-      "showCount": "Shows: {count}",
       "librariesEmptyHint": "Ustvarite knjižnico, da začnete dodajati knjige.",
       "podcastLibrariesEmptyHint": "Create a podcast library to start following shows.",
       "smartScopesEmptyHint": "Pametni obsegi shranijo nabor filtrov, ki jih pogosto uporabljate.",

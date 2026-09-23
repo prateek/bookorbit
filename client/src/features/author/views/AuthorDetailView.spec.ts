@@ -14,7 +14,7 @@ class MockIntersectionObserver {
 }
 
 const mocks = vi.hoisted(() => ({
-  route: { params: { id: '7' }, query: {} as Record<string, unknown> },
+  route: { params: { id: '7' }, query: {} as Record<string, unknown>, fullPath: '/authors/7' },
   routerPush: vi.fn<(to: unknown) => Promise<void>>(),
   routerBack: vi.fn<() => void>(),
   fetchLibraries: vi.fn<() => Promise<void>>(),
@@ -22,7 +22,8 @@ const mocks = vi.hoisted(() => ({
   loadBooks: vi.fn<(reset?: boolean) => Promise<void>>(),
   loadMetadataPreview: vi.fn<() => Promise<void>>(),
   cancelMetadataPreview: vi.fn<() => void>(),
-  api: vi.fn<(url: string, init?: RequestInit) => Promise<{ ok: boolean }>>(),
+  api: vi.fn<(url: string, init?: RequestInit) => Promise<{ ok: boolean; json?: () => Promise<unknown> }>>(),
+  windowWidth: null as unknown as Ref<number>,
   author: null as unknown as Ref<AuthorDetail | null>,
   loadingAuthor: null as unknown as Ref<boolean>,
   authorError: null as unknown as Ref<string | null>,
@@ -50,8 +51,9 @@ vi.mock('vue-sonner', () => ({
   toast: { success: vi.fn<(message: string) => void>(), error: vi.fn<(message: string) => void>(), warning: vi.fn<(message: string) => void>() },
 }))
 
-vi.mock('@vueuse/core', () => ({
-  useWindowSize: () => ({ width: ref(1024) }),
+vi.mock('@vueuse/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@vueuse/core')>()),
+  useWindowSize: () => ({ width: mocks.windowWidth }),
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -236,6 +238,8 @@ describe('AuthorDetailView', () => {
     mocks.loadBooks.mockResolvedValue()
     mocks.loadMetadataPreview.mockResolvedValue()
     mocks.api.mockResolvedValue({ ok: true })
+    mocks.windowWidth = ref(1024)
+    window.localStorage.clear()
     mocks.author = ref(makeAuthor())
     mocks.loadingAuthor = ref(false)
     mocks.authorError = ref(null)
@@ -448,5 +452,105 @@ describe('AuthorDetailView', () => {
 
     dialog = wrapper.getComponent(DeleteBookDialogStub)
     expect(dialog.props('open')).toBe(false)
+  })
+
+  describe('on a phone', () => {
+    function makeSerial(overrides: Partial<NonNullable<BookCard['collapsedSeries']>> = {}): BookCard {
+      return {
+        ...makeBook(201),
+        seriesId: 44,
+        seriesName: 'Return of the Runebound Professor',
+        addedAt: '2026-09-20T00:00:00.000Z',
+        updatedAt: null,
+        collapsedSeries: {
+          bookCount: 1004,
+          readCount: 992,
+          coverBookIds: [],
+          seriesLatestAddedAt: null,
+          latestVolumeBookId: 205,
+          latestSeriesIndex: '1004',
+          firstUnreadBookId: 204,
+          ...overrides,
+        },
+      } as BookCard
+    }
+
+    beforeEach(() => {
+      mocks.windowWidth = ref(390)
+      mocks.author = ref(makeAuthor({ bookCount: 1089, seriesCount: 16, serialBookCount: 1089 }))
+    })
+
+    it('groups by series even when the saved preference is flat', async () => {
+      mocks.collapsePreference = false
+
+      await mountView()
+
+      expect(mocks.collapseSeries.value).toBe(true)
+    })
+
+    it('opens on list rows that say how far behind the reader is', async () => {
+      mocks.books = ref([makeSerial()])
+
+      const wrapper = await mountView()
+
+      expect(wrapper.find('[data-test="virtual-book-grid"]').exists()).toBe(false)
+      const row = wrapper.get('[data-testid="author-series-row"]')
+      expect(row.text()).toContain('Return of the Runebound Professor')
+      expect(row.get('[data-testid="author-series-row-status"]').text()).toBe('12 unread · latest Ch 1004')
+    })
+
+    it('marks a serial the reader has caught up on instead of offering Continue', async () => {
+      mocks.books = ref([makeSerial({ readCount: 1004, firstUnreadBookId: null })])
+
+      const wrapper = await mountView()
+
+      const row = wrapper.get('[data-testid="author-series-row"]')
+      expect(row.text()).toContain(i18n.global.t('author.detail.books.caughtUp'))
+      expect(row.find('[data-testid="author-series-row-continue"]').exists()).toBe(false)
+    })
+
+    it('continues a serial straight into the reader at the next chapter', async () => {
+      mocks.books = ref([makeSerial()])
+      mocks.api.mockImplementation(async (url: string) => {
+        if (url.startsWith('/api/v1/series/44/books')) {
+          return { ok: true, json: async () => ({ seriesInfo: { next: { bookId: 204, fileId: 9, format: 'epub' } } }) }
+        }
+        return { ok: true }
+      })
+
+      const wrapper = await mountView()
+      await wrapper.get('[data-testid="author-series-row-continue"]').trigger('click')
+      await flushPromises()
+
+      expect(mocks.routerPush).toHaveBeenCalledWith({ name: 'reader', params: { bookId: 204, fileId: 9 }, query: { format: 'epub' } })
+    })
+
+    it('opens the series with a way back to this author', async () => {
+      mocks.books = ref([makeSerial()])
+
+      const wrapper = await mountView()
+      await wrapper.get('[data-testid="author-series-row"] button').trigger('click')
+
+      expect(mocks.routerPush).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'series-detail', params: { seriesId: 44 }, query: { from: '/authors/7' } }),
+      )
+    })
+
+    it('remembers a switch to the grid for the next visit', async () => {
+      const first = await mountView()
+      const gridButton = first.findAll('button').find((button) => button.attributes('aria-label') === i18n.global.t('author.detail.books.viewGrid'))
+      await gridButton!.trigger('click')
+      first.unmount()
+
+      const second = await mountView()
+
+      expect(second.find('[data-test="virtual-book-grid"]').exists()).toBe(true)
+    })
+
+    it('leaves out the library filter when there is only one library to pick', async () => {
+      const wrapper = await mountView()
+
+      expect(wrapper.findAll('select').some((select) => select.text().includes(i18n.global.t('author.detail.books.allLibraries')))).toBe(false)
+    })
   })
 })

@@ -7767,8 +7767,6 @@
       "resultCount": "{shown}/{total}",
       "noMatches": "Nincs találat",
       "noMatchesHint": "Próbálkozz egy másik keresőkifejezéssel.",
-      "bookCount": "Könyvek: {count}",
-      "showCount": "Műsorok: {count}",
       "librariesEmptyHint": "Hozz létre egy könyvtárat a könyvek hozzáadásának megkezdéséhez.",
       "podcastLibrariesEmptyHint": "Hozz létre egy podcastkönyvtárat a műsorok követésének megkezdéséhez.",
       "smartScopesEmptyHint": "Az okosgyűjtemények elmentik a gyakran használt szűrők egy-egy csoportját.",

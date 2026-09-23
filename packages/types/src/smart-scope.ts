@@ -24,6 +24,10 @@ export interface SmartScope {
   displayOrder: number;
   /** Matching books, on book scopes. Null when the filter failed to validate. */
   bookCount?: number | null;
+  /** Distinct series among the matching books, on book scopes. */
+  seriesCount?: number;
+  /** Matching books the requesting user has not read, on book scopes. */
+  unreadCount?: number;
   /** Matching episodes, on podcast scopes. Null when the rules failed to validate. */
   episodeCount?: number | null;
   createdAt: string;

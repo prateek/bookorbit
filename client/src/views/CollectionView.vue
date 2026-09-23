@@ -746,6 +746,14 @@ defineOptions({ name: 'CollectionView' })
           <p class="text-xs text-muted-foreground">
             {{ debouncedQuery ? t('views.collection.empty.noSearchMatchHint') : t('views.collection.empty.noBooksHint') }}
           </p>
+          <RouterLink
+            v-if="!debouncedQuery"
+            :to="{ name: 'series' }"
+            data-testid="collection-empty-browse-series"
+            class="mt-1 inline-flex h-11 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            {{ t('views.collection.empty.browseSeries') }}
+          </RouterLink>
         </div>
 
         <VirtualBookGrid
