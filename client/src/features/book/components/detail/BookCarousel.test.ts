@@ -57,7 +57,7 @@ function makeBook(overrides: Partial<CarouselBook> = {}): CarouselBook {
 
 function mountCarousel(
   books: CarouselBook[],
-  options: { loading?: boolean; showSeriesIndex?: boolean; currentBookId?: number | null; showHeader?: boolean } = {},
+  options: { loading?: boolean; showSeriesIndex?: boolean; currentBookId?: number | null; showHeader?: boolean; captioned?: boolean } = {},
 ) {
   return mount(BookCarousel, {
     props: {
@@ -66,6 +66,7 @@ function mountCarousel(
       showSeriesIndex: options.showSeriesIndex ?? false,
       currentBookId: options.currentBookId ?? null,
       showHeader: options.showHeader ?? true,
+      captioned: options.captioned ?? false,
     },
     global: {
       stubs: { ChevronLeft: true, ChevronRight: true },
@@ -309,6 +310,30 @@ describe('BookCarousel', () => {
     expect(mockRouterPush).toHaveBeenCalledWith({ name: 'book-detail', params: { bookId: 77 } })
   })
 
+  it('navigates to the card target when one is given, such as a series', async () => {
+    const wrapper = mountCarousel([makeBook({ id: 410, key: 'series-41', to: { name: 'series-detail', params: { seriesId: 41 } } })])
+    await wrapper.find('[data-book-id="410"]').trigger('click')
+    expect(mockRouterPush).toHaveBeenCalledWith({ name: 'series-detail', params: { seriesId: 41 } })
+  })
+
+  it('prints the chapter number, a decoded title and the caption under a captioned card', () => {
+    const wrapper = mountCarousel([makeBook({ id: 5, seriesIndex: '1002', title: 'Mother&#39;s Love', caption: '3 books' })], {
+      showSeriesIndex: true,
+      captioned: true,
+    })
+    const card = wrapper.get('[data-book-id="5"]')
+    expect(card.get('[data-test="card-kicker"]').text()).toBe('#1002')
+    expect(card.get('[data-test="card-title"]').text()).toBe("Mother's Love")
+    expect(card.get('[data-test="card-caption"]').text()).toBe('3 books')
+  })
+
+  it('staggers only the first few cards so later ones are not left blank', () => {
+    const books = Array.from({ length: 20 }, (_, i) => makeBook({ id: i + 1 }))
+    const wrapper = mountCarousel(books)
+    expect(wrapper.get('[data-book-id="3"]').attributes('style')).toContain('animation-delay: 80ms')
+    expect(wrapper.get('[data-book-id="20"]').attributes('style')).toContain('animation-delay: 240ms')
+  })
+
   it('scrolls carousel left and right from header controls', async () => {
     const wrapper = mountCarousel([makeBook({ id: 1 }), makeBook({ id: 2 })])
     const scrollContainer = wrapper.find('.flex.gap-6.overflow-x-auto.pb-2')
@@ -344,6 +369,20 @@ describe('BookCarousel', () => {
     expect(wrapper.find('[data-book-id="10"]').attributes('aria-current')).toBe('true')
     expect(wrapper.find('[data-book-id="10"] [data-test="current-book-marker"]').exists()).toBe(true)
     expect(wrapper.find('[data-book-id="9"]').attributes('aria-current')).toBeUndefined()
+    rectSpy.mockRestore()
+  })
+
+  it('centers the current book once the scroller mounts after loading', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.dataset.bookId === '1003') return { left: 7281, width: 124 } as DOMRect
+      return { left: 0, width: 344 } as DOMRect
+    })
+
+    const wrapper = mountCarousel([], { loading: true, currentBookId: 1003 })
+    await wrapper.setProps({ loading: false, books: [makeBook({ id: 1002 }), makeBook({ id: 1003 })] })
+
+    const scroller = wrapper.get('[data-test="carousel-scroller"]').element as HTMLElement
+    expect(scroller.scrollLeft).toBe(7171)
     rectSpy.mockRestore()
   })
 })

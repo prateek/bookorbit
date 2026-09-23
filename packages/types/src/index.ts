@@ -59,6 +59,7 @@ export * from "./app-info";
 export * from "./app-features";
 export * from "./release-notes";
 export * from "./series";
+export * from "./related-shelf";
 export * from "./series-index";
 export * from "./table-layout";
 export * from "./series-collapse";

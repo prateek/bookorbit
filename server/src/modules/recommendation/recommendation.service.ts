@@ -1,19 +1,41 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
-import type { BookRecommendation, SeriesBookRecommendation, UnscopedBookRecommendation, UserBookStatus } from '@bookorbit/types';
+import type {
+  BookRecommendation,
+  RelatedBookCard,
+  RelatedSeriesCard,
+  RelatedShelfItem,
+  SeriesBookRecommendation,
+  UnscopedBookRecommendation,
+  UserBookStatus,
+} from '@bookorbit/types';
 import { normalizeCoverAspectRatio } from '@bookorbit/types';
 import type { RequestUser } from '../../common/types/request-user';
 import { BookEmbedderService } from '../embedding/book-embedder.service';
 import { BookReadService } from '../book/book-read.service';
 import { LibraryService } from '../library/library.service';
 import { UserBookStatusService } from '../user-book-status/user-book-status.service';
-import { AnnCandidate, CandidateMetadata, RecommendationRepository, TargetBookData } from './recommendation.repository';
+import {
+  AnnCandidate,
+  AuthorBookRow,
+  CandidateMetadata,
+  CoverBookRow,
+  RecommendationRepository,
+  SeriesAggregateRow,
+  TargetBookData,
+} from './recommendation.repository';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 
 const RECOMMENDATION_EVENT = 'book.recommendations';
 const SERIES_BOOKS_EVENT = 'book.series_books';
 const AUTHOR_BOOKS_EVENT = 'book.author_books';
+const AUTHOR_SHELF_EVENT = 'book.author_shelf';
+const SIMILAR_SHELF_EVENT = 'book.similar_shelf';
 const MAX_RECOMMENDATIONS = 25;
+const MAX_SIMILAR_SHELF_ITEMS = 15;
+const MAX_AUTHOR_STANDALONE_BOOKS = 10;
+/** Serial chapters crowd the nearest neighbours, so the series shelf looks further out before grouping. */
+const SIMILAR_SHELF_CANDIDATE_LIMIT = 300;
 const DEFAULT_RATING_PROXIMITY = 0.5;
 const RATING_PROXIMITY_RANGE = 4;
 const SCORE_WEIGHTS = {
@@ -203,6 +225,161 @@ export class RecommendationService {
       );
       throw err;
     }
+  }
+
+  /**
+   * The book's authors' other work: one card per other series, then books with no series. The
+   * book's own series is left out; it has its own shelf.
+   */
+  async getAuthorShelf(bookId: number, user: RequestUser): Promise<RelatedShelfItem[]> {
+    const startedAt = Date.now();
+    this.logger.log(`[${AUTHOR_SHELF_EVENT}] [start] bookId=${bookId} userId=${user.id} - author shelf lookup started`);
+
+    try {
+      const libraryId = await this.bookReadService.findLibraryIdByBookId(bookId);
+      if (libraryId === null) throw new NotFoundException(`Book ${bookId} not found`);
+      await this.libraryService.verifyUserAccess(user.id, libraryId, user.isSuperuser);
+
+      const contentFilters = user.isSuperuser ? undefined : user.contentFilters;
+      const [series, libraryIds] = await Promise.all([this.recRepo.getSeriesIdentity(bookId), this.libraryService.findAccessibleLibraryIds(user)]);
+      const [seriesRows, standaloneRows] = await Promise.all([
+        this.recRepo.findAuthorSeries(bookId, series?.id ?? null, libraryIds, user.id, contentFilters),
+        this.recRepo.findAuthorBooks(bookId, libraryIds, contentFilters, { standaloneOnly: true, limit: MAX_AUTHOR_STANDALONE_BOOKS }),
+      ]);
+
+      const seriesCards = await this.toSeriesCards(seriesRows);
+      const bookCards = await this.withReadStatus(
+        standaloneRows.map((row) => this.toBookCard(row)),
+        user.id,
+      );
+
+      this.logger.log(
+        `[${AUTHOR_SHELF_EVENT}] [end] bookId=${bookId} userId=${user.id} durationMs=${Date.now() - startedAt} seriesCount=${seriesCards.length} standaloneCount=${bookCards.length} - author shelf lookup completed`,
+      );
+      return [...seriesCards, ...bookCards];
+    } catch (err) {
+      const { errorClass, errorMessage } = this.parseError(err);
+      this.logger.error(
+        `[${AUTHOR_SHELF_EVENT}] [fail] bookId=${bookId} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - author shelf lookup failed`,
+      );
+      throw err;
+    }
+  }
+
+  /**
+   * Books like this one, grouped so each other series shows once, ranked by its closest book.
+   * Books from the book's own series never appear.
+   */
+  async getSimilarShelf(bookId: number, user: RequestUser): Promise<RelatedShelfItem[]> {
+    const startedAt = Date.now();
+    this.logger.log(`[${SIMILAR_SHELF_EVENT}] [start] bookId=${bookId} userId=${user.id} - similar shelf lookup started`);
+
+    try {
+      const libraryId = await this.bookReadService.findLibraryIdByBookId(bookId);
+      if (libraryId === null) throw new NotFoundException(`Book ${bookId} not found`);
+      await this.libraryService.verifyUserAccess(user.id, libraryId, user.isSuperuser);
+
+      const target = (await this.recRepo.getTargetBookData(bookId)) ?? this.createFallbackTarget();
+      const embedding = target.embedding ?? (await this.embedder.embedBook(bookId));
+      if (!this.isValidEmbedding(embedding)) {
+        this.logger.log(
+          `[${SIMILAR_SHELF_EVENT}] [end] bookId=${bookId} userId=${user.id} durationMs=${Date.now() - startedAt} reason=invalid_embedding resultCount=0 - similar shelf lookup completed`,
+        );
+        return [];
+      }
+
+      const contentFilters = user.isSuperuser ? undefined : user.contentFilters;
+      const libraryIds = await this.libraryService.findAccessibleLibraryIds(user);
+      const candidates = await this.recRepo.findAnnCandidates(embedding, bookId, libraryIds, contentFilters, {
+        excludeSeriesId: target.seriesId,
+        limit: SIMILAR_SHELF_CANDIDATE_LIMIT,
+      });
+      const groups = await this.rankCandidateGroups(candidates, target);
+
+      const seriesIds = groups.filter((g) => g.seriesId != null).map((g) => g.seriesId!);
+      const bookIds = groups.filter((g) => g.seriesId == null).map((g) => g.bookId);
+      const [seriesRows, bookRows] = await Promise.all([
+        this.recRepo.findSeriesAggregates(seriesIds, libraryIds, user.id, contentFilters),
+        bookIds.length === 0 ? Promise.resolve([]) : this.bookReadService.findRecommendationTitlesByBookIds(bookIds),
+      ]);
+      const seriesCards = new Map((await this.toSeriesCards(seriesRows)).map((card) => [card.seriesId, card]));
+      const bookCards = new Map(
+        (await this.withReadStatus(bookRows, user.id)).map((row): [number, RelatedBookCard] => [row.id, { kind: 'book', ...row }]),
+      );
+
+      const items = groups
+        .map((group) => (group.seriesId != null ? seriesCards.get(group.seriesId) : bookCards.get(group.bookId)))
+        .filter((item): item is RelatedShelfItem => item != null);
+
+      this.logger.log(
+        `[${SIMILAR_SHELF_EVENT}] [end] bookId=${bookId} userId=${user.id} durationMs=${Date.now() - startedAt} candidateCount=${candidates.length} groupCount=${groups.length} resultCount=${items.length} - similar shelf lookup completed`,
+      );
+      return items;
+    } catch (err) {
+      const { errorClass, errorMessage } = this.parseError(err);
+      this.logger.error(
+        `[${SIMILAR_SHELF_EVENT}] [fail] bookId=${bookId} userId=${user.id} durationMs=${Date.now() - startedAt} errorClass=${errorClass} error="${errorMessage}" - similar shelf lookup failed`,
+      );
+      throw err;
+    }
+  }
+
+  /** Candidates rescored and collapsed to one entry per series (standalone books stay single), best first. */
+  private async rankCandidateGroups(
+    candidates: AnnCandidate[],
+    target: TargetBookData,
+  ): Promise<Array<{ seriesId: number | null; bookId: number; score: number }>> {
+    if (candidates.length === 0) return [];
+
+    const metadata = await this.recRepo.getCandidateMetadata(candidates.map((c) => c.bookId));
+    const metaMap = new Map(metadata.map((m) => [m.bookId, m]));
+    const best = new Map<string, { seriesId: number | null; bookId: number; score: number }>();
+    for (const candidate of candidates) {
+      const score = this.rescore(candidate, target, metaMap.get(candidate.bookId) ?? null);
+      const key = candidate.seriesId != null ? `s${candidate.seriesId}` : `b${candidate.bookId}`;
+      const current = best.get(key);
+      if (!current || score > current.score) best.set(key, { seriesId: candidate.seriesId, bookId: candidate.bookId, score });
+    }
+    return [...best.values()].sort((a, b) => b.score - a.score).slice(0, MAX_SIMILAR_SHELF_ITEMS);
+  }
+
+  private async toSeriesCards(rows: SeriesAggregateRow[]): Promise<RelatedSeriesCard[]> {
+    if (rows.length === 0) return [];
+    const covers = new Map((await this.recRepo.findCoverBooks(rows.map((row) => row.coverBookId))).map((c) => [c.bookId, c]));
+    return rows.map((row) => this.toSeriesCard(row, covers.get(row.coverBookId) ?? null));
+  }
+
+  private toSeriesCard(row: SeriesAggregateRow, cover: CoverBookRow | null): RelatedSeriesCard {
+    return {
+      kind: 'series',
+      seriesId: row.seriesId,
+      name: row.name,
+      authors: cover?.authorNames ?? [],
+      bookCount: row.bookCount,
+      readCount: row.readCount,
+      readingCount: row.readingCount,
+      isSerial: row.isSerial,
+      coverBookId: row.coverBookId,
+      coverUpdatedAt: cover?.updatedAt?.toISOString() ?? null,
+      hasCover: cover?.coverSource != null,
+      coverAspectRatio: normalizeCoverAspectRatio(cover?.coverAspectRatio ?? null),
+      isAudiobook: cover?.isAudiobook ?? false,
+      isComic: cover?.isComic ?? false,
+    };
+  }
+
+  private toBookCard(row: AuthorBookRow): UnscopedBookRecommendation & { kind: 'book' } {
+    return {
+      kind: 'book',
+      id: row.bookId,
+      title: row.title,
+      coverAspectRatio: normalizeCoverAspectRatio(row.coverAspectRatio),
+      updatedAt: row.updatedAt?.toISOString() ?? null,
+      hasCover: row.coverSource !== null,
+      authors: row.authorNames,
+      isAudiobook: row.isAudiobook,
+      isComic: row.isComic,
+    };
   }
 
   private rescore(candidate: AnnCandidate, target: TargetBookData, meta: CandidateMetadata | null): number {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatDate as formatLocaleDate } from '@/i18n/formatters'
 import { formatBytes as formatFileSize } from '@/lib/formatting'
@@ -14,7 +14,7 @@ import {
   Library,
   Headphones,
   Lock,
-  MoreVertical,
+  MoreHorizontal,
   Pencil,
   RotateCcw,
   Send,
@@ -50,6 +50,7 @@ import { setBookDetailBackTarget } from '@/features/book/components/detail/book-
 import BookCoverArtwork from '@/features/book/components/BookCoverArtwork.vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { api } from '@/lib/api'
 import { useAuth } from '@/features/auth/composables/useAuth'
@@ -868,6 +869,16 @@ const detailProgressRows = computed(() =>
     .filter(({ progress, percentage }) => percentage > 0 || hasMediaOverlayProgress(progress)),
 )
 
+const readProgressPercent = computed(() => Math.min(100, Math.max(0, ...detailProgressRows.value.map((row) => row.percentage))))
+
+const showReadProgressBar = computed(() => localReadStatus.value !== 'read' && readProgressPercent.value > 0 && readProgressPercent.value < 100)
+
+const primaryActionLabel = computed(() => {
+  if (localReadStatus.value === 'read') return t(isPrimaryAudio.value ? 'book.detail.details.listenAgain' : 'book.detail.details.readAgain')
+  if (showReadProgressBar.value) return t('book.detail.details.resumeAt', { percent: formatPercent(readProgressPercent.value) })
+  return t(isPrimaryAudio.value ? 'book.detail.details.listen' : 'book.detail.details.read')
+})
+
 type ProgressRow = {
   label: string
   percentage: number
@@ -1172,6 +1183,42 @@ function handleOpenResetReadingState() {
   openResetReadingStateDialog()
 }
 
+function handleOpenAddToCollection() {
+  addToCollectionOpen.value = true
+}
+
+function handleOpenMobileMoreMenu() {
+  mobileMoreMenuOpen.value = true
+}
+
+function handleMobileMoreMenuOpenChange(open: boolean) {
+  mobileMoreMenuOpen.value = open
+}
+
+function handleMoreMenuOpenChange(open: boolean) {
+  moreMenuOpen.value = open
+}
+
+type MoreAction = { key: string; label: string; icon: Component; destructive: boolean; run: () => void }
+
+const moreActions = computed<MoreAction[]>(() => {
+  const actions: MoreAction[] = []
+  if (canEditMetadata.value) {
+    actions.push({
+      key: 'reset',
+      label: t('book.detail.details.actions.resetReadingState'),
+      icon: RotateCcw,
+      destructive: false,
+      run: handleOpenResetReadingState,
+    })
+    actions.push({ key: 'move', label: t('book.move.action'), icon: FolderInput, destructive: false, run: handleMoveFromMenu })
+  }
+  if (hasPermission('library_delete_books')) {
+    actions.push({ key: 'delete', label: t('book.detail.details.actions.deleteBook'), icon: Trash2, destructive: true, run: handleDeleteFromMenu })
+  }
+  return actions
+})
+
 async function handleResetReadingState() {
   const result = await resetReadingState()
   if (!result) return
@@ -1384,7 +1431,7 @@ watch(
        natural height of the three-column content instead of being pinned to the viewport bottom. -->
   <div
     data-test="details-layout"
-    class="flex flex-col gap-5 @min-[46rem]/book-detail:grid @min-[46rem]/book-detail:content-start @min-[46rem]/book-detail:grid-cols-[clamp(12rem,23cqi,17rem)_minmax(16rem,1fr)_clamp(15rem,26cqi,19.25rem)] @min-[46rem]/book-detail:gap-x-6 @min-[46rem]/book-detail:gap-y-5"
+    class="flex flex-col gap-5 pb-8 @min-[46rem]/book-detail:pb-0 @min-[46rem]/book-detail:grid @min-[46rem]/book-detail:content-start @min-[46rem]/book-detail:grid-cols-[clamp(12rem,23cqi,17rem)_minmax(16rem,1fr)_clamp(15rem,26cqi,19.25rem)] @min-[46rem]/book-detail:gap-x-6 @min-[46rem]/book-detail:gap-y-5"
   >
     <!-- Cover column -->
     <div
@@ -1450,7 +1497,7 @@ watch(
               <template v-for="(author, index) in authorLinks" :key="`m-${author.id}-${index}`">
                 <RouterLink
                   :to="{ name: 'author-detail', params: { id: author.id } }"
-                  class="transition-colors hover:text-primary hover:underline underline-offset-2"
+                  class="touch-target transition-colors hover:text-primary hover:underline underline-offset-2"
                   >{{ author.name }}</RouterLink
                 ><span v-if="index < authorLinks.length - 1">, </span>
               </template>
@@ -1513,7 +1560,7 @@ watch(
               >
                 <BookOpen v-if="isPrimaryAudio" class="size-4" />
                 <BookOpen v-else class="size-4" />
-                {{ isPrimaryAudio ? t('book.detail.details.listen') : t('book.detail.details.read') }}
+                {{ primaryActionLabel }}
               </button>
               <div class="w-px bg-primary-foreground/20 shrink-0" />
               <Popover :open="readMenuOpen" @update:open="(v) => (readMenuOpen = v)">
@@ -1558,7 +1605,7 @@ watch(
             >
               <Headphones v-if="isPrimaryAudio" class="size-4" />
               <BookOpen v-else class="size-4" />
-              {{ isPrimaryAudio ? t('book.detail.details.listen') : t('book.detail.details.read') }}
+              {{ primaryActionLabel }}
             </button>
 
             <Tooltip>
@@ -1574,6 +1621,19 @@ watch(
               </TooltipTrigger>
               <TooltipContent>{{ t('book.detail.details.peek') }}</TooltipContent>
             </Tooltip>
+          </div>
+
+          <div
+            v-if="showReadProgressBar"
+            data-test="read-progress-bar"
+            class="h-1 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            :aria-valuenow="Math.round(readProgressPercent)"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-label="t('book.detail.details.readProgressAria')"
+          >
+            <div class="h-full rounded-full bg-primary" :style="{ width: `${readProgressPercent}%` }" />
           </div>
 
           <div v-if="hasSeriesNeighbors" data-test="series-nav" class="flex gap-2">
@@ -1605,59 +1665,73 @@ watch(
             </button>
           </div>
 
-          <div class="flex gap-2">
-            <div v-if="hasPermission('library_download')" class="flex-1">
-              <BookDownloadButton :files="book.files" :book-id="book.id" />
+          <div data-test="book-actions" class="grid auto-cols-fr grid-flow-col gap-2">
+            <div v-if="hasPermission('library_download')" class="flex min-w-0 flex-col items-center gap-1">
+              <div class="w-full [&>button]:h-11 sm:[&>button]:h-9">
+                <BookDownloadButton :files="book.files" :book-id="book.id" />
+              </div>
+              <span class="text-[11px] leading-none text-muted-foreground" aria-hidden="true">{{ t('book.detail.details.actions.download') }}</span>
             </div>
-            <button
-              class="flex flex-1 items-center justify-center h-9 rounded-md border border-input bg-background text-sm hover:bg-muted transition-colors"
-              @click="addToCollectionOpen = true"
-            >
-              <Library class="size-3.5" />
-            </button>
-            <button
-              v-if="hasPermission('email_send')"
-              class="flex flex-1 items-center justify-center h-9 rounded-md border border-input bg-background text-sm hover:bg-muted transition-colors"
-              :aria-label="t('book.detail.details.sendViaEmail')"
-              @click="handleSendFromMenu"
-            >
-              <Send class="size-3.5" />
-            </button>
-            <Popover v-if="canEditMetadata || hasPermission('library_delete_books')" :open="moreMenuOpen" @update:open="(v) => (moreMenuOpen = v)">
-              <PopoverTrigger as-child>
-                <button
-                  class="flex flex-1 items-center justify-center h-9 rounded-md border border-border bg-background text-foreground hover:bg-muted transition-colors"
-                >
-                  <MoreVertical class="size-3.5" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent class="w-44 p-1" align="end">
-                <button
-                  v-if="canEditMetadata"
-                  class="flex w-full items-center gap-2 px-2 py-1.5 rounded text-sm text-foreground hover:bg-muted transition-colors"
-                  @click="handleOpenResetReadingState"
-                >
-                  <RotateCcw class="size-3.5" />
-                  Reset reading state
-                </button>
-                <button
-                  v-if="hasPermission('library_edit_metadata')"
-                  class="flex w-full items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors"
-                  @click="handleMoveFromMenu"
-                >
-                  <FolderInput class="size-3.5" />
-                  {{ t('book.move.action') }}
-                </button>
-                <button
-                  v-if="hasPermission('library_delete_books')"
-                  class="flex w-full items-center gap-2 px-2 py-1.5 rounded text-sm text-destructive hover:bg-destructive/10 transition-colors"
-                  @click="handleDeleteFromMenu"
-                >
-                  <Trash2 class="size-3.5" />
-                  Delete book
-                </button>
-              </PopoverContent>
-            </Popover>
+            <div class="flex min-w-0 flex-col items-center gap-1">
+              <button
+                type="button"
+                class="flex h-11 w-full items-center justify-center rounded-md border border-input bg-background transition-colors hover:bg-muted sm:h-9"
+                :aria-label="t('book.detail.details.actions.addToShelf')"
+                @click="handleOpenAddToCollection"
+              >
+                <Library class="size-4" />
+              </button>
+              <span class="text-[11px] leading-none text-muted-foreground" aria-hidden="true">{{ t('book.detail.details.actions.shelf') }}</span>
+            </div>
+            <div v-if="hasPermission('email_send')" class="flex min-w-0 flex-col items-center gap-1">
+              <button
+                type="button"
+                class="flex h-11 w-full items-center justify-center rounded-md border border-input bg-background transition-colors hover:bg-muted sm:h-9"
+                :aria-label="t('book.detail.details.sendViaEmail')"
+                @click="handleSendFromMenu"
+              >
+                <Send class="size-4" />
+              </button>
+              <span class="text-[11px] leading-none text-muted-foreground" aria-hidden="true">{{ t('book.detail.details.actions.send') }}</span>
+            </div>
+            <div v-if="moreActions.length > 0" class="flex min-w-0 flex-col items-center gap-1">
+              <!-- Phones get a bottom action sheet; wider screens keep the anchored menu. -->
+              <button
+                type="button"
+                data-test="book-more-sheet-trigger"
+                class="flex h-11 w-full items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted sm:hidden"
+                :aria-label="t('book.detail.details.actions.moreAria')"
+                @click="handleOpenMobileMoreMenu"
+              >
+                <MoreHorizontal class="size-4" />
+              </button>
+              <Popover :open="moreMenuOpen" @update:open="handleMoreMenuOpenChange">
+                <PopoverTrigger as-child>
+                  <button
+                    type="button"
+                    class="hidden h-9 w-full items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted sm:flex"
+                    :aria-label="t('book.detail.details.actions.moreAria')"
+                  >
+                    <MoreHorizontal class="size-4" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent class="w-52 p-1" align="end">
+                  <template v-for="action in moreActions" :key="action.key">
+                    <div v-if="action.destructive && moreActions.length > 1" class="my-1 h-px bg-border" aria-hidden="true" />
+                    <button
+                      type="button"
+                      class="flex min-h-9 w-full items-center gap-2 rounded px-2 text-sm transition-colors"
+                      :class="action.destructive ? 'text-destructive hover:bg-destructive/10' : 'text-foreground hover:bg-muted'"
+                      @click="action.run"
+                    >
+                      <component :is="action.icon" class="size-4" />
+                      {{ action.label }}
+                    </button>
+                  </template>
+                </PopoverContent>
+              </Popover>
+              <span class="text-[11px] leading-none text-muted-foreground" aria-hidden="true">{{ t('book.detail.details.actions.more') }}</span>
+            </div>
           </div>
         </div>
 
@@ -2097,7 +2171,7 @@ watch(
             <button
               v-if="book.description"
               type="button"
-              class="ml-auto shrink-0 text-[11px] font-semibold text-primary transition-colors hover:underline"
+              class="touch-target ml-auto shrink-0 text-[13px] font-semibold text-primary transition-colors hover:underline"
               :aria-controls="`book-${book.id}-synopsis`"
               :aria-expanded="descriptionExpanded"
               @click="toggleDescription"
@@ -2275,7 +2349,7 @@ watch(
               <button
                 v-if="canEditMetadata"
                 ref="addedDateEditButton"
-                class="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                class="touch-target p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                 :title="t('book.detail.details.editDateAdded')"
                 :aria-label="t('book.detail.details.editDateAdded')"
                 :disabled="isEditingAnyDate || savingAddedDate || savingReadingDates"
@@ -2321,7 +2395,7 @@ watch(
             <dd v-else class="flex items-center gap-1.5">
               <span class="text-[13px] font-medium">{{ formatDisplayDate(savedReadingDates.startedAt) }}</span>
               <button
-                class="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                class="touch-target p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                 :title="t('book.detail.details.editDateStarted')"
                 :disabled="isEditingAnyDate || savingReadingDates"
                 @click="startEditingReadingDate('startedAt')"
@@ -2364,7 +2438,7 @@ watch(
             <dd v-else class="flex items-center gap-1.5">
               <span class="text-[13px] font-medium">{{ formatDisplayDate(savedReadingDates.finishedAt) }}</span>
               <button
-                class="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                class="touch-target p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                 :title="t('book.detail.details.editDateFinished')"
                 :disabled="isEditingAnyDate || savingReadingDates"
                 @click="startEditingReadingDate('finishedAt')"
@@ -2403,16 +2477,44 @@ watch(
     <!-- Discovery shelf -->
     <div data-test="discovery-shelf" class="min-w-0 @min-[46rem]/book-detail:col-span-3 @min-[46rem]/book-detail:row-start-2">
       <DiscoverRow
-        class="h-full"
         :book-id="book.id"
+        :series-id="book.seriesId ?? null"
         :series-name="book.seriesName"
         :author-count="book.authors.length"
+        :author-name="authorLinks.length === 1 ? authorLinks[0]!.name : null"
         size="lg"
         flush
         @series-books="handleSeriesBooks"
       />
     </div>
   </div>
+
+  <Sheet :open="mobileMoreMenuOpen" @update:open="handleMobileMoreMenuOpenChange">
+    <SheetContent
+      side="bottom"
+      hide-close
+      class="gap-0 rounded-t-2xl px-2 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]"
+      data-test="book-more-sheet"
+    >
+      <div class="mx-auto mb-2 h-1.5 w-10 rounded-full bg-muted-foreground/30" aria-hidden="true" />
+      <SheetHeader class="sr-only">
+        <SheetTitle>{{ t('book.detail.details.actions.moreAria') }}</SheetTitle>
+        <SheetDescription>{{ book.title ?? t('book.detail.details.untitled') }}</SheetDescription>
+      </SheetHeader>
+      <template v-for="action in moreActions" :key="action.key">
+        <div v-if="action.destructive && moreActions.length > 1" class="mx-3 my-2 h-px bg-border" aria-hidden="true" />
+        <button
+          type="button"
+          class="flex min-h-12 w-full items-center gap-3 rounded-md px-3 text-base transition-colors active:bg-muted"
+          :class="action.destructive ? 'text-destructive' : 'text-foreground'"
+          @click="action.run"
+        >
+          <component :is="action.icon" class="size-5" />
+          {{ action.label }}
+        </button>
+      </template>
+    </SheetContent>
+  </Sheet>
 
   <AddToCollectionSheet
     :open="addToCollectionOpen"

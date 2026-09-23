@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import type { BookDetail } from '@bookorbit/types'
@@ -18,6 +18,15 @@ const pushMock = vi.fn<(...args: unknown[]) => unknown>()
 
 const detailRef = ref<BookDetail | null>(null)
 const loadingRef = ref(false)
+const apiMock = vi.hoisted(() => vi.fn<(input: string) => Promise<Response>>())
+const compactRef = ref(false)
+
+vi.mock('@/lib/api', () => ({ api: apiMock }))
+
+vi.mock('@vueuse/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@vueuse/core')>()),
+  useMediaQuery: () => compactRef,
+}))
 
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-router')>()
@@ -131,7 +140,7 @@ function makeDetail(overrides: Partial<BookDetail> = {}): BookDetail {
 const globalStubs = {
   stubs: {
     Sheet: { template: '<div><slot /></div>' },
-    SheetContent: { template: '<div><slot /></div>' },
+    SheetContent: { props: ['side'], template: '<div :data-side="side"><slot /></div>' },
     SheetTitle: { template: '<div><slot /></div>' },
     SheetDescription: { template: '<div><slot /></div>' },
     TooltipProvider: { template: '<div><slot /></div>' },
@@ -159,6 +168,9 @@ describe('BookQuickView', () => {
     loadingRef.value = false
     displaySettings.bookCoverDisplayMode.value = 'blurred-fit'
     detailRef.value = makeDetail()
+    compactRef.value = false
+    apiMock.mockReset()
+    apiMock.mockResolvedValue({ ok: true, json: async () => [] } as unknown as Response)
   })
 
   it('fetches detail when mounted with a book id', () => {
@@ -197,13 +209,14 @@ describe('BookQuickView', () => {
       global: globalStubs,
     })
 
+    await wrapper.get('[data-testid="quick-view-action-more"]').trigger('click')
     await wrapper.get('[data-testid="quick-view-action-delete"]').trigger('click')
 
     expect(wrapper.emitted('update:open')).toEqual([[false]])
     expect(wrapper.emitted('action')).toEqual([['delete']])
   })
 
-  it('hides delete action when delete permission is missing', () => {
+  it('hides delete action when delete permission is missing', async () => {
     permissionState.canDelete = false
 
     const wrapper = mount(BookQuickView, {
@@ -214,7 +227,43 @@ describe('BookQuickView', () => {
       global: globalStubs,
     })
 
+    await wrapper.get('[data-testid="quick-view-action-more"]').trigger('click')
     expect(wrapper.find('[data-testid="quick-view-action-delete"]').exists()).toBe(false)
+  })
+
+  it('keeps delete out of sight until the reader opens More', () => {
+    const wrapper = mount(BookQuickView, { props: { open: true, bookId: 42 }, global: globalStubs })
+
+    expect(wrapper.find('[data-testid="quick-view-action-delete"]').exists()).toBe(false)
+  })
+
+  it('opens as a bottom sheet on phones and a side drawer otherwise', async () => {
+    const wrapper = mount(BookQuickView, { props: { open: true, bookId: 42 }, global: globalStubs })
+    expect(wrapper.get('[data-testid="quick-view-sheet"]').attributes('data-side')).toBe('right')
+
+    compactRef.value = true
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[data-testid="quick-view-sheet"]').attributes('data-side')).toBe('bottom')
+  })
+
+  it('shows the chapter number and how far the reader has got', async () => {
+    detailRef.value = makeDetail({ seriesName: 'Runebound', seriesIndex: '1003' })
+    apiMock.mockResolvedValue({ ok: true, json: async () => [{ fileId: 11, percentage: 93.26 }] } as unknown as Response)
+
+    const wrapper = mount(BookQuickView, { props: { open: true, bookId: 42 }, global: globalStubs })
+    await flushPromises()
+
+    expect(apiMock).toHaveBeenCalledWith('/api/v1/books/42/progress')
+    expect(wrapper.get('[data-testid="quick-view-reading-line"]').text()).toBe('#1003 · 93% read')
+    expect(wrapper.get('[data-testid="quick-view-action-read"]').text()).toBe('Resume · 93%')
+  })
+
+  it('says a book is unread when there is no progress', async () => {
+    const wrapper = mount(BookQuickView, { props: { open: true, bookId: 42 }, global: globalStubs })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="quick-view-reading-line"]').text()).toBe('Unread')
+    expect(wrapper.get('[data-testid="quick-view-action-read"]').text()).toBe('Read')
   })
 
   it('renders RanobeDB provider icon link', () => {

@@ -224,6 +224,10 @@ async function handleAddSessionSubmit(payload: AddReadingSessionPayload) {
   }
 }
 
+// Range and export controls only mean something once there are sessions; a narrowed range that
+// happens to be empty keeps them so the reader can widen it again.
+const hasSessionHistory = computed(() => (stats.value?.totalSessions ?? 0) > 0 || activeQuick.value !== 'all' || selectedFormat.value != null)
+
 const quickFilters = computed<{ label: string; value: QuickFilter }[]>(() => [
   { label: t('book.detail.readingLog.filters.allTime'), value: 'all' },
   { label: t('book.detail.readingLog.filters.last30'), value: 'last30' },
@@ -297,6 +301,7 @@ const quickFilters = computed<{ label: string; value: QuickFilter }[]>(() => [
         >
           <template #actions>
             <div
+              v-if="hasSessionHistory"
               class="flex items-center gap-0.5 rounded-lg border border-border bg-muted/60 p-0.5"
               role="group"
               :aria-label="t('book.detail.readingLog.filters.dateRangeAria')"
@@ -305,7 +310,7 @@ const quickFilters = computed<{ label: string; value: QuickFilter }[]>(() => [
                 v-for="quick in quickFilters"
                 :key="quick.value"
                 :data-quick-filter="quick.value"
-                class="h-6 rounded-md px-2 text-[11px] font-medium transition-colors"
+                class="touch-target h-6 rounded-md px-2 text-[11px] font-medium transition-colors pointer-coarse:h-9 pointer-coarse:px-2.5 pointer-coarse:text-xs"
                 :class="
                   activeQuick === quick.value ? 'bg-card text-foreground shadow-[var(--elevation-xs)]' : 'text-muted-foreground hover:text-foreground'
                 "
@@ -327,7 +332,7 @@ const quickFilters = computed<{ label: string; value: QuickFilter }[]>(() => [
               <option v-for="format in uniqueFormats" :key="format" :value="format">{{ format.toUpperCase() }}</option>
             </select>
 
-            <ReadingLogExportMenu :book-title="bookTitle" :total="total" :export-all="exportAll" />
+            <ReadingLogExportMenu v-if="hasSessionHistory" :book-title="bookTitle" :total="total" :export-all="exportAll" />
 
             <DropdownMenu v-if="canManageReadingState">
               <DropdownMenuTrigger as-child>

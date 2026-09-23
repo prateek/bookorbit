@@ -842,7 +842,7 @@ function handleCoverChanged(source: 'extracted' | 'custom' | null) {
   <div class="@container/edit flex min-h-full min-w-0 flex-col">
     <div class="flex flex-1 flex-col gap-3">
       <!-- Command strip -->
-      <div class="sticky top-0 z-30 -mx-4 flex flex-none items-center gap-2 bg-card/95 px-4 py-0.5 backdrop-blur-sm sm:mx-0 sm:px-0">
+      <div class="sticky -top-4 z-30 -mx-4 -mt-4 flex flex-none items-center gap-2 bg-card/95 px-4 pt-4 pb-0.5 backdrop-blur-sm sm:mx-0 sm:px-0">
         <div class="no-scrollbar flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
           <div
             v-if="metadataScore !== null"

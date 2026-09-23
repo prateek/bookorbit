@@ -279,9 +279,11 @@ defineExpose({ openAddForm })
             >
               {{ attempt.origin }}
             </span>
-            <span class="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            <span
+              class="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100"
+            >
               <button
-                class="inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                class="inline-flex size-5 pointer-coarse:size-11 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 :aria-label="t('book.detail.readingLog.attempts.editAria')"
                 @click="handleEdit(attempt)"
               >
@@ -290,14 +292,14 @@ defineExpose({ openAddForm })
               <template v-if="canManage">
                 <button
                   v-if="confirmDeleteId === attempt.id"
-                  class="inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  class="inline-flex size-5 pointer-coarse:size-11 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   :aria-label="t('book.detail.readingLog.attempts.cancelDeleteAria')"
                   @click="handleCancelDelete"
                 >
                   <X class="size-3" />
                 </button>
                 <button
-                  class="inline-flex size-5 items-center justify-center rounded transition-colors"
+                  class="inline-flex size-5 pointer-coarse:size-11 items-center justify-center rounded transition-colors"
                   :class="
                     confirmDeleteId === attempt.id
                       ? 'bg-destructive/15 text-destructive ring-1 ring-destructive/40'

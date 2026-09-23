@@ -69,6 +69,12 @@ const globalStubs = {
     DialogOverlay: { template: '<div />' },
     DialogContent: { template: '<div><slot /></div>' },
     DialogClose: { template: '<button><slot /></button>' },
+    // Stubbing DialogRoot also stubs the one inside Sheet, which its content then cannot find.
+    Sheet: { template: '<div><slot /></div>' },
+    SheetContent: { template: '<div><slot /></div>' },
+    SheetHeader: { template: '<div><slot /></div>' },
+    SheetTitle: { template: '<div><slot /></div>' },
+    SheetDescription: { template: '<div><slot /></div>' },
     AddToCollectionSheet: true,
     MoveToLibrarySheet: true,
     DeleteBookDialog: true,
