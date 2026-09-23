@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   score: number | null
@@ -9,22 +10,25 @@ const emit = defineEmits<{
   click: []
 }>()
 
+const { t } = useI18n()
+
 function handleClick() {
   emit('click')
 }
 
 const label = computed(() => {
   if (props.score === null) return null
-  return `${props.score}%`
+  return t('metadataScore.badgeLabel', { score: props.score })
 })
 
-const colorClass = computed(() => {
+// Outlined with a band-colored dot so it cannot be mistaken for reading progress or status.
+const dotClass = computed(() => {
   const s = props.score
-  if (s === null) return 'bg-muted text-muted-foreground'
-  if (s >= 90) return 'bg-green-500/15 text-green-600 dark:text-green-400'
-  if (s >= 70) return 'bg-lime-500/15 text-lime-600 dark:text-lime-400'
-  if (s >= 50) return 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-  return 'bg-red-500/15 text-red-600 dark:text-red-400'
+  if (s === null) return 'bg-muted-foreground'
+  if (s >= 90) return 'bg-success'
+  if (s >= 70) return 'bg-success/60'
+  if (s >= 50) return 'bg-warning'
+  return 'bg-destructive'
 })
 </script>
 
@@ -32,10 +36,12 @@ const colorClass = computed(() => {
   <button
     v-if="label !== null"
     type="button"
-    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-all duration-200 hover:opacity-80"
-    :class="colorClass"
+    data-test="metadata-score-badge"
+    class="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground cursor-pointer transition-colors duration-200 hover:bg-muted hover:text-foreground"
+    :aria-label="t('metadataScore.badgeAria', { score: score ?? 0 })"
     @click="handleClick"
   >
+    <span class="size-1.5 shrink-0 rounded-full" :class="dotClass" aria-hidden="true" />
     {{ label }}
   </button>
 </template>

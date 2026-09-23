@@ -59,6 +59,17 @@ function scroll(direction: 'left' | 'right') {
   scrollEl.value.scrollBy({ left: direction === 'left' ? -240 : 240, behavior: 'smooth' })
 }
 
+// scrollIntoView would also scroll the page to the shelf, which sits below the fold on phones.
+function centerCard(container: HTMLElement, card: HTMLElement) {
+  const containerRect = container.getBoundingClientRect()
+  const cardRect = card.getBoundingClientRect()
+  container.scrollLeft += cardRect.left - containerRect.left - (containerRect.width - cardRect.width) / 2
+}
+
+function isCurrent(book: CarouselBook): boolean {
+  return props.currentBookId != null && book.id === props.currentBookId
+}
+
 function navigateToBook(bookId: number) {
   router.push({ name: 'book-detail', params: { bookId } })
 }
@@ -104,8 +115,8 @@ watch(
     if (loading || !currentId || books.length === 0) return
     await nextTick()
     if (!scrollEl.value) return
-    const card = scrollEl.value.querySelector(`[data-book-id="${currentId}"]`)
-    if (card) card.scrollIntoView({ inline: 'center', behavior: 'instant', block: 'nearest' })
+    const card = scrollEl.value.querySelector<HTMLElement>(`[data-book-id="${currentId}"]`)
+    if (card) centerCard(scrollEl.value, card)
   },
   { immediate: true },
 )
@@ -146,6 +157,7 @@ defineExpose({ scroll })
         class="shrink-0 text-left group animate-fade-up"
         :class="book.coverAspectRatio === '1/1' ? cardWidthClass.square : cardWidthClass.portrait"
         :style="{ animationDelay: `${index * 40}ms` }"
+        :aria-current="isCurrent(book) ? 'true' : undefined"
         @click="navigateToBook(book.id)"
       >
         <BookCoverSurface
@@ -184,6 +196,7 @@ defineExpose({ scroll })
             {{ formatSeriesIndex(book.seriesIndex) }}
           </span>
         </BookCoverSurface>
+        <span v-if="isCurrent(book)" data-test="current-book-marker" class="mt-1.5 block h-1 w-full rounded-full bg-primary" aria-hidden="true" />
       </button>
     </div>
   </div>
