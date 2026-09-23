@@ -9186,6 +9186,19 @@
     },
     "loadingBook": "Loading book…",
     "failedToLoadBook": "Failed to load book",
+    "endCard": {
+      "region": "End of chapter",
+      "eyebrow": "Next chapter",
+      "endOfBook": "End of book",
+      "numbered": "#{index} {title}",
+      "untitled": "Untitled",
+      "next": "Next chapter",
+      "openNext": "Next chapter: {title}",
+      "markAsRead": "Mark as read",
+      "markedAsRead": "Marked as read",
+      "markFailed": "Could not mark this book as read",
+      "dismiss": "Dismiss"
+    },
     "chapterNumber": "Chapter {number}",
     "peek": {
       "badge": "Peeking",

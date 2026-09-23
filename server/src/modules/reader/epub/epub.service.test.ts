@@ -381,6 +381,7 @@ describe('EpubService', () => {
 
     expect(result.contentType).toBe('application/xhtml+xml');
     expect(result.size).toBe(11);
+    expect(result.version).toBe((await service.getBookInfo(1, undefined, user)).version);
     await expect(readStream(result.stream)).resolves.toEqual(Buffer.from('chapter-one'));
   });
 
@@ -439,6 +440,21 @@ describe('EpubService', () => {
 
     const third = await service.getBookInfo(1, undefined, user);
     expect(third.metadata['title']).toBe('Title Two');
+    expect(mockOpenFile).toHaveBeenCalledTimes(2);
+    expect(first.version).toBe(second.version);
+    expect(third.version).not.toBe(first.version);
+  });
+
+  it('changes the version when a same-mtime overwrite changes the file size', async () => {
+    mockStat.mockResolvedValueOnce({ mtimeMs: 500, size: 10 } as Awaited<ReturnType<typeof stat>>);
+    mockOpenFile.mockResolvedValueOnce(makeEpubArchive() as any);
+    const first = await service.getBookInfo(1, undefined, user);
+
+    mockStat.mockResolvedValueOnce({ mtimeMs: 500, size: 11 } as Awaited<ReturnType<typeof stat>>);
+    mockOpenFile.mockResolvedValueOnce(makeEpubArchive() as any);
+    const second = await service.getBookInfo(1, undefined, user);
+
+    expect(second.version).not.toBe(first.version);
     expect(mockOpenFile).toHaveBeenCalledTimes(2);
   });
 

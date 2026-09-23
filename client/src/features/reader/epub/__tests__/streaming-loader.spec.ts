@@ -70,4 +70,17 @@ describe('makeStreamingLoader auth integration', () => {
     await expect(loader.loadText('text/chapter 1.xhtml')).resolves.toBe('<html>chapter</html>')
     expect(calls).toEqual([{ url: chapterUrl, auth: 'Bearer legacy-token' }])
   })
+
+  it('adds the file version from the info payload to resource URLs', async () => {
+    const urls: string[] = []
+    const fetchFile = vi.fn<typeof fetch>((input: RequestInfo | URL) => {
+      urls.push(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
+      return Promise.resolve(new Response('<html>chapter</html>', { status: 200 }))
+    })
+
+    const loader = makeStreamingLoader(42, '/api/v1/epub', { version: 'abc-1', manifest: [{ href: 'text/ch1.xhtml', size: 20 }] }, fetchFile, null, 9)
+
+    await loader.loadText('text/ch1.xhtml')
+    expect(urls).toEqual(['/api/v1/epub/42/file/text/ch1.xhtml?fileId=9&v=abc-1'])
+  })
 })

@@ -107,4 +107,19 @@ describe('useReadingSession - elapsedMinutes', () => {
     expect(elapsedMinutes.value).toBe(0)
     expect(apiMock).not.toHaveBeenCalled()
   })
+
+  it('ends the session with a keepalive request on pagehide', async () => {
+    const { onActivity } = useReadingSession(99, () => ({ percentage: 40 }))
+
+    onActivity()
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    window.dispatchEvent(new Event('pagehide'))
+
+    const sessionCalls = apiMock.mock.calls.filter((c) => c[0] === '/api/v1/books/files/99/sessions')
+    expect(sessionCalls).toHaveLength(1)
+    expect(sessionCalls[0]?.[1]).toEqual(expect.objectContaining({ method: 'POST', keepalive: true }))
+    expect(JSON.parse((sessionCalls[0]?.[1] as { body?: string } | undefined)?.body ?? '{}')).toEqual(
+      expect.objectContaining({ durationSeconds: 60, endProgress: 40 }),
+    )
+  })
 })

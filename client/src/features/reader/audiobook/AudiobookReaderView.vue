@@ -35,6 +35,7 @@ import { useAudioQueue } from './composables/useAudioQueue'
 import { useAudioSettings } from './composables/useAudioSettings'
 import { useAudioBookmarks, type AudioBookmark } from './composables/useAudioBookmarks'
 import { useReadingSession } from '../shared/composables/useReadingSession'
+import { useReaderBack } from '../shared/composables/useReaderBack'
 import { useFullscreen } from '../shared/composables/useFullscreen'
 
 const { t } = useI18n()
@@ -45,6 +46,7 @@ const router = useRouter()
 const trackingEnabled = computed(() => !props.peekMode)
 
 const detail = ref<BookDetail | null>(null)
+const { goBack } = useReaderBack(props.bookId, () => detail.value)
 const manifest = ref<AudiobookManifest | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -782,7 +784,7 @@ onMounted(async () => {
       <div class="text-center max-w-sm">
         <p class="text-sm font-medium text-white mb-2">{{ t('reader.audiobook.loadError') }}</p>
         <p class="text-xs text-white/50 mb-4">{{ error }}</p>
-        <button class="text-sm text-white/80 underline" @click="router.back">{{ t('reader.header.goBack') }}</button>
+        <button class="text-sm text-white/80 underline" @click="goBack">{{ t('reader.header.goBack') }}</button>
       </div>
     </div>
 
@@ -791,7 +793,7 @@ onMounted(async () => {
       <div class="relative z-10 flex flex-col h-full text-white">
         <!-- Header -->
         <div class="flex items-center gap-2 px-3 py-3 shrink-0">
-          <button class="p-2 rounded-full hover:bg-white/10 transition-colors" @click="router.back">
+          <button class="p-2 rounded-full hover:bg-white/10 transition-colors" @click="goBack">
             <ChevronLeft class="w-5 h-5" />
           </button>
           <div class="flex-1 min-w-0 px-1">
