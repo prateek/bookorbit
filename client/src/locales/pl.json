@@ -4888,8 +4888,6 @@
       "resultCount": "{shown} z {total}",
       "noMatches": "Brak dopasowań",
       "noMatchesHint": "Spróbuj innego wyszukiwanego hasła.",
-      "bookCount": "Książki: {count}",
-      "showCount": "Shows: {count}",
       "librariesEmptyHint": "Utwórz bibliotekę, aby zacząć dodawać książki.",
       "podcastLibrariesEmptyHint": "Create a podcast library to start following shows.",
       "smartScopesEmptyHint": "Inteligentne zakresy zapisują zestaw często używanych filtrów.",

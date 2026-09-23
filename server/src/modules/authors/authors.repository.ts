@@ -8,7 +8,7 @@ import { accentInsensitiveIlike, buildSearchPattern } from '../../common/utils/a
 import { DB } from '../../db';
 import { refreshPrimaryAuthorSortNamesForAuthors, refreshPrimaryAuthorSortNamesForBooks } from '../../db/book-author-sort-key';
 import * as schema from '../../db/schema';
-import { authors, bookAuthors, bookMetadata, books } from '../../db/schema';
+import { authors, bookAuthors, bookMetadata, books, libraries } from '../../db/schema';
 import { AuthorBookSort } from './dto/list-author-books.dto';
 import { AuthorListSort, SortDirection } from './dto/list-authors.dto';
 
@@ -23,10 +23,17 @@ type AuthorSummaryRow = {
   lastAddedAt: Date | null;
 };
 
-/** The list query alone resolves a cover fallback; detail and enrichment do not need one. */
-export type AuthorListItemRow = AuthorSummaryRow & {
-  coverBookId: number | null;
+/** What the list and detail queries add so a page can count an author's work in series rather than books. */
+type AuthorSeriesCountsRow = {
+  seriesCount: number;
+  serialBookCount: number;
 };
+
+/** The list query alone resolves a cover fallback; detail and enrichment do not need one. */
+export type AuthorListItemRow = AuthorSummaryRow &
+  AuthorSeriesCountsRow & {
+    coverBookId: number | null;
+  };
 
 export type AuthorLetterCountRow = {
   letter: string;
@@ -37,17 +44,18 @@ type AuthorBookIdRow = {
   id: number;
 };
 
-export type AuthorDetailRow = AuthorSummaryRow & {
-  birthDate: string | null;
-  birthYear: number | null;
-  deathDate: string | null;
-  deathYear: number | null;
-  website: string | null;
-  genres: string[] | null;
-  influences: string[] | null;
-  metadataProvider: string | null;
-  metadataProviderId: string | null;
-};
+export type AuthorDetailRow = AuthorSummaryRow &
+  AuthorSeriesCountsRow & {
+    birthDate: string | null;
+    birthYear: number | null;
+    deathDate: string | null;
+    deathYear: number | null;
+    website: string | null;
+    genres: string[] | null;
+    influences: string[] | null;
+    metadataProvider: string | null;
+    metadataProviderId: string | null;
+  };
 
 export type AuthorEnrichmentRow = AuthorSummaryRow & {
   hasPhoto: boolean;
@@ -115,12 +123,15 @@ export class AuthorsRepository {
         sortName: authors.sortName,
         description: authors.description,
         bookCount: sql<number>`count(distinct ${books.id})::int`,
+        ...this.seriesCountColumns(),
         lastAddedAt: lastAddedExpr,
         coverBookId: this.coverBookIdExpr(params.libraryIds),
       })
       .from(authors)
       .innerJoin(bookAuthors, eq(bookAuthors.authorId, authors.id))
       .innerJoin(books, eq(books.id, bookAuthors.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(where)
       .groupBy(authors.id, authors.name, authors.sortName, authors.description)
       .having(having)
@@ -189,11 +200,14 @@ export class AuthorsRepository {
         metadataProvider: authors.metadataProvider,
         metadataProviderId: authors.metadataProviderId,
         bookCount: sql<number>`count(distinct ${books.id})::int`,
+        ...this.seriesCountColumns(),
         lastAddedAt: max(books.addedAt),
       })
       .from(authors)
       .innerJoin(bookAuthors, eq(bookAuthors.authorId, authors.id))
       .innerJoin(books, eq(books.id, bookAuthors.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(and(eq(authors.id, authorId), inArray(books.libraryId, libraryIds), ...filterClauses))
       .groupBy(
         authors.id,
@@ -556,6 +570,14 @@ export class AuthorsRepository {
       : await this.db.update(authors).set({ hasPhoto: false }).where(eq(authors.hasPhoto, true)).returning({ id: authors.id });
 
     return { marked: marked.length, cleared: cleared.length };
+  }
+
+  /** Needs `libraries` and `bookMetadata` joined onto the author's books. */
+  private seriesCountColumns() {
+    return {
+      seriesCount: sql<number>`count(distinct ${bookMetadata.seriesId})::int`,
+      serialBookCount: sql<number>`(count(distinct ${books.id}) filter (where ${libraries.countSeriesAsOneBook} and ${bookMetadata.seriesId} is not null))::int`,
+    };
   }
 
   private buildAuthorWhere(params: {

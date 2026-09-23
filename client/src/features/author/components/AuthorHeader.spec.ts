@@ -52,3 +52,36 @@ describe('life dates', () => {
     expect(wrapper.text()).toContain('1929')
   })
 })
+
+describe('compact header', () => {
+  it('shows a monogram rather than a portrait-sized placeholder when there is no portrait', () => {
+    const wrapper = mount(AuthorHeader, { props: { author: { ...author, name: 'Actus' } } })
+
+    expect(wrapper.get('[data-testid="author-monogram"]').text()).toBe('A')
+    expect(wrapper.find('img').exists()).toBe(false)
+  })
+
+  it('counts a serial writer in serials and chapters', () => {
+    const wrapper = mount(AuthorHeader, {
+      props: { author: { ...author, bookCount: 1089, seriesCount: 16, serialBookCount: 1089 } },
+    })
+
+    expect(wrapper.get('[data-testid="author-subtitle"]').text()).toMatch(/^16 serials · 1,089 chapters · latest chapter /)
+  })
+
+  it('counts a novelist in series and books', () => {
+    const wrapper = mount(AuthorHeader, {
+      props: { author: { ...author, bookCount: 12, seriesCount: 3, serialBookCount: 0 } },
+    })
+
+    expect(wrapper.get('[data-testid="author-subtitle"]').text()).toMatch(/^3 series · 12 books · last added /)
+  })
+
+  it('keeps the missing biography note away from readers', () => {
+    const reader = mount(AuthorHeader, { props: { author } })
+    const editor = mount(AuthorHeader, { props: { author, canUpdate: true } })
+
+    expect(reader.find('[data-testid="author-no-bio"]').exists()).toBe(false)
+    expect(editor.get('[data-testid="author-no-bio"]').text()).toBe('No biography')
+  })
+})

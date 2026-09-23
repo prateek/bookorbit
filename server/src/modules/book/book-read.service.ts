@@ -35,8 +35,8 @@ export class BookReadService {
     return this.bookRepo.findCardsCollapsed(opts);
   }
 
-  countWhere(where: SQL | undefined): Promise<number> {
-    return this.bookRepo.countWhere(where);
+  summarizeWhere(where: SQL | undefined, userId: number) {
+    return this.bookRepo.summarizeWhere(where, userId);
   }
 
   findLibraryIdsByBookIds(bookIds: number[]) {

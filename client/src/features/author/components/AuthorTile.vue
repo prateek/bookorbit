@@ -6,6 +6,7 @@ import type { AuthorCoverShape, AuthorSummary } from '@bookorbit/types'
 import { formatNumber, formatRelativeFromNow } from '@/i18n/formatters'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import AuthorPortrait from './AuthorPortrait.vue'
+import { isSerialAuthor } from '../lib/author-work'
 
 const props = withDefaults(
   defineProps<{
@@ -34,7 +35,11 @@ const { t } = useI18n()
 const bookCountLabel = computed(() => formatNumber(props.author.bookCount))
 const lastAdded = computed(() => (props.author.lastAddedAt ? formatRelativeFromNow(new Date(props.author.lastAddedAt)) : ''))
 
-const countLine = computed(() => t('author.index.bookCount', { count: props.author.bookCount }))
+const countLine = computed(() =>
+  isSerialAuthor(props.author)
+    ? t('author.index.serialSummary', { series: props.author.seriesCount ?? 0, chapters: props.author.bookCount })
+    : t('author.index.bookCount', { count: props.author.bookCount }),
+)
 
 const accessibleLabel = computed(() => t('author.index.rowLabel', { name: props.author.name, count: props.author.bookCount }))
 

@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   addedWithinDays: null as unknown as { value: number | null },
   minBookCount: null as unknown as { value: number | null },
   viewMode: null as unknown as { value: string },
+  total: null as unknown as { value: number },
 }))
 
 vi.mock('vue-router', () => ({
@@ -81,7 +82,7 @@ vi.mock('../composables/useAuthorJumpRail', () => ({
 vi.mock('../composables/useAuthorsList', () => ({
   useAuthorsList: () => ({
     items: mocks.items,
-    total: ref(0),
+    total: mocks.total,
     loading: ref(false),
     error: ref(null),
     hasMore: ref(false),
@@ -137,6 +138,7 @@ describe('AuthorsView', () => {
     mocks.load.mockResolvedValue()
     mocks.loadThrough.mockResolvedValue(true)
     mocks.items = ref([])
+    mocks.total = ref(0)
     mocks.q = ref('')
     mocks.sort = ref('name')
     mocks.order = ref('asc')
@@ -186,12 +188,40 @@ describe('AuthorsView', () => {
     expect(mocks.addedWithinDays.value).toBe(7)
   })
 
-  it('groups authors into one section per letter when sorted alphabetically', async () => {
+  it('groups a long list into one section per letter when sorted alphabetically', async () => {
     mocks.items = ref([author(1, 'Alan Glynn'), author(2, 'Amy Tan'), author(3, 'Blake Crouch')])
+    mocks.total = ref(120)
     const wrapper = await mountView()
 
     const headings = wrapper.findAll('[data-letter]')
     expect(headings.map((heading) => heading.attributes('data-letter'))).toEqual(['A', 'B'])
+  })
+
+  it('opens on the most recently updated authors on a touch screen', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query === '(pointer: coarse)',
+        media: query,
+        addEventListener: vi.fn<() => void>(),
+        removeEventListener: vi.fn<() => void>(),
+        addListener: vi.fn<() => void>(),
+        removeListener: vi.fn<() => void>(),
+      })),
+    )
+
+    await mountView()
+
+    expect(mocks.sort.value).toBe('lastAddedAt')
+    expect(mocks.order.value).toBe('desc')
+  })
+
+  it('keeps a short list flat rather than giving every author a heading', async () => {
+    mocks.items = ref([author(1, 'Actus'), author(2, 'Domagoj Kurmaic'), author(3, 'RinoZ')])
+    mocks.total = ref(3)
+    const wrapper = await mountView()
+
+    expect(wrapper.findAll('[data-letter]')).toHaveLength(0)
   })
 
   it('drops the letter sections when the sort is not alphabetical', async () => {

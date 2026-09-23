@@ -4687,7 +4687,6 @@
       "resultCount": "{shown} {total}",
       "noMatches": "Збігів немає",
       "noMatchesHint": "Спробуйте інший пошуковий термін.",
-      "bookCount": "Книги: {count}",
       "librariesEmptyHint": "Створіть бібліотеку, щоб почати додавати книги.",
       "podcastLibrariesEmptyHint": "Create a podcast library to start following shows.",
       "smartScopesEmptyHint": "Розумні області зберігають набір фільтрів, які ви часто використовуєте.",

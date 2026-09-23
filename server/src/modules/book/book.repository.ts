@@ -101,6 +101,7 @@ type CollapsedRawRow = {
   cover_updated_at_by_book_id: JsonObj | null;
   first_volume_book_id: number | null;
   latest_volume_book_id: number | null;
+  latest_series_index: string | null;
   first_unread_book_id: number | null;
   total_count: string;
   book_total: string;
@@ -826,6 +827,7 @@ export class BookRepository {
       seriesLatestAddedAt: Date | null;
       firstVolumeBookId: number | null;
       latestVolumeBookId: number | null;
+      latestSeriesIndex: string | null;
       firstUnreadBookId: number | null;
     }>;
     authorRows: { bookId: number; name: string }[];
@@ -962,12 +964,13 @@ export class BookRepository {
         WHERE scc.rn = 1
       ),
       series_latest_volume AS (
-        SELECT slv.series_id, slv.library_id, slv.id AS latest_volume_book_id
+        SELECT slv.series_id, slv.library_id, slv.id AS latest_volume_book_id, slv.series_index AS latest_series_index
         FROM (
           SELECT
             base.series_id,
             base.library_id,
             base.id,
+            base.series_index,
             ROW_NUMBER() OVER (
               PARTITION BY base.series_id, base.library_id
               ORDER BY ${sql.raw(seriesIndexSortKeySql('base.series_index'))} DESC NULLS LAST,
@@ -1059,6 +1062,7 @@ export class BookRepository {
           scv.cover_updated_at_by_book_id,
           sfv.first_volume_book_id,
           slv2.latest_volume_book_id,
+          slv2.latest_series_index,
           sfu2.first_unread_book_id
         FROM base_rows base
         LEFT JOIN user_book_ratings ubr ON ubr.book_id = base.id AND ubr.user_id = ${userId}
@@ -1136,6 +1140,7 @@ export class BookRepository {
       seriesLatestAddedAt: r.sort_added_at ? parsePgTimestamptz(r.sort_added_at) : null,
       firstVolumeBookId: r.first_volume_book_id ?? null,
       latestVolumeBookId: r.latest_volume_book_id ?? null,
+      latestSeriesIndex: r.latest_series_index ?? null,
       firstUnreadBookId: r.first_unread_book_id ?? null,
     }));
 
@@ -1890,6 +1895,23 @@ export class BookRepository {
       .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(this.visibleWhere(where));
     return Number(total);
+  }
+
+  /** {@link countWhere} plus the series those books span and how many of them `userId` has not read. */
+  async summarizeWhere(where: SQL | undefined, userId: number): Promise<{ bookCount: number; seriesCount: number; unreadCount: number }> {
+    const [row] = await this.db
+      .select({
+        bookCount: count(),
+        seriesCount: sql<number>`count(distinct ${bookMetadata.seriesId})::int`,
+        unreadCount: sql<number>`(count(*) filter (where not exists (
+          select 1 from ${userBookStatus} summary_ubs
+          where summary_ubs.book_id = ${books.id} and summary_ubs.user_id = ${userId} and summary_ubs.status = 'read'
+        )))::int`,
+      })
+      .from(books)
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .where(this.visibleWhere(where));
+    return { bookCount: Number(row?.bookCount ?? 0), seriesCount: Number(row?.seriesCount ?? 0), unreadCount: Number(row?.unreadCount ?? 0) };
   }
 
   async findLibraryIdsByBookIds(bookIds: number[]): Promise<{ id: number; libraryId: number }[]> {

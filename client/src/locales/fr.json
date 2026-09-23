@@ -7332,7 +7332,6 @@
       "resultCount": "{shown} sur {total}",
       "noMatches": "Aucun résultat",
       "noMatchesHint": "Essayez un autre terme de recherche.",
-      "bookCount": "Livres : {count}",
       "librariesEmptyHint": "Créez une bibliothèque pour commencer à ajouter des livres.",
       "smartScopesEmptyHint": "Les listes intelligentes enregistrent un ensemble de filtres que vous utilisez souvent.",
       "collectionsEmptyHint": "Les collections regroupent les livres que vous choisissez à la main."
