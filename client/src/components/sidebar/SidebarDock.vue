@@ -72,7 +72,7 @@ function navigateToAccount() {
 }
 
 function navigateToSettings() {
-  goTo('settings-libraries')
+  goTo(props.isMobile ? 'settings-home' : 'settings-libraries')
 }
 
 function navigateToWhatsNew() {

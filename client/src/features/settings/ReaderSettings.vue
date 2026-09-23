@@ -48,9 +48,7 @@ async function setStorageMode(sync: boolean) {
 </script>
 
 <template>
-  <div
-    class="[&_.settings-hint]:overflow-hidden [&_.settings-hint]:text-ellipsis [&_.settings-hint]:whitespace-nowrap md:[&_.settings-hint]:overflow-visible md:[&_.settings-hint]:whitespace-normal"
-  >
+  <div>
     <SettingsPageHeader v-if="!props.embedded" :title="t('settings.reader.general.title')" :subtitle="t('settings.reader.general.subtitle')" />
 
     <!-- Preference storage -->

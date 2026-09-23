@@ -14,7 +14,7 @@ function handleReset() {
 
 <template>
   <div class="flex justify-end border-t border-border pt-4" data-testid="settings-reset-action">
-    <Button variant="outline" size="sm" type="button" class="w-full md:w-auto" @click="handleReset">
+    <Button variant="outline" size="sm" type="button" class="w-full md:w-auto pointer-coarse:h-11" @click="handleReset">
       <RotateCcw :size="14" aria-hidden="true" />
       {{ t('settings.reader.resetToDefaults') }}
     </Button>

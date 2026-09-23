@@ -45,7 +45,7 @@ const { isHidden, arrangeRows, visibleRows, arrangeGroups } = useSidebarLayout()
 const { isCustomizing, stopCustomizing } = useSidebarCustomizeMode()
 
 const isRail = computed(() => state.value === 'collapsed' && !isMobile.value)
-const isSettingsRoute = computed(() => typeof route.name === 'string' && route.name.startsWith('settings-'))
+const isSettingsRoute = computed(() => !isMobile.value && typeof route.name === 'string' && route.name.startsWith('settings-'))
 
 type SidebarBlock = { kind: 'nav'; id: string; zone: SidebarNavZone } | { kind: 'list'; id: string; section: SidebarSection }
 
