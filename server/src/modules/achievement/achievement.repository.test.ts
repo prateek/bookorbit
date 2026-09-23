@@ -1719,16 +1719,18 @@ describe('AchievementRepository', () => {
 
   describe('hasMonthWithBooksFinished', () => {
     it('returns true when a month had enough finished books', async () => {
-      const db = { execute: vi.fn().mockResolvedValue({ rows: [{ found: true }] }) };
+      const chain = makeSelectChain([{ one: 1 }]);
+      const db = { select: vi.fn().mockReturnValue(chain) };
       const repo = makeRepo(db);
 
       const result = await repo.hasMonthWithBooksFinished(1, 5);
 
       expect(result).toBe(true);
+      expect(boundValues(chain.having.mock.calls[0]?.[0])).toContain(5);
     });
 
     it('returns false when no month reached the minimum', async () => {
-      const db = { execute: vi.fn().mockResolvedValue({ rows: [{ found: false }] }) };
+      const db = { select: vi.fn().mockReturnValue(makeSelectChain([])) };
       const repo = makeRepo(db);
 
       const result = await repo.hasMonthWithBooksFinished(1, 5);

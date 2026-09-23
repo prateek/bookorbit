@@ -18,6 +18,7 @@ export function makeLibrary(overrides: Partial<Library> = {}): Library {
     excludePatterns: [],
     readingThreshold: 10,
     markAsFinishedPercentComplete: 95,
+    countSeriesAsOneBook: false,
     fileNamingPattern: null,
     fileWriteEnabled: false,
     fileWriteWriteCover: false,
