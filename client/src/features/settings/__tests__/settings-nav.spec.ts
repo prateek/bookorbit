@@ -8,8 +8,8 @@ import { SETTINGS_NAV, findSettingsNavItem, firstVisibleSettingsRoute, visibleSe
 const NOBODY: SettingsNavContext = { isSuperuser: false, permissions: [], isDemoRestricted: false }
 const SUPERUSER: SettingsNavContext = { isSuperuser: true, permissions: [], isDemoRestricted: false }
 
-/** Detail pages reached from a list, not destinations in the rail. */
-const NON_NAV_ROUTES = new Set(['settings-admin-shared-insights'])
+/** Detail pages reached from a list, and the phone index that lists the rail itself. */
+const NON_NAV_ROUTES = new Set(['settings-admin-shared-insights', 'settings-home'])
 
 function settingsRouteNames(): string[] {
   const settingsRoot = routes.flatMap((route) => route.children ?? []).find((route: RouteRecordRaw) => route.path === '/settings')

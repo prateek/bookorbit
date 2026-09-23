@@ -39,9 +39,7 @@ onMounted(load)
 </script>
 
 <template>
-  <div
-    class="[&_.settings-hint]:overflow-hidden [&_.settings-hint]:text-ellipsis [&_.settings-hint]:whitespace-nowrap md:[&_.settings-hint]:overflow-visible md:[&_.settings-hint]:whitespace-normal"
-  >
+  <div>
     <SettingsPageHeader v-if="!props.embedded" :title="t('settings.reader.comics.title')" :subtitle="t('settings.reader.comics.subtitle')" />
 
     <!-- View -->
@@ -60,7 +58,7 @@ onMounted(load)
           </div>
           <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-lg border border-border bg-muted/50 self-start">
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="
                 effective.scrollMode === 'paginated' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
               "
@@ -69,14 +67,14 @@ onMounted(load)
               {{ t('settings.reader.comics.paginated') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.scrollMode === 'infinite' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="update({ scrollMode: 'infinite' })"
             >
               {{ t('settings.reader.comics.infiniteSpaced') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="
                 effective.scrollMode === 'long-strip' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
               "
@@ -99,14 +97,14 @@ onMounted(load)
           </div>
           <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-lg border border-border bg-muted/50 self-start">
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.viewMode === 'single' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="update({ viewMode: 'single' })"
             >
               {{ t('settings.reader.comics.single') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.viewMode === 'two-page' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="update({ viewMode: 'two-page' })"
             >
@@ -171,14 +169,14 @@ onMounted(load)
           </div>
           <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-lg border border-border bg-muted/50 self-start">
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.direction === 'ltr' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="update({ direction: 'ltr' })"
             >
               {{ t('settings.reader.comics.ltr') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.direction === 'rtl' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="update({ direction: 'rtl' })"
             >
@@ -199,7 +197,7 @@ onMounted(load)
           </div>
           <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-lg border border-border bg-muted/50 self-start">
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="
                 effective.spreadAlignment === 'normal' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
               "
@@ -208,7 +206,7 @@ onMounted(load)
               {{ t('settings.reader.comics.alignmentNormal') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="
                 effective.spreadAlignment === 'shifted' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
               "
@@ -258,7 +256,7 @@ onMounted(load)
           </div>
           <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-lg border border-border bg-muted/50 self-start">
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="
                 effective.widePageSingletonMode === 'auto' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'
               "
@@ -267,7 +265,7 @@ onMounted(load)
               {{ t('settings.reader.comics.widePageAuto') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="
                 effective.widePageSingletonMode === 'disable'
                   ? 'bg-background shadow-xs text-foreground'
@@ -292,14 +290,14 @@ onMounted(load)
           </div>
           <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-lg border border-border bg-muted/50 self-start">
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="!effective.forceTwoPage ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="update({ forceTwoPage: false })"
             >
               {{ t('settings.reader.comics.off') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.forceTwoPage ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="update({ forceTwoPage: true })"
             >
@@ -320,14 +318,14 @@ onMounted(load)
           </div>
           <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-lg border border-border bg-muted/50 self-start">
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="!effective.autoAdvance ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="disableAutoAdvance"
             >
               {{ t('settings.reader.comics.off') }}
             </button>
             <button
-              class="h-8 px-3 rounded-md text-xs font-medium transition-colors"
+              class="h-8 px-3 rounded-md text-xs font-medium transition-colors pointer-coarse:h-11 pointer-coarse:text-sm"
               :class="effective.autoAdvance ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground'"
               @click="enableAutoAdvance"
             >

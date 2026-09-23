@@ -15,6 +15,7 @@ import { normalizeSystemTab, type SystemTab } from '@/features/settings/lib/syst
 import { normalizeAccountTab, type AccountTab } from '@/features/settings/lib/account-tabs'
 import { normalizeAppearanceTab, type AppearanceTab } from '@/features/settings/lib/appearance-tabs'
 import { normalizeIntegrationTab, type IntegrationTab } from '@/features/settings/lib/integration-tabs'
+import { SETTINGS_HOME_ROUTE, settingsHomeGuard } from '@/features/settings/lib/settings-home'
 import { i18n } from '@/i18n'
 import { registerAuthGuard } from './guards/auth.guard'
 import { registerRouteTitleHook } from './title-resolver'
@@ -207,7 +208,13 @@ export const routes: RouteRecordRaw[] = [
         path: '/settings',
         component: () => import('@/views/SettingsView.vue'),
         children: [
-          { path: '', redirect: { name: 'settings-appearance-theme' } },
+          {
+            path: '',
+            name: SETTINGS_HOME_ROUTE,
+            component: () => import('@/features/settings/SettingsHome.vue'),
+            beforeEnter: settingsHomeGuard,
+            meta: { title: () => t('settings.nav.title') },
+          },
 
           // ── You ────────────────────────────────────────────────────────────
           {
@@ -555,7 +562,7 @@ export const routes: RouteRecordRaw[] = [
           { path: 'admin/metadata-auto-fetch', redirect: { name: 'settings-metadata-auto-fetch' } },
           { path: 'admin/file-naming', name: 'settings-admin-file-naming', redirect: { name: 'settings-file-naming' } },
           { path: 'admin/maintenance', name: 'settings-admin-maintenance', redirect: { name: 'settings-maintenance' } },
-          { path: ':pathMatch(.*)*', redirect: { name: 'settings-appearance-theme' } },
+          { path: ':pathMatch(.*)*', redirect: { name: SETTINGS_HOME_ROUTE } },
         ],
       },
       {
