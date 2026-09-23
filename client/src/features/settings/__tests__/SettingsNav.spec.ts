@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount, RouterLinkStub } from '@vue/test-utils'
-import { computed } from 'vue'
+import { computed, defineComponent, h, ref } from 'vue'
 import { Permission } from '@bookorbit/types'
+import { provideSidebarContext } from '@/components/ui/sidebar/utils'
 import SettingsNav from '../components/SettingsNav.vue'
 
 const permState = {
@@ -378,6 +379,69 @@ describe('SettingsNav', () => {
       await wrapper.get('[data-testid="settings-nav-search"]').setValue('zzzznotasetting')
       expect(wrapper.findAll('[data-testid="settings-nav-result"]')).toHaveLength(0)
       expect(wrapper.text()).toContain('No settings match')
+    })
+  })
+
+  describe('mobile drawer', () => {
+    function mountInDrawer(isMobile: boolean) {
+      const setOpenMobile = vi.fn<(open: boolean) => void>()
+      const Host = defineComponent({
+        setup() {
+          provideSidebarContext({
+            state: computed(() => 'expanded' as const),
+            open: ref(true),
+            setOpen: vi.fn<(open: boolean) => void>(),
+            isMobile: ref(isMobile),
+            openMobile: ref(true),
+            setOpenMobile,
+            toggleSidebar: vi.fn<() => void>(),
+            widthPx: ref(256),
+            setWidth: vi.fn<(value: number) => void>(),
+            minWidthPx: 200,
+            maxWidthPx: 400,
+          })
+          return () => h(SettingsNav)
+        },
+      })
+      permState.isSuperuser = false
+      permState.permissions = []
+      permState.demoRestricted = false
+      routeState.name = 'settings-appearance-theme'
+      const wrapper = mount(Host, { global: { stubs: { RouterLink: RouterLinkStub } } })
+      return { wrapper, setOpenMobile }
+    }
+
+    it('closes the phone drawer after picking a settings page', async () => {
+      const { wrapper, setOpenMobile } = mountInDrawer(true)
+
+      await wrapper.findAll('[data-testid="settings-nav-child"]')[0]?.trigger('click')
+
+      expect(setOpenMobile).toHaveBeenCalledWith(false)
+    })
+
+    it('closes the phone drawer after picking a search result', async () => {
+      const { wrapper, setOpenMobile } = mountInDrawer(true)
+
+      await wrapper.get('[data-testid="settings-nav-search"]').setValue('theme')
+      await wrapper.get('[data-testid="settings-nav-result"]').trigger('click')
+
+      expect(setOpenMobile).toHaveBeenCalledWith(false)
+    })
+
+    it('closes the phone drawer when going back to the library', async () => {
+      const { wrapper, setOpenMobile } = mountInDrawer(true)
+
+      await wrapper.get('[data-testid="settings-nav-back"]').trigger('click')
+
+      expect(setOpenMobile).toHaveBeenCalledWith(false)
+    })
+
+    it('leaves the desktop sidebar alone', async () => {
+      const { wrapper, setOpenMobile } = mountInDrawer(false)
+
+      await wrapper.findAll('[data-testid="settings-nav-child"]')[0]?.trigger('click')
+
+      expect(setOpenMobile).not.toHaveBeenCalled()
     })
   })
 })

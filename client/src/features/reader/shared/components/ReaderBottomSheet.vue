@@ -124,6 +124,7 @@ watch(
     <SheetContent
       side="bottom"
       hide-close
+      :swipe-dismiss="false"
       class="max-h-[92dvh] gap-0 overflow-hidden rounded-t-2xl border-border bg-card p-0"
       :class="dragging || reducedMotion === 'reduce' ? '!transition-none !duration-0' : 'transition-[height] duration-200'"
       :style="sheetStyle"

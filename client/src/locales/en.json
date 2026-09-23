@@ -7379,9 +7379,24 @@
       },
       "surfaceOpacity": "Surface opacity",
       "surfaceOpacityValue": "{value}%",
-      "surfaceBrightnessValue": "{value}%"
+      "surfaceBrightnessValue": "{value}%",
+      "closeSearch": "Close search",
+      "clearSearch": "Clear search",
+      "moreActions": "More actions",
+      "accountMenu": "Account menu",
+      "seriesSection": "Series",
+      "booksSection": "Books"
+    },
+    "bottomNav": {
+      "label": "Quick navigation",
+      "home": "Home",
+      "series": "Series",
+      "search": "Search",
+      "scopes": "Scopes",
+      "more": "More"
     },
     "sidebar": {
+      "navLabel": "Main navigation",
       "dashboard": "Dashboard",
       "authors": "Authors",
       "series": "Series",

@@ -47,7 +47,9 @@ const { t } = useI18n()
         <SheetTitle>{{ t('components.ui.sidebar.title') }}</SheetTitle>
         <SheetDescription>{{ t('components.ui.sidebar.mobileDescription') }}</SheetDescription>
       </SheetHeader>
-      <div class="flex h-full w-full flex-col">
+      <div
+        class="flex h-full w-full flex-col pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)]"
+      >
         <slot />
       </div>
     </SheetContent>

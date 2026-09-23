@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ChevronRight, Search, X } from '@lucide/vue'
 import { useModifierKey } from '@/composables/useModifierKey'
+import { useSidebar } from '@/components/ui/sidebar/utils'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useSettingsNavStatus } from '../composables/useSettingsNavStatus'
 import { visibleSettingsNav, type SettingsNavGroup, type SettingsNavItem } from '../lib/settings-nav'
@@ -19,6 +20,13 @@ const route = useRoute()
 const router = useRouter()
 const { isSuperuser, userPermissions, isDemoRestrictedAccount } = usePermissions()
 const { isMac, modifierKey } = useModifierKey()
+/** Null outside the app shell (tests, standalone mounts), where there is no drawer to close. */
+const sidebar = useSidebar(null)
+
+/** On phones the nav lives in the drawer; picking a page should reveal it, not leave the drawer over it. */
+function closeMobileDrawer(): void {
+  if (sidebar?.isMobile.value) sidebar.setOpenMobile(false)
+}
 
 /** Apple writes the combo as one glyph pair, everyone else separates the two keys. */
 const shortcutLabel = computed(() => (isMac.value ? `${modifierKey.value}K` : `${modifierKey.value}+K`))
@@ -92,6 +100,7 @@ function rowProps(item: SettingsNavItem): Record<string, unknown> {
 
 function handleRowClick(item: SettingsNavItem): void {
   if (item.children?.length) toggleBranch(item)
+  else closeMobileDrawer()
 }
 
 function searchText(item: SettingsNavItem, group: SettingsNavGroup): string {
@@ -160,6 +169,7 @@ defineExpose({ focusSearch })
         :title="t('settings.nav.backToApp')"
         :aria-label="t('settings.nav.backToApp')"
         data-testid="settings-nav-back"
+        @click="closeMobileDrawer"
       >
         <ArrowLeft :size="16" aria-hidden="true" />
       </RouterLink>
@@ -204,6 +214,7 @@ defineExpose({ focusSearch })
           :class="isActive(hit.item) ? 'bg-sidebar-accent' : ''"
           :aria-current="isActive(hit.item) ? 'page' : undefined"
           data-testid="settings-nav-result"
+          @click="closeMobileDrawer"
         >
           <component
             :is="hit.item.icon"
@@ -291,6 +302,7 @@ defineExpose({ focusSearch })
                 :class="isActive(child) ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground' : 'font-normal text-sidebar-foreground'"
                 :aria-current="isActive(child) ? 'page' : undefined"
                 data-testid="settings-nav-child"
+                @click="closeMobileDrawer"
               >
                 <span class="truncate">{{ t(child.labelKey) }}</span>
               </RouterLink>

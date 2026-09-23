@@ -17,4 +17,7 @@
   if (isDark) document.documentElement.classList.add('dark')
   if (accent !== 'neutral') document.documentElement.classList.add('accent-' + accent)
   if (radius !== 'default') document.documentElement.classList.add('radius-' + radius)
+  // Close to the resolved --background; App.vue replaces it with the exact color once styles load.
+  var themeColor = document.querySelector('meta[name="theme-color"]')
+  if (themeColor) themeColor.setAttribute('content', isDark ? '#0a0a0c' : '#fcfcfd')
 })()

@@ -6,7 +6,7 @@ type ListSeriesParams = {
   q?: string
   page: number
   size: number
-  sort: SeriesListSort
+  sort: SeriesListSort | 'relevance'
   order: SortDirection
   libraryId?: number | null
   completionStatus?: CompletionStatus | null
@@ -26,9 +26,9 @@ function toQuery(params: Record<string, unknown>): string {
   return new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString()
 }
 
-export async function fetchSeries(params: ListSeriesParams): Promise<SeriesPage> {
+export async function fetchSeries(params: ListSeriesParams, signal?: AbortSignal): Promise<SeriesPage> {
   const qs = toQuery(params)
-  const res = await api(`/api/v1/series?${qs}`)
+  const res = await api(`/api/v1/series?${qs}`, signal ? { signal } : undefined)
   if (!res.ok) throw new Error(`Failed to fetch series: ${res.status}`)
   return res.json()
 }
