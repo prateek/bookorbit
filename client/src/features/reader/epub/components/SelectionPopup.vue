@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BookA, Check, Copy, FileText, Headphones, Highlighter, Languages, Search, Trash2 } from '@lucide/vue'
 import { ANNOTATION_HIGHLIGHT_COLORS } from '@bookorbit/types'
@@ -31,6 +31,36 @@ const emit = defineEmits<{
 
 const showColorPicker = ref(false)
 const copied = ref(false)
+
+const VIEWPORT_MARGIN = 8
+const FALLBACK_WIDTH = 296
+
+const popupRef = ref<HTMLElement | null>(null)
+const popupWidth = ref(FALLBACK_WIDTH)
+
+/** Centers on the selection but never lets the toolbar run past either edge of the viewport. */
+const popupLeft = computed(() => {
+  const viewportWidth = typeof window === 'undefined' ? popupWidth.value : window.innerWidth
+  const desired = props.position.x - popupWidth.value / 2
+  const max = viewportWidth - popupWidth.value - VIEWPORT_MARGIN
+  if (max < VIEWPORT_MARGIN) return VIEWPORT_MARGIN
+  return Math.min(Math.max(desired, VIEWPORT_MARGIN), max)
+})
+
+function measurePopup() {
+  const width = popupRef.value?.offsetWidth
+  if (width) popupWidth.value = width
+}
+
+watch(
+  () => [props.visible, props.position.x, showColorPicker.value, props.overlappingAnnotationId, props.isTtsAvailable] as const,
+  async () => {
+    if (!props.visible) return
+    await nextTick()
+    measurePopup()
+  },
+  { immediate: true },
+)
 
 const colors = ANNOTATION_HIGHLIGHT_COLORS
 
@@ -76,16 +106,17 @@ async function onCopy() {
     <template v-if="visible">
       <div class="fixed inset-0 z-[59]" @click="emit('dismiss')" />
       <div
-        class="fixed z-[60] select-none"
+        ref="popupRef"
+        class="fixed z-[60] w-max max-w-[calc(100vw-1rem)] select-none"
         :style="{
-          left: `${position.x}px`,
+          left: `${popupLeft}px`,
           top: `${position.y}px`,
-          transform: showBelow ? 'translateX(-50%)' : 'translateX(-50%) translateY(-100%)',
+          transform: showBelow ? undefined : 'translateY(-100%)',
         }"
         @mousedown.stop
       >
         <div class="bg-card text-card-foreground rounded-lg shadow-xl border border-border p-1.5 flex flex-col gap-1">
-          <div class="flex gap-1">
+          <div class="flex flex-wrap gap-1">
             <Tooltip>
               <TooltipTrigger as-child>
                 <button
@@ -187,11 +218,11 @@ async function onCopy() {
           </div>
 
           <div v-if="showColorPicker" class="border-t border-border pt-1.5 space-y-1.5">
-            <div class="flex gap-1 px-0.5">
+            <div class="flex flex-wrap gap-1 px-0.5 pointer-coarse:gap-2">
               <button
                 v-for="c in colors"
                 :key="c.hex"
-                class="w-6 h-6 rounded-full border-2 transition-all hover:scale-110"
+                class="w-6 h-6 pointer-coarse:w-8 pointer-coarse:h-8 rounded-full border-2 transition-all hover:scale-110"
                 :class="selectedColor === c.hex ? 'border-foreground scale-110' : 'border-transparent'"
                 :style="{ background: c.hex }"
                 :title="c.label"
@@ -204,7 +235,7 @@ async function onCopy() {
               <button
                 v-for="s in styles"
                 :key="s.id"
-                class="w-6 h-6 rounded text-xs font-bold transition-colors border"
+                class="w-6 h-6 pointer-coarse:w-8 pointer-coarse:h-8 rounded text-xs font-bold transition-colors border"
                 :class="
                   selectedStyle === s.id ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted text-muted-foreground'
                 "
@@ -213,7 +244,7 @@ async function onCopy() {
                 {{ s.label }}
               </button>
               <button
-                class="flex-1 ml-1 px-2 py-0.5 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                class="flex-1 ml-1 px-2 py-0.5 pointer-coarse:min-h-8 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                 @click="applyHighlight(selectedColor, selectedStyle)"
               >
                 {{ t('reader.selection.apply') }}

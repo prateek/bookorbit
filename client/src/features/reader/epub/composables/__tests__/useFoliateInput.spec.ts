@@ -357,7 +357,7 @@ describe('useFoliateInput', () => {
     doc.dispatchEvent(makeTouchEvent('touchstart', [{ clientX: 50, clientY: 50 }]))
     doc.dispatchEvent(makeTouchEvent('touchend', [], [{ clientX: 50, clientY: 50 }]))
 
-    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'foliate-click' }), window.location.origin)
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'foliate-click', pointerType: 'touch' }), window.location.origin)
 
     postMessage.mockRestore()
     input.cleanup()
@@ -699,5 +699,142 @@ describe('useFoliateInput', () => {
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
     expect(next).not.toHaveBeenCalled()
+  })
+
+  describe('touch taps', () => {
+    let restoreTouchPoints: PropertyDescriptor | undefined
+
+    function useTouchDevice() {
+      restoreTouchPoints = Object.getOwnPropertyDescriptor(navigator, 'maxTouchPoints')
+      Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, get: () => 5 })
+    }
+
+    afterEach(() => {
+      if (restoreTouchPoints) Object.defineProperty(navigator, 'maxTouchPoints', restoreTouchPoints)
+      else Reflect.deleteProperty(navigator, 'maxTouchPoints')
+      restoreTouchPoints = undefined
+    })
+
+    function setup(flow: 'paginated' | 'scrolled') {
+      vi.useFakeTimers()
+      useTouchDevice()
+      const goLeft = vi.fn<() => void>()
+      const goRight = vi.fn<() => void>()
+      const onMiddleTap = vi.fn<() => void>()
+      const view: ViewLike = {
+        prev: vi.fn<() => void>(),
+        next: vi.fn<() => void>(),
+        goLeft,
+        goRight,
+        getBoundingClientRect: () => ({ left: 0, width: 100 }) as DOMRect,
+        renderer: { getAttribute: (name) => (name === 'flow' ? flow : null) },
+      }
+      const input = useFoliateInput(() => view, onMiddleTap, vi.fn<() => void>(), vi.fn<() => void>())
+      const tap = (clientX: number) =>
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { type: 'foliate-click', clientX, clientY: 400, pointerType: 'touch' },
+            origin: window.location.origin,
+          }),
+        )
+      return { input, goLeft, goRight, onMiddleTap, tap }
+    }
+
+    it('turns pages from the side zones in paginated flow without waiting out a double tap', () => {
+      const { input, goLeft, goRight, onMiddleTap, tap } = setup('paginated')
+
+      tap(95)
+      vi.advanceTimersByTime(50)
+      expect(goRight).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(300)
+      tap(5)
+      vi.advanceTimersByTime(50)
+      expect(goLeft).toHaveBeenCalledTimes(1)
+      expect(onMiddleTap).not.toHaveBeenCalled()
+
+      input.cleanup()
+    })
+
+    it('turns a page for each quick tap in the same zone', () => {
+      const { input, goRight, tap } = setup('paginated')
+
+      tap(95)
+      vi.advanceTimersByTime(350)
+      tap(95)
+      vi.advanceTimersByTime(50)
+
+      expect(goRight).toHaveBeenCalledTimes(2)
+
+      input.cleanup()
+    })
+
+    it('toggles the controls from the middle zone in paginated flow', () => {
+      const { input, goLeft, goRight, onMiddleTap, tap } = setup('paginated')
+
+      tap(50)
+      vi.advanceTimersByTime(50)
+
+      expect(onMiddleTap).toHaveBeenCalledTimes(1)
+      expect(goLeft).not.toHaveBeenCalled()
+      expect(goRight).not.toHaveBeenCalled()
+
+      input.cleanup()
+    })
+
+    it('keeps every tap a controls toggle in scrolled flow', () => {
+      const { input, goLeft, goRight, onMiddleTap, tap } = setup('scrolled')
+
+      tap(95)
+      vi.advanceTimersByTime(50)
+
+      expect(onMiddleTap).toHaveBeenCalledTimes(1)
+      expect(goRight).not.toHaveBeenCalled()
+      expect(goLeft).not.toHaveBeenCalled()
+
+      input.cleanup()
+    })
+
+    it('still waits out a double-click from a mouse on a touch-capable device', () => {
+      const { input, goRight, onMiddleTap } = setup('paginated')
+      const doc = makeDocTarget()
+      input.attachIframeClicks(doc)
+      const click = () => {
+        doc.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+        window.dispatchEvent(
+          new MessageEvent('message', { data: { type: 'foliate-click', clientX: 95, clientY: 400 }, origin: window.location.origin }),
+        )
+      }
+
+      click()
+      vi.advanceTimersByTime(100)
+      click()
+      vi.advanceTimersByTime(400)
+
+      expect(goRight).not.toHaveBeenCalled()
+      expect(onMiddleTap).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(300)
+      click()
+      vi.advanceTimersByTime(50)
+      expect(goRight).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(250)
+      expect(goRight).toHaveBeenCalledTimes(1)
+
+      input.cleanup()
+    })
+
+    it('lets a highlight tap claim the touch before the page turns', () => {
+      const { input, goRight, onMiddleTap, tap } = setup('paginated')
+
+      tap(95)
+      input.suppressNextTapNavigation()
+      vi.advanceTimersByTime(100)
+
+      expect(goRight).not.toHaveBeenCalled()
+      expect(onMiddleTap).not.toHaveBeenCalled()
+
+      input.cleanup()
+    })
   })
 })

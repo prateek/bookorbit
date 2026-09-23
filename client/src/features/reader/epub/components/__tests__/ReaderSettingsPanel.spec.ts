@@ -132,6 +132,30 @@ describe('ReaderSettingsPanel', () => {
     expect(wrapper.text()).toContain('Advanced layout')
   })
 
+  it('hides the page width control on phone-width screens where it cannot take effect', () => {
+    const setting = mountPanel().get('[data-testid="page-width-setting"]')
+
+    expect(setting.classes()).toContain('max-sm:hidden')
+  })
+
+  it('offers no scope choice unless the host supplies one', () => {
+    expect(mountPanel().text()).not.toContain('Apply changes to')
+  })
+
+  it('switches between saving for all books and this book', async () => {
+    const wrapper = mountPanel({ settingsScope: 'all' })
+
+    const group = wrapper.get('[aria-label="Apply changes to"]')
+    expect(group.get('button[aria-pressed="true"]').text()).toBe('All books')
+
+    await group
+      .findAll('button')
+      .find((btn) => btn.text() === 'This book')!
+      .trigger('click')
+
+    expect(wrapper.emitted('update:settingsScope')).toEqual([['book']])
+  })
+
   it('steps text size within its bounds', async () => {
     const wrapper = mountPanel()
 

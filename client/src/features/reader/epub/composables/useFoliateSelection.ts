@@ -48,7 +48,8 @@ export function useFoliateSelection(getView: () => unknown) {
     const minSpaceAbove = 120
     const showBelow = selectionTop < minSpaceAbove
     const popupY = showBelow ? selectionBottom + 10 : selectionTop - 50
-    const clampedX = Math.max(100, Math.min(popupX, window.innerWidth - 150))
+    // Popups clamp their own measured width to the viewport; this only keeps the anchor on screen.
+    const clampedX = Math.max(0, Math.min(popupX, window.innerWidth))
 
     const view = getView() as {
       renderer?: { getContents?: () => { index: number }[] }

@@ -246,6 +246,9 @@ function sanitizeDefaultSettings(group: ReaderFormatGroup, raw: unknown): Reader
 
 // -- Per-book settings (used inside the reader) --
 
+/** Where an in-reader change is stored: the format default for every book, or this book only. */
+export type ReaderSettingsScope = 'all' | 'book'
+
 export function useReaderSettings(bookFileId: number, format: string) {
   const group = getFormatGroup(format)
   const { user } = useAuth()
@@ -392,11 +395,29 @@ export function useReaderSettings(bookFileId: number, format: string) {
     }
   }
 
+  /**
+   * An in-reader change. By default it becomes the format default, so it carries to the next file
+   * (a serial chapter is its own file). A field this book already overrides is updated in the
+   * override too, otherwise the override would hide the change the reader just made here.
+   */
+  function updateSettings(patch: Partial<ReaderSettings>, scope: ReaderSettingsScope = 'all') {
+    if (scope === 'book') {
+      updateBookSettings(patch)
+      return
+    }
+    updateDefaultSettings(patch)
+    const delta = bookDelta.value
+    if (!delta) return
+    const overridden = Object.fromEntries(Object.entries(patch).filter(([key]) => key in delta)) as Partial<ReaderSettings>
+    if (Object.keys(overridden).length > 0) updateBookSettings(overridden)
+  }
+
   return {
     effective,
     bookDelta,
     isCustomized,
     load,
+    updateSettings,
     updateBookSettings,
     resetBookSettings,
     updateDefaultSettings,

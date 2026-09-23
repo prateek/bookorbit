@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Bookmark, BookOpen, Highlighter, Pin, PinOff, Trash2, TriangleAlert, X } from '@lucide/vue'
 import { ANNOTATION_COLOR_FILTER_OPTIONS } from '@bookorbit/types'
@@ -214,13 +214,49 @@ function isApproximateAnnotation(ann: Annotation): boolean {
   return ann.cfi == null
 }
 
+const DELETE_CONFIRM_WINDOW_MS = 4000
+
+type PendingDelete = { kind: 'bookmark' | 'annotation'; id: number }
+const pendingDelete = ref<PendingDelete | null>(null)
+let pendingDeleteTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearPendingDelete() {
+  if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer)
+  pendingDeleteTimer = null
+  pendingDelete.value = null
+}
+
+function isDeletePending(kind: PendingDelete['kind'], id: number): boolean {
+  return pendingDelete.value?.kind === kind && pendingDelete.value.id === id
+}
+
+/** The first tap arms the button and the second deletes, so a stray tap on a phone cannot lose a note. */
+function confirmDelete(kind: PendingDelete['kind'], id: number): boolean {
+  if (isDeletePending(kind, id)) {
+    clearPendingDelete()
+    return true
+  }
+  clearPendingDelete()
+  pendingDelete.value = { kind, id }
+  pendingDeleteTimer = setTimeout(clearPendingDelete, DELETE_CONFIRM_WINDOW_MS)
+  return false
+}
+
 function deleteBookmark(id: number) {
-  emit('deleteBookmark', id)
+  if (confirmDelete('bookmark', id)) emit('deleteBookmark', id)
 }
 
 function deleteAnnotation(id: number) {
-  emit('deleteAnnotation', id)
+  if (confirmDelete('annotation', id)) emit('deleteAnnotation', id)
 }
+
+function deleteButtonLabel(kind: PendingDelete['kind'], id: number): string {
+  if (isDeletePending(kind, id)) return t('reader.sidebar.confirmDelete')
+  return kind === 'bookmark' ? t('reader.sidebar.deleteBookmark') : t('reader.sidebar.deleteHighlight')
+}
+
+watch(activeTab, clearPendingDelete)
+onBeforeUnmount(clearPendingDelete)
 
 function closeSidebar() {
   emit('close')
@@ -234,7 +270,7 @@ function togglePinned() {
 <template>
   <div class="fixed inset-0 z-50 flex" :class="pinned ? 'pointer-events-none' : ''">
     <div
-      class="sidebar-panel pointer-events-auto w-[17.1rem] sm:w-[18rem] md:w-[19.35rem] lg:w-[20.25rem] h-full bg-card text-card-foreground flex flex-col shadow-2xl border-r border-border"
+      class="sidebar-panel pointer-events-auto w-[min(20rem,88vw)] sm:w-[18rem] md:w-[19.35rem] lg:w-[20.25rem] h-full bg-card text-card-foreground flex flex-col shadow-2xl border-r border-border"
       @click.stop
     >
       <div class="flex items-stretch border-b border-border shrink-0">
@@ -243,13 +279,13 @@ function togglePinned() {
             <TooltipTrigger as-child>
               <button
                 type="button"
-                class="relative flex min-w-0 items-center justify-center gap-1 px-1 py-2.5 text-[13px] transition-colors"
+                class="relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs transition-colors sm:flex-row sm:gap-1 sm:py-2.5 sm:text-[13px]"
                 :class="activeTab === tab.id ? 'text-primary' : 'text-muted-foreground hover:text-foreground'"
                 :aria-label="tab.fullLabel"
                 @click="selectTab(tab.id)"
               >
                 <component :is="tab.icon" :size="16" class="shrink-0" />
-                <span class="truncate">{{ tab.label }}</span>
+                <span class="max-w-full truncate">{{ tab.label }}</span>
                 <span v-if="activeTab === tab.id" class="absolute bottom-0 inset-x-0 h-0.5 bg-primary rounded-t-full" />
               </button>
             </TooltipTrigger>
@@ -261,7 +297,7 @@ function togglePinned() {
             <TooltipTrigger as-child>
               <button
                 type="button"
-                class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                class="hidden h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:flex"
                 :class="pinned ? 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary' : ''"
                 :aria-label="pinLabel"
                 :aria-pressed="pinned"
@@ -276,7 +312,7 @@ function togglePinned() {
             <TooltipTrigger as-child>
               <button
                 type="button"
-                class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-11"
                 :aria-label="t('reader.sidebar.close')"
                 @click="closeSidebar"
               >
@@ -310,12 +346,12 @@ function togglePinned() {
                 v-model="bookmarkQuery"
                 type="text"
                 :placeholder="t('reader.sidebar.searchBookmarks')"
-                class="h-8 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+                class="h-8 w-full rounded-md border border-border bg-background px-2.5 text-base outline-none focus:border-primary sm:text-sm"
               />
               <div class="flex items-center gap-2">
                 <select
                   v-model="bookmarkSort"
-                  class="h-8 flex-1 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground outline-none focus:border-primary"
+                  class="h-8 flex-1 rounded-md border border-border bg-background px-2 text-base text-muted-foreground outline-none focus:border-primary sm:text-xs"
                 >
                   <option value="location">{{ t('reader.sidebar.sort.readingOrder') }}</option>
                   <option value="newest">{{ t('reader.sidebar.sort.newest') }}</option>
@@ -344,13 +380,18 @@ function togglePinned() {
                   <TooltipTrigger as-child>
                     <button
                       type="button"
-                      class="opacity-0 group-hover:opacity-100 flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:text-destructive transition-all shrink-0"
+                      class="reader-sidebar-delete"
+                      :class="isDeletePending('bookmark', bm.id) ? 'reader-sidebar-delete--armed' : ''"
+                      :aria-label="deleteButtonLabel('bookmark', bm.id)"
                       @click.stop="deleteBookmark(bm.id)"
                     >
-                      <Trash2 :size="13" />
+                      <span v-if="isDeletePending('bookmark', bm.id)" class="text-xs font-semibold">{{
+                        t('reader.sidebar.confirmDeleteShort')
+                      }}</span>
+                      <Trash2 v-else :size="14" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>{{ t('reader.sidebar.deleteBookmark') }}</TooltipContent>
+                  <TooltipContent>{{ deleteButtonLabel('bookmark', bm.id) }}</TooltipContent>
                 </Tooltip>
               </li>
             </ul>
@@ -368,12 +409,12 @@ function togglePinned() {
                 v-model="highlightQuery"
                 type="text"
                 :placeholder="t('reader.sidebar.searchHighlights')"
-                class="h-8 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
+                class="h-8 w-full rounded-md border border-border bg-background px-2.5 text-base outline-none focus:border-primary sm:text-sm"
               />
               <div class="grid grid-cols-2 gap-2">
                 <select
                   v-model="highlightSort"
-                  class="h-8 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground outline-none focus:border-primary"
+                  class="h-8 rounded-md border border-border bg-background px-2 text-base text-muted-foreground outline-none focus:border-primary sm:text-xs"
                 >
                   <option value="location">{{ t('reader.sidebar.sort.readingOrder') }}</option>
                   <option value="newest">{{ t('reader.sidebar.sort.newest') }}</option>
@@ -381,14 +422,14 @@ function togglePinned() {
                 </select>
                 <select
                   v-model="highlightColorFilter"
-                  class="h-8 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground outline-none focus:border-primary"
+                  class="h-8 rounded-md border border-border bg-background px-2 text-base text-muted-foreground outline-none focus:border-primary sm:text-xs"
                 >
                   <option value="all">{{ t('reader.sidebar.allColors') }}</option>
                   <option v-for="color in highlightColorOptions" :key="color.hex" :value="color.hex">{{ color.label }}</option>
                 </select>
                 <select
                   v-model="highlightChapterFilter"
-                  class="col-span-2 h-8 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground outline-none focus:border-primary"
+                  class="col-span-2 h-8 rounded-md border border-border bg-background px-2 text-base text-muted-foreground outline-none focus:border-primary sm:text-xs"
                 >
                   <option value="all">{{ t('reader.sidebar.allChapters') }}</option>
                   <option v-for="chapter in highlightChapterOptions" :key="chapter" :value="chapter">{{ chapter }}</option>
@@ -431,13 +472,18 @@ function togglePinned() {
                     <TooltipTrigger as-child>
                       <button
                         type="button"
-                        class="opacity-0 group-hover:opacity-100 flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:text-destructive transition-all shrink-0"
+                        class="reader-sidebar-delete"
+                        :class="isDeletePending('annotation', ann.id) ? 'reader-sidebar-delete--armed' : ''"
+                        :aria-label="deleteButtonLabel('annotation', ann.id)"
                         @click.stop="deleteAnnotation(ann.id)"
                       >
-                        <Trash2 :size="13" />
+                        <span v-if="isDeletePending('annotation', ann.id)" class="text-xs font-semibold">{{
+                          t('reader.sidebar.confirmDeleteShort')
+                        }}</span>
+                        <Trash2 v-else :size="14" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent>{{ t('reader.sidebar.deleteHighlight') }}</TooltipContent>
+                    <TooltipContent>{{ deleteButtonLabel('annotation', ann.id) }}</TooltipContent>
                   </Tooltip>
                 </div>
               </li>
@@ -490,7 +536,7 @@ const TocList = defineComponent({
               'button',
               {
                 class: [
-                  'w-full text-left flex items-center gap-1 px-3 py-1.5 text-[13px] leading-snug transition-colors hover:bg-muted/50',
+                  'w-full text-left flex items-center gap-1 px-3 py-1.5 text-[13px] leading-snug transition-colors hover:bg-muted/50 pointer-coarse:min-h-11',
                   active ? 'text-primary font-medium bg-primary/8' : 'text-foreground',
                   props.navigationLocked ? 'opacity-60 cursor-not-allowed hover:bg-transparent' : '',
                 ],
@@ -508,7 +554,7 @@ const TocList = defineComponent({
                   ? h(
                       'span',
                       {
-                        class: 'shrink-0',
+                        class: 'flex shrink-0 items-center justify-center self-stretch pointer-coarse:w-8',
                         onClick: (e: Event) => {
                           e.stopPropagation()
                           emit('toggleExpand', item.href)
@@ -539,6 +585,48 @@ const TocList = defineComponent({
 </script>
 
 <style scoped>
+.reader-sidebar-delete {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding-inline: 0.25rem;
+  border-radius: calc(var(--radius) - 4px);
+  color: var(--muted-foreground);
+  opacity: 0;
+  transition:
+    opacity 150ms,
+    color 150ms,
+    background-color 150ms;
+}
+
+.group:hover .reader-sidebar-delete,
+.reader-sidebar-delete:focus-visible,
+.reader-sidebar-delete--armed {
+  opacity: 1;
+}
+
+.reader-sidebar-delete:hover,
+.reader-sidebar-delete--armed {
+  color: var(--destructive);
+}
+
+.reader-sidebar-delete--armed {
+  background-color: color-mix(in oklch, var(--destructive) 12%, transparent);
+}
+
+/* Touch has no hover to reveal the button, so it stays visible at a full-size target. */
+@media (pointer: coarse) {
+  .reader-sidebar-delete {
+    min-width: 2.75rem;
+    height: 2.75rem;
+    margin-block: -0.5rem;
+    opacity: 1;
+  }
+}
+
 .sidebar-panel {
   animation: slideInFromLeft 0.25s ease;
 }

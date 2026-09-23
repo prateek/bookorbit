@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import ReaderSettingsSheet from '@/features/reader/shared/components/ReaderSettingsSheet.vue'
 import { useFullscreen } from '../../shared/composables/useFullscreen'
+import { readerChromeThemeStyle, useReaderPageContext } from '../composables/readerPageContext'
 
 const { t } = useI18n()
 
@@ -55,7 +56,10 @@ const emit = defineEmits<{
   toggleTapZones: []
 }>()
 
-const { isFullscreen } = useFullscreen()
+const { isFullscreen, isFullscreenSupported } = useFullscreen()
+
+const pageContext = useReaderPageContext()
+const chromeStyle = computed(() => readerChromeThemeStyle(pageContext?.mode.value))
 
 // The settings surface is one panel in two containers: an anchored popover where there
 // is room beside the text, a bottom sheet where the thumb is and the page must stay visible.
@@ -65,6 +69,8 @@ const ttsTooltip = computed(() => {
   if (props.isTtsActive) return props.isMediaOverlay ? t('reader.header.narrationPlaying') : t('reader.header.ttsPlaying')
   return props.isMediaOverlay ? t('reader.header.listenWithNarrationShort') : t('reader.header.listen')
 })
+
+const pinMenuLabel = computed(() => (props.isPinned ? t('reader.header.unpinMenu') : t('reader.header.pinMenu')))
 
 function onSettingsOpenChange(open: boolean) {
   emit('update:settingsOpen', open)
@@ -90,10 +96,12 @@ function getFooterModeTooltip(mode: 0 | 1 | 2): string {
 
 <template>
   <header
-    class="fixed top-0 left-0 right-0 h-10 sm:h-11 z-50 flex items-center px-2 sm:px-3 gap-1 bg-background/90 backdrop-blur-md border-b border-border"
+    data-reader-chrome
+    class="reader-bar fixed top-0 left-0 right-0 z-50 flex h-[calc(2.75rem+env(safe-area-inset-top))] items-center gap-1 border-b border-border bg-background/95 px-1 pt-[env(safe-area-inset-top)] text-foreground backdrop-blur-md sm:px-3"
+    :style="chromeStyle"
   >
     <!-- Left button group -->
-    <div class="flex items-center gap-1 shrink-0">
+    <div class="flex shrink-0 items-center gap-0 sm:gap-1">
       <Tooltip>
         <TooltipTrigger as-child>
           <button class="viewer-btn" :aria-label="t('reader.header.goBack')" @click="emit('back')">
@@ -103,7 +111,7 @@ function getFooterModeTooltip(mode: 0 | 1 | 2): string {
         <TooltipContent>{{ t('reader.header.goBack') }}</TooltipContent>
       </Tooltip>
 
-      <div class="viewer-sep" />
+      <div class="viewer-sep max-sm:hidden" />
 
       <Tooltip>
         <TooltipTrigger as-child>
@@ -130,17 +138,17 @@ function getFooterModeTooltip(mode: 0 | 1 | 2): string {
       </Tooltip>
     </div>
 
-    <!-- Title: desktop/tablet only to avoid overlap on narrow mobile headers -->
-    <div class="hidden sm:absolute sm:inset-x-0 sm:top-0 sm:h-12 sm:flex sm:items-center sm:justify-center sm:pointer-events-none">
-      <p class="text-sm font-serif font-medium truncate text-center text-muted-foreground max-w-[40vw]">{{ chapterTitle }}</p>
+    <!-- Title: fills the gap between the button groups on phones, centered over the bar on wider screens -->
+    <div class="flex min-w-0 flex-1 items-center justify-center px-1 sm:pointer-events-none sm:absolute sm:inset-x-0 sm:bottom-0 sm:h-11 sm:px-0">
+      <p class="truncate text-center font-serif text-sm font-medium text-muted-foreground sm:max-w-[40vw]">{{ chapterTitle }}</p>
     </div>
 
     <!-- Right button group -->
-    <div class="flex items-center gap-1 shrink-0 ml-auto">
+    <div class="ml-auto flex shrink-0 items-center gap-0 sm:gap-1">
       <div v-if="props.peekMode" class="flex h-7 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-1.5 text-primary">
         <span class="hidden text-[11px] font-medium sm:inline">{{ t('reader.peek.badge') }}</span>
         <button
-          class="h-5 rounded-sm bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 sm:h-6 sm:px-2 sm:text-[11px]"
+          class="relative h-5 rounded-sm bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground transition-colors before:absolute before:-inset-x-1 before:-inset-y-3 before:content-[''] hover:bg-primary/90 sm:h-6 sm:px-2 sm:text-[11px]"
           @click="emit('startReading')"
         >
           {{ t('reader.peek.startReading') }}
@@ -188,7 +196,7 @@ function getFooterModeTooltip(mode: 0 | 1 | 2): string {
         <TooltipContent>{{ t('reader.header.keyboardShortcutsHint') }}</TooltipContent>
       </Tooltip>
 
-      <Tooltip>
+      <Tooltip v-if="isFullscreenSupported">
         <TooltipTrigger as-child>
           <button
             class="viewer-btn"
@@ -207,13 +215,13 @@ function getFooterModeTooltip(mode: 0 | 1 | 2): string {
           <button
             class="viewer-btn hidden sm:flex"
             :class="props.showTapZones ? '!bg-muted !text-primary' : ''"
-            aria-label="Toggle tap zones"
+            :aria-label="t('reader.header.toggleTapZones')"
             @click="emit('toggleTapZones')"
           >
             <Columns3 :size="18" />
           </button>
         </TooltipTrigger>
-        <TooltipContent>Show tap zones</TooltipContent>
+        <TooltipContent>{{ t('reader.header.showTapZones') }}</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -221,14 +229,14 @@ function getFooterModeTooltip(mode: 0 | 1 | 2): string {
           <button
             class="viewer-btn hidden sm:flex"
             :class="props.isPinned ? '!bg-muted !text-primary' : ''"
-            :aria-label="props.isPinned ? 'Unpin menu' : 'Pin menu'"
+            :aria-label="pinMenuLabel"
             @click="emit('togglePin')"
           >
             <PinOff v-if="props.isPinned" :size="18" />
             <Pin v-else :size="18" />
           </button>
         </TooltipTrigger>
-        <TooltipContent>{{ props.isPinned ? 'Unpin menu' : 'Pin menu' }}</TooltipContent>
+        <TooltipContent>{{ pinMenuLabel }}</TooltipContent>
       </Tooltip>
 
       <template v-if="isCompact">
@@ -269,3 +277,13 @@ function getFooterModeTooltip(mode: 0 | 1 | 2): string {
     </div>
   </header>
 </template>
+
+<style scoped>
+/* .viewer-btn is a 32px square; on a touch screen every bar control needs a 44px target. */
+@media (pointer: coarse) {
+  .reader-bar :deep(.viewer-btn) {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+}
+</style>

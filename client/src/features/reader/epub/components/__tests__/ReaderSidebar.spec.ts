@@ -203,8 +203,9 @@ describe('ReaderSidebar', () => {
     const activeBookmarkRow = wrapper.findAll('li').find((li) => li.text().includes('Later mark'))
     expect(activeBookmarkRow?.classes()).toContain('bg-primary/10')
 
-    const bookmarkDelete = wrapper.findAll('li button').find((btn) => btn.classes().includes('hover:text-destructive'))
-    await bookmarkDelete?.trigger('click')
+    await wrapper.get('li button[aria-label="Delete bookmark"]').trigger('click')
+    expect(wrapper.emitted('deleteBookmark')).toBeUndefined()
+    await wrapper.get('li button[aria-label="Tap again to delete"]').trigger('click')
     expect(wrapper.emitted('deleteBookmark')?.[0]).toEqual([1])
 
     const highlightsTab = wrapper.findAll('button').find((btn) => btn.text().includes('Notes'))
@@ -215,8 +216,9 @@ describe('ReaderSidebar', () => {
     await highlightNav?.trigger('click')
     expect(wrapper.emitted('navigateAnnotation')?.[0]).toEqual(['epubcfi(/6/8)'])
 
-    const highlightDelete = wrapper.findAll('li button').find((btn) => btn.classes().includes('hover:text-destructive'))
-    await highlightDelete?.trigger('click')
+    await wrapper.get('li button[aria-label="Delete highlight"]').trigger('click')
+    expect(wrapper.emitted('deleteAnnotation')).toBeUndefined()
+    await wrapper.get('li button[aria-label="Tap again to delete"]').trigger('click')
     expect(wrapper.emitted('deleteAnnotation')?.[0]).toEqual([9])
   })
 
@@ -390,5 +392,38 @@ describe('ReaderSidebar', () => {
     const colorSelect = wrapper.findAll('select')[1]
     await colorSelect?.setValue('#FACC15')
     expect(wrapper.text()).toContain('No highlights match your filters')
+  })
+
+  it('disarms a pending delete when the second tap does not come', async () => {
+    vi.useFakeTimers()
+    const wrapper = mount(ReaderSidebar, {
+      props: {
+        ...makeBaseProps(),
+        bookmarks: [{ id: 5, bookId: 1, cfi: 'epubcfi(/6/2)', title: 'Mark', createdAt: '2026-02-14T12:00:00.000Z' }],
+      },
+      global,
+    })
+
+    await wrapper
+      .findAll('button')
+      .find((btn) => btn.text().includes('Marks'))!
+      .trigger('click')
+    await wrapper.get('li button[aria-label="Delete bookmark"]').trigger('click')
+    expect(wrapper.find('li button[aria-label="Tap again to delete"]').exists()).toBe(true)
+
+    vi.advanceTimersByTime(4000)
+    await nextTick()
+
+    await wrapper.get('li button[aria-label="Delete bookmark"]').trigger('click')
+    expect(wrapper.emitted('deleteBookmark')).toBeUndefined()
+    vi.useRealTimers()
+  })
+
+  it('keeps the desktop-only pin control off phone layouts', () => {
+    const wrapper = mount(ReaderSidebar, { props: makeBaseProps(), global })
+
+    const pin = wrapper.get('button[aria-label="Pin sidebar"]')
+    expect(pin.classes()).toContain('hidden')
+    expect(pin.classes()).toContain('sm:flex')
   })
 })

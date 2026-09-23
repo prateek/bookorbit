@@ -2,6 +2,9 @@ const LEFT_ZONE = 0.3
 const RIGHT_ZONE = 0.7
 const DOUBLE_CLICK_MS = 300
 const ANNOTATION_CLICK_SUPPRESSION_MS = DOUBLE_CLICK_MS + 100
+// A touch tap waits only long enough for the synthesized click to reach the annotation
+// hit test, which suppresses the tap when it lands on a highlight.
+const TOUCH_TAP_SETTLE_MS = 50
 const SWIPE_THRESHOLD = 50
 const TAP_MOVEMENT_THRESHOLD = 10
 
@@ -136,12 +139,7 @@ export function useFoliateInput(
         // under the finger and deltaY collapses to roughly zero. Any sideways drift while
         // scrolling would then read as a swipe and turn the page.
         if (isScrolledFlow()) return
-        if (isNavigating) return
-        if (!canProceedNavigation()) return
-        isNavigating = true
-        if (deltaX < 0) navigateRight()
-        else navigateLeft()
-        setTimeout(() => (isNavigating = false), 300)
+        turnPage(deltaX < 0 ? 'right' : 'left')
         return
       }
 
@@ -163,6 +161,7 @@ export function useFoliateInput(
             iframeLeft: iframeRect.left,
             iframeWidth: iframeRect.width,
             eventClientX: touch.clientX,
+            pointerType: 'touch',
           },
           window.location.origin,
         )
@@ -228,6 +227,31 @@ export function useFoliateInput(
     doc.addEventListener('selectionchange', () => handleSelectionChange(doc))
   }
 
+  function isTouchDevice() {
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0
+  }
+
+  function turnPage(zone: 'left' | 'right') {
+    if (isNavigating) return
+    if (!canProceedNavigation()) return
+    isNavigating = true
+    if (zone === 'left') navigateLeft()
+    else navigateRight()
+    setTimeout(() => (isNavigating = false), 300)
+  }
+
+  function handleTouchTap(zone: 'left' | 'middle' | 'right') {
+    setTimeout(() => {
+      if (isTapNavigationSuppressed()) return
+      // Scrolled flow keeps the whole page as a controls toggle so a tap never jumps the text.
+      if (zone === 'middle' || isScrolledFlow()) {
+        onMiddleTap?.()
+        return
+      }
+      turnPage(zone)
+    }, TOUCH_TAP_SETTLE_MS)
+  }
+
   function handleWindowMessage(e: MessageEvent) {
     if (e.origin !== window.location.origin) return
     if (e.data?.type !== 'foliate-click') return
@@ -252,6 +276,16 @@ export function useFoliateInput(
     else if (x > rightThreshold) currentZone = 'right'
     else currentZone = 'middle'
 
+    // Double taps carry no meaning on touch, so taps act at once instead of waiting one out.
+    // A mouse on a touch-capable laptop still takes the path below, so a double-click that
+    // selects a word never turns the page.
+    if (e.data.pointerType === 'touch') {
+      lastClickTime = 0
+      lastClickZone = null
+      handleTouchTap(currentZone)
+      return
+    }
+
     if (timeSinceLastClick < DOUBLE_CLICK_MS && lastClickZone === currentZone) {
       lastClickTime = now
       lastClickZone = currentZone
@@ -267,25 +301,16 @@ export function useFoliateInput(
       if (!longHoldTimeout) return
       if (isNavigating) return
 
-      const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
       const y = e.data.clientY
       const height = window.innerHeight
 
-      if (!isMobile && (y < 64 || y > height - 64)) {
+      if (y < 64 || y > height - 64) {
         onMiddleTap?.()
-      } else if (currentZone === 'left' && !isMobile) {
-        if (!canProceedNavigation()) return
-        isNavigating = true
-        navigateLeft()
-        setTimeout(() => (isNavigating = false), 300)
-      } else if (currentZone === 'right' && !isMobile) {
-        if (!canProceedNavigation()) return
-        isNavigating = true
-        navigateRight()
-        setTimeout(() => (isNavigating = false), 300)
-      } else if (isMobile) {
-        // Touch has no page zones: any tap that is not a double tap toggles the chrome. On a
-        // pointer device the middle zone is deliberately inert, so it must not fall through here.
+      } else if (currentZone === 'left' || currentZone === 'right') {
+        turnPage(currentZone)
+      } else if (isTouchDevice()) {
+        // Without touch the middle zone is deliberately inert; on a touch-capable device a
+        // mouse click there still toggles, matching what a tap does.
         onMiddleTap?.()
       }
     }, DOUBLE_CLICK_MS)
@@ -337,8 +362,7 @@ export function useFoliateInput(
     if (!isInsideView && !isInsideHeader && !isInsideFooter) return
     if (isInteractive(target)) return
 
-    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
-    if (!isMobile) {
+    if (!isTouchDevice()) {
       const y = e.clientY
       const height = window.innerHeight
       if (y < 64 || y > height - 64) {

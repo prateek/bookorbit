@@ -71,7 +71,7 @@ describe('useFoliateSelection', () => {
       cfi: 'epubcfi(/6/2)',
       range: expect.objectContaining({ toString: expect.any(Function) }),
       popupPosition: {
-        x: 100,
+        x: 50,
         y: 130,
         showBelow: true,
       },

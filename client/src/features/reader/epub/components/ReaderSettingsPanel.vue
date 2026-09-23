@@ -39,6 +39,7 @@ import { FONT_WEIGHT_LABEL_KEYS, builtInVariants, closestVariant, familyVariants
 import ReaderRangeField from '@/features/reader/shared/components/ReaderRangeField.vue'
 import ReaderSegmentedControl from '@/features/reader/shared/components/ReaderSegmentedControl.vue'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
+import type { ReaderSettingsScope } from '@/features/reader/shared/composables/useReaderSettings'
 
 const { t } = useI18n()
 
@@ -47,11 +48,14 @@ const props = defineProps<{
   customFonts?: ReturnType<typeof useCustomFonts>
   isFixedLayout?: boolean
   canReset?: boolean
+  /** Where changes are saved. The scope toggle only renders when the host supplies this. */
+  settingsScope?: ReaderSettingsScope
 }>()
 
 const emit = defineEmits<{
   update: [partial: Partial<ReaderState>]
   reset: []
+  'update:settingsScope': [scope: ReaderSettingsScope]
 }>()
 
 const COLUMN_MIN = 1
@@ -98,6 +102,15 @@ const spreadOptions = computed(() => [
     icon: BookOpen,
   },
 ])
+
+const scopeOptions = computed(() => [
+  { value: 'all', label: t('reader.settings.applyTo.allBooks') },
+  { value: 'book', label: t('reader.settings.applyTo.thisBook') },
+])
+
+function setScope(value: string) {
+  emit('update:settingsScope', value as ReaderSettingsScope)
+}
 
 const typographySourceOptions = computed(() => [
   { value: 'book', label: t('reader.settings.bookDefault') },
@@ -374,7 +387,8 @@ function variantLabel(variant: FontNamedInstance): string {
   return t('reader.settings.fontStyleItalicOf', { style: base })
 }
 
-const groupLabelClass = 'mb-2 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'
+const groupLabelClass = 'mb-2 block text-xs font-semibold uppercase tracking-wide text-muted-foreground'
+const subLabelClass = 'mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground'
 const stepperButtonClass =
   'flex h-10 flex-1 items-center justify-center rounded-lg border border-border font-serif text-foreground transition-colors hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent'
 const cardBaseClass =
@@ -396,7 +410,7 @@ const cardBaseClass =
       />
       <button
         type="button"
-        class="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+        class="flex size-8 shrink-0 pointer-coarse:size-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
         :disabled="!canReset"
         :title="t('reader.settings.reset')"
         :aria-label="t('reader.settings.reset')"
@@ -407,6 +421,15 @@ const cardBaseClass =
     </div>
 
     <div ref="contentRef" class="min-h-0 flex-1 overflow-y-auto" @scroll="onContentScroll">
+      <div v-if="settingsScope" class="border-b border-border px-4 py-3">
+        <p :class="groupLabelClass">{{ t('reader.settings.applyTo.label') }}</p>
+        <ReaderSegmentedControl
+          :options="scopeOptions"
+          :model-value="settingsScope"
+          :aria-label="t('reader.settings.applyTo.label')"
+          @update:model-value="setScope"
+        />
+      </div>
       <div v-if="!isFixedLayout" class="border-b border-border px-4 py-3.5">
         <p :class="groupLabelClass">{{ t('reader.settings.textSize') }}</p>
         <div class="flex items-center gap-2">
@@ -466,7 +489,7 @@ const cardBaseClass =
               Aa
             </span>
             <span
-              class="mt-0.5 block truncate text-center text-[10px] leading-tight"
+              class="mt-0.5 block truncate text-center text-xs leading-tight"
               :class="state.themeName === theme.name ? 'text-foreground' : 'text-muted-foreground'"
             >
               {{ t(theme.labelKey) }}
@@ -478,7 +501,7 @@ const cardBaseClass =
       <template v-if="!isFixedLayout">
         <div class="border-b border-border px-4 py-3.5">
           <p :class="groupLabelClass">{{ t('reader.settings.font') }}</p>
-          <p v-if="hasCustomFontSections" class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <p v-if="hasCustomFontSections" :class="subLabelClass">
             {{ t('reader.settings.fontBuiltIn') }}
           </p>
           <div class="grid grid-cols-2 gap-2">
@@ -501,7 +524,7 @@ const cardBaseClass =
           </div>
 
           <template v-for="section in customFontSections" :key="section.key">
-            <p class="mb-1.5 mt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <p class="mt-3" :class="subLabelClass">
               {{ section.label }}
             </p>
             <div class="grid grid-cols-2 gap-2">
@@ -525,7 +548,7 @@ const cardBaseClass =
           </template>
 
           <template v-if="showVariantPicker">
-            <p :id="fontStyleLabelId" class="mb-1.5 mt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <p :id="fontStyleLabelId" class="mt-3" :class="subLabelClass">
               {{ t('reader.settings.fontStyle') }}
             </p>
             <div class="flex flex-wrap gap-2" role="group" :aria-labelledby="fontStyleLabelId">
@@ -581,7 +604,8 @@ const cardBaseClass =
           />
         </div>
 
-        <div class="border-b border-border px-4 py-3.5">
+        <!-- A phone is narrower than the smallest page width, so the control would do nothing there. -->
+        <div class="border-b border-border px-4 py-3.5 max-sm:hidden" data-testid="page-width-setting">
           <ReaderRangeField
             :model-value="state.maxInlineSize"
             :min="400"
@@ -619,7 +643,7 @@ const cardBaseClass =
               <div class="flex items-center gap-2">
                 <button
                   type="button"
-                  class="flex size-8 items-center justify-center rounded-lg border border-border text-lg font-light text-foreground transition-colors hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+                  class="flex size-8 pointer-coarse:size-11 items-center justify-center rounded-lg border border-border text-lg font-light text-foreground transition-colors hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
                   :disabled="state.maxColumnCount <= COLUMN_MIN"
                   :aria-label="t('reader.settings.columnsFewer')"
                   @click="decreaseColumns"
@@ -629,7 +653,7 @@ const cardBaseClass =
                 <span class="w-6 text-center text-[13px] font-semibold tabular-nums text-foreground">{{ state.maxColumnCount }}</span>
                 <button
                   type="button"
-                  class="flex size-8 items-center justify-center rounded-lg border border-border text-lg font-light text-foreground transition-colors hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+                  class="flex size-8 pointer-coarse:size-11 items-center justify-center rounded-lg border border-border text-lg font-light text-foreground transition-colors hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
                   :disabled="state.maxColumnCount >= COLUMN_MAX"
                   :aria-label="t('reader.settings.columnsMore')"
                   @click="increaseColumns"

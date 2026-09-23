@@ -1,6 +1,9 @@
+import { mount } from '@vue/test-utils'
+import { defineComponent, h } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import { MEDIA_OVERLAY_HIGHLIGHT_CSS_VARIABLE } from '../../../media-overlay/lib/media-overlay-highlight'
 import { useReaderState } from '../useReaderState'
+import { useReaderPageContext, type ReaderPageContext } from '../readerPageContext'
 
 describe('useReaderState', () => {
   it('clamps numeric settings to supported ranges', () => {
@@ -301,5 +304,76 @@ describe('useReaderState', () => {
       expect(css).not.toContain('font-family:')
       expect(css).not.toContain('body *')
     })
+  })
+
+  describe('themed page backgrounds', () => {
+    function themedCss() {
+      const state = useReaderState()
+      state.setThemeName('sepia')
+      state.setIsDark(true)
+      return { css: state.generateCSS(), mode: state.activeMode.value }
+    }
+
+    it('stops painting every element with the page color', () => {
+      const { css, mode } = themedCss()
+
+      expect(css).toContain('background-color: transparent !important;')
+      expect(css).not.toContain(`background-color: ${mode.bg} !important;`)
+    })
+
+    it('keeps tables and background boxes visible as a tint of the theme', () => {
+      const { css, mode } = themedCss()
+
+      expect(css).toMatch(/body :where\(table, [^)]*\[style\*="background" i\][^)]*\) \{/)
+      expect(css).toContain(`background-color: color-mix(in srgb, ${mode.fg} 10%, ${mode.bg}) !important;`)
+      expect(css).toContain(`background-color: color-mix(in srgb, ${mode.fg} 16%, ${mode.bg}) !important;`)
+    })
+
+    it('keeps the box tint below the read-aloud highlight, which is a single class rule', () => {
+      const { css } = themedCss()
+
+      expect(css).toContain('body :where(table, ')
+      expect(css).not.toContain('body :is(table, ')
+      expect(css.indexOf('body :where(')).toBeGreaterThan(css.indexOf('body * {'))
+    })
+
+    it('closes every rule, so the paragraph rule after the theme block is not swallowed', () => {
+      const { css } = themedCss()
+
+      expect(css.split('{').length).toBe(css.split('}').length)
+    })
+
+    it('softens borders instead of forcing them to full text color', () => {
+      const { css } = themedCss()
+
+      expect(css).toContain('border-color: color-mix(in srgb, currentColor 45%, transparent) !important;')
+      expect(css).not.toContain('border-color: currentColor !important;')
+    })
+  })
+
+  it('shares the page theme and flow with the reader chrome it renders', () => {
+    let context: ReaderPageContext | null = null
+    const Child = defineComponent({
+      setup() {
+        context = useReaderPageContext()
+        return () => h('span')
+      },
+    })
+    let readerState!: ReturnType<typeof useReaderState>
+    mount(
+      defineComponent({
+        setup() {
+          readerState = useReaderState()
+          return () => h(Child)
+        },
+      }),
+    )
+
+    readerState.setThemeName('sepia')
+    readerState.setFlow('scrolled')
+
+    expect(context).not.toBeNull()
+    expect(context!.mode.value).toEqual(readerState.activeMode.value)
+    expect(context!.flow.value).toBe('scrolled')
   })
 })
