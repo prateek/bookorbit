@@ -127,6 +127,7 @@ function makeService(overrides: { bookMetadataLockService?: unknown } = {}) {
     findFileById: vi.fn(),
     updateBookFile: vi.fn().mockResolvedValue(undefined),
     updateBookPrimaryFile: vi.fn().mockResolvedValue(undefined),
+    markBookMissingWithoutFiles: vi.fn().mockResolvedValue(undefined),
     findLibraryIdByBookId: vi.fn(),
     findProgress: vi.fn(),
     findProgressByBook: vi.fn(),
@@ -5265,7 +5266,7 @@ describe('BookService', () => {
   });
 
   describe('deleteFile', () => {
-    it('deletes file on disk and updates db and marks missing if last file', async () => {
+    it('marks the book missing when its last file is deleted', async () => {
       const { service, bookRepo, libraryService } = makeService();
       const user = makeUser({ id: 1 });
       const fileId = 100;
@@ -5284,7 +5285,8 @@ describe('BookService', () => {
 
       expect(rm).toHaveBeenCalledWith('/path/to/old.epub', { force: true });
       expect(bookRepo.deleteBookFile).toHaveBeenCalledWith(fileId);
-      expect(bookRepo.updateBookPrimaryFile).toHaveBeenCalledWith(10, null);
+      expect(bookRepo.markBookMissingWithoutFiles).toHaveBeenCalledWith(10);
+      expect(bookRepo.updateBookPrimaryFile).not.toHaveBeenCalled();
     });
 
     it('elects new primary file if deleted file was primary and other files exist', async () => {
@@ -5310,6 +5312,35 @@ describe('BookService', () => {
       expect(rm).toHaveBeenCalledWith('/path/to/old.epub', { force: true });
       expect(bookRepo.deleteBookFile).toHaveBeenCalledWith(fileId);
       expect(bookRepo.updateBookPrimaryFile).toHaveBeenCalledWith(10, 101);
+      expect(bookRepo.markBookMissingWithoutFiles).not.toHaveBeenCalled();
+    });
+
+    it('marks the book missing when its last content file is deleted and only a cover remains', async () => {
+      const { service, bookRepo } = makeService();
+      bookRepo.findFileById = vi.fn().mockResolvedValue({ absolutePath: '/path/to/old.epub', bookId: 10, libraryId: 1, role: 'content' });
+      vi.mocked(rm).mockResolvedValue(undefined);
+      bookRepo.deleteBookFile = vi.fn().mockResolvedValue(undefined);
+      bookRepo.findFilesForBook = vi.fn().mockResolvedValue([{ id: 101, role: 'cover' }]);
+      bookRepo.findBookBase = vi.fn().mockResolvedValue({ id: 10, primaryFileId: 100 });
+
+      await service.deleteFile(100, makeUser({ id: 1 }));
+
+      expect(bookRepo.markBookMissingWithoutFiles).toHaveBeenCalledWith(10);
+      expect(bookRepo.updateBookPrimaryFile).not.toHaveBeenCalled();
+    });
+
+    it('keeps the book present when a non-content file is deleted', async () => {
+      const { service, bookRepo } = makeService();
+      bookRepo.findFileById = vi.fn().mockResolvedValue({ absolutePath: '/path/to/cover.jpg', bookId: 10, libraryId: 1, role: 'cover' });
+      vi.mocked(rm).mockResolvedValue(undefined);
+      bookRepo.deleteBookFile = vi.fn().mockResolvedValue(undefined);
+      bookRepo.findFilesForBook = vi.fn().mockResolvedValue([{ id: 100, role: 'content' }]);
+      bookRepo.findBookBase = vi.fn().mockResolvedValue({ id: 10, primaryFileId: 100 });
+
+      await service.deleteFile(101, makeUser({ id: 1 }));
+
+      expect(bookRepo.markBookMissingWithoutFiles).not.toHaveBeenCalled();
+      expect(bookRepo.updateBookPrimaryFile).not.toHaveBeenCalled();
     });
 
     it('uses library format priority and read-aloud capability when replacing a deleted primary', async () => {

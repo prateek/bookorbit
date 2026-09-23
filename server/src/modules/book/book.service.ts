@@ -1583,20 +1583,21 @@ export class BookService {
       await this.bookRepo.deleteBookFile(fileId);
 
       const allFiles = await this.bookRepo.findFilesForBook(file.bookId);
-      // deleteBookFile already removes it, but just in case
       const remaining = allFiles.filter((f) => f.id !== fileId);
-      if (remaining.length === 0) {
-        // mark book as missing if no files left
-        await this.bookRepo.updateBookPrimaryFile(file.bookId, null);
+      const contentFiles = remaining.filter((candidate) => candidate.role === 'content');
+      const markedMissing = remaining.length === 0 || (file.role === 'content' && contentFiles.length === 0);
+      if (markedMissing) {
+        await this.bookRepo.markBookMissingWithoutFiles(file.bookId);
       } else if (wasPrimary) {
-        const contentFiles = remaining.filter((candidate) => candidate.role === 'content');
         const library = await this.libraryService.findOne(file.libraryId);
         const newPrimary =
           selectPrimaryFile(contentFiles, library.formatPriority ?? DEFAULT_FORMAT_PRIORITY, { allowZeroByteFallback: true }) ?? remaining[0];
         await this.bookRepo.updateBookPrimaryFile(file.bookId, newPrimary?.id ?? null);
       }
 
-      this.logger.log(`[${event}] [end] fileId=${fileId} durationMs=${Date.now() - startedAt} - delete file completed`);
+      this.logger.log(
+        `[${event}] [end] fileId=${fileId} bookId=${file.bookId} durationMs=${Date.now() - startedAt} remainingFiles=${remaining.length} markedMissing=${markedMissing} - delete file completed`,
+      );
     } catch (err) {
       const errorClass = err instanceof Error ? err.name : 'Error';
       const errorMessage = sanitizeLogValue(err instanceof Error ? err.message : String(err));
