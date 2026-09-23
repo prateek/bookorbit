@@ -94,6 +94,7 @@ import { TtsModule } from './modules/tts/tts.module';
 import { SearchModule } from './modules/search/search.module';
 import { WatchDownloadModule } from './modules/watch-download/watch-download.module';
 import { PodcastModule } from './modules/podcast/podcast.module';
+import { PushModule } from './modules/push/push.module';
 
 @Module({
   imports: [
@@ -198,6 +199,7 @@ import { PodcastModule } from './modules/podcast/podcast.module';
     SearchModule,
     WatchDownloadModule,
     PodcastModule,
+    PushModule,
   ],
   providers: [{ provide: APP_INTERCEPTOR, useClass: AuditInterceptor }, ...GLOBAL_GUARDS.map((useClass) => ({ provide: APP_GUARD, useClass }))],
 })

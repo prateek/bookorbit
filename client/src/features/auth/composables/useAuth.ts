@@ -15,6 +15,7 @@ import { resetCollections } from '@/features/collection/composables/useCollectio
 import { resetBrowseCounts } from '@/composables/useBrowseCounts'
 import { resetBookRequestSummary } from '@/features/book-requests/composables/useBookRequestSummary'
 import { clearReleaseSearchCache } from '@/features/book-requests/composables/useReleasePicker'
+import { detachDevicePushSubscription } from '@/features/push/composables/usePushNotifications'
 
 const SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
@@ -216,6 +217,7 @@ export function useAuth() {
 
   async function logout(): Promise<void> {
     try {
+      await detachDevicePushSubscription()
       await fetchWithAuthProxyRecovery('/api/v1/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined)
     } finally {
       clearAuth()
