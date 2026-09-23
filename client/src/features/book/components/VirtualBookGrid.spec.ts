@@ -3,6 +3,7 @@ import { nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import type { BookCard } from '@bookorbit/types'
 import VirtualBookGrid from './VirtualBookGrid.vue'
+import type { BookSlot } from '../composables/useBookWindow'
 
 const scrollToItemMock = vi.fn<(index: number, options?: { align?: string }) => void>()
 
@@ -23,11 +24,11 @@ vi.mock('vue-virtual-scroller', () => ({
 vi.mock('./BookCoverCard.vue', () => ({
   default: {
     name: 'BookCoverCard',
-    props: ['book', 'selectionMode', 'selected', 'showLabel', 'coverAspectRatio'],
+    props: ['book', 'selectionMode', 'selected', 'showLabel', 'coverAspectRatio', 'hideFormatBadge'],
     emits: ['action', 'select', 'update:book'],
     template:
       '<div>' +
-      '<button data-testid="book-card" :data-cover-ratio="coverAspectRatio || \'\'" @click="$emit(\'action\', \'quick-view\')">' +
+      '<button data-testid="book-card" :data-cover-ratio="coverAspectRatio || \'\'" :data-hide-format="String(hideFormatBadge)" @click="$emit(\'action\', \'quick-view\')">' +
       '{{ book.id }}<span v-if="showLabel" data-testid="book-card-label-slot" /></button>' +
       '<button data-testid="book-card-select" @click="$emit(\'select\', $event)">select</button>' +
       '<button data-testid="book-card-update" @click="$emit(\'update:book\', { ...book, title: \'Updated\' })">update</button>' +
@@ -100,6 +101,17 @@ describe('VirtualBookGrid', () => {
 
     expect(wrapper.find('[data-testid="recycle-scroller"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="book-grid-static"]').exists()).toBe(false)
+  })
+
+  it('hides every card format badge only when the loaded books share one format', () => {
+    const epub = (id: number) => makeBook(id, { files: [{ id: id * 10, format: 'epub', role: 'primary', sizeBytes: null }] })
+    const hideFlags = (books: BookSlot[]) =>
+      mount(VirtualBookGrid, { props: { books, coverSize: 120, gridGap: 12 } })
+        .findAll('[data-testid="book-card"]')
+        .map((card) => card.attributes('data-hide-format'))
+
+    expect(hideFlags([epub(1), { id: -1, placeholder: true as const }, epub(2)])).toEqual(['true', 'true'])
+    expect(hideFlags([epub(1), makeBook(2, { files: [{ id: 20, format: 'pdf', role: 'primary', sizeBytes: null }] })])).toEqual(['false', 'false'])
   })
 
   it('renders every book directly when virtualization is disabled', () => {

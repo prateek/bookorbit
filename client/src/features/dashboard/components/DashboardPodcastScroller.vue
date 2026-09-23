@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, useAttrs, watch } from 'vue'
+import { computed, ref, useAttrs, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronLeft, ChevronRight, Play, Radio, RefreshCw } from '@lucide/vue'
 
@@ -21,6 +21,7 @@ const attrs = useAttrs()
 const { t } = useI18n()
 const player = usePodcastPlayer()
 const { episodes, loading, error, refresh } = useDashboardPodcastScroller(props.limit)
+const isEmpty = computed(() => !loading.value && !error.value && episodes.value.length === 0)
 
 const scrollEl = ref<HTMLElement | null>(null)
 const failedArtworkIds = ref<Set<number>>(new Set())
@@ -70,20 +71,31 @@ function timeRemaining(episode: PodcastEpisodeListItem) {
 
 <template>
   <section v-bind="attrs" class="group/scroller overflow-hidden rounded-2xl border border-primary/40 bg-card/30 shadow-sm backdrop-blur-[1px]">
-    <div class="mb-2 flex items-center justify-between px-5 pt-4">
-      <div class="flex items-center gap-2.5">
+    <!-- An empty shelf collapses to this single line -->
+    <div class="flex items-center justify-between px-5" :class="isEmpty ? 'py-3' : 'mb-2 pt-4'">
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-0.5">
         <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50">
           <Radio :size="14" class="text-foreground" aria-hidden="true" />
         </div>
-        <h2 class="text-[15px] font-bold tracking-tight">{{ title }}</h2>
+        <h2 class="shrink-0 text-[15px] font-bold tracking-tight">{{ title }}</h2>
         <span
           v-if="!loading && !error && episodes.length > 0"
           class="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-bold tabular-nums text-foreground"
         >
           {{ episodes.length }}
         </span>
+        <p
+          v-if="isEmpty"
+          data-testid="podcast-shelf-empty"
+          class="w-full min-w-0 truncate ps-9.5 text-xs text-muted-foreground sm:w-auto sm:flex-1 sm:ps-0 sm:text-sm"
+        >
+          {{ t('dashboard.scroller.empty.continuePodcasts') }}
+        </p>
       </div>
-      <div class="flex items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/scroller:opacity-100 focus-within:opacity-100">
+      <div
+        v-if="!isEmpty"
+        class="flex items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover/scroller:opacity-100 focus-within:opacity-100"
+      >
         <button
           class="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           :aria-label="t('common.previous')"
@@ -118,14 +130,11 @@ function timeRemaining(episode: PodcastEpisodeListItem) {
       </button>
     </div>
 
-    <div v-else-if="episodes.length === 0" class="flex animate-fade-up flex-col items-center justify-center gap-3 py-10 text-center">
-      <div class="flex h-12 w-12 animate-scale-in items-center justify-center rounded-full bg-muted">
-        <Radio :size="20" class="text-muted-foreground" aria-hidden="true" />
-      </div>
-      <p class="text-sm text-muted-foreground">{{ t('dashboard.scroller.empty.continuePodcasts') }}</p>
-    </div>
-
-    <div v-else ref="scrollEl" class="flex items-start gap-5 overflow-x-auto px-5 pb-5 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div
+      v-else-if="!isEmpty"
+      ref="scrollEl"
+      class="flex items-start gap-5 overflow-x-auto px-5 pb-5 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       <button
         v-for="(episode, index) in episodes"
         :key="episode.id"

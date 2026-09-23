@@ -412,7 +412,14 @@ describe('BookListRow - phone ergonomics', () => {
 
     expect(wrapper.text()).toContain("It's Hard to Break a Slug's Back")
     expect(wrapper.text()).not.toContain('&#39;')
-    expect(wrapper.get('[data-testid="book-list-row-compact-meta"]').text()).toBe('Slugs #12 · 2024')
+    expect(wrapper.get('[data-testid="book-list-row-compact-meta"]').text()).toBe('Slugs · 2024')
+    expect(wrapper.get('[data-testid="book-list-row-series-position"]').text()).toBe('#12')
+  })
+
+  it('leaves the series position chip off books outside a series', () => {
+    const wrapper = mount(BookListRow, { props: { book: presentBook }, global: globalStubs })
+
+    expect(wrapper.find('[data-testid="book-list-row-series-position"]').exists()).toBe(false)
   })
 
   it('shows the read state on the row', () => {

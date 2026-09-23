@@ -72,6 +72,8 @@ const props = defineProps<{
   coverAspectRatio?: CoverAspectRatio
   /** Opt-in: only views that host the destination sheet should offer this. */
   allowMoveToLibrary?: boolean
+  /** Set by the list when every item shares one format, so the badge would say nothing. */
+  hideFormatBadge?: boolean
 }>()
 
 type BookActionType = 'quick-view' | 'add-to-collection' | 'move-to-library' | 'delete'
@@ -148,7 +150,7 @@ const showSendDialog = ref(false)
 
 const hasProgress = computed(() => props.book.readingProgress != null && props.book.readingProgress > 0)
 const showProgressBar = computed(() => cardOverlays.value.includes('progress-bar') && hasProgress.value)
-const showFormatOverlay = computed(() => cardOverlays.value.includes('format') && formatOverlayFile.value?.format != null)
+const showFormatOverlay = computed(() => !props.hideFormatBadge && cardOverlays.value.includes('format') && formatOverlayFile.value?.format != null)
 const showRatingOverlay = computed(() => cardOverlays.value.includes('rating') && props.book.rating != null)
 const showLockStatusPill = computed(() => cardOverlays.value.includes('lock-status') && !props.selectionMode && !isMissing.value)
 const metadataLocked = computed(() => props.book.hasMetadataLocks)
@@ -518,10 +520,11 @@ const secondaryLabelText = computed(() => resolveBookLabel(gridCardSecondaryLabe
               <TooltipTrigger as-child>
                 <div
                   data-card-click-blocker
-                  class="pointer-events-auto flex items-center bg-black/60 rounded-full px-1.5 py-0.5 transition-opacity duration-150 cursor-default"
+                  data-testid="book-card-series-position"
+                  class="pointer-events-auto flex items-center bg-black/80 rounded-full px-2 py-1 transition-opacity duration-150 cursor-default"
                   :class="showMobileOverlay ? 'opacity-0 pointer-events-none' : 'group-hover:opacity-0 group-hover:pointer-events-none'"
                 >
-                  <span class="text-[9px] font-bold text-white leading-none">{{ seriesPositionLabel }}</span>
+                  <span class="text-xs font-bold tabular-nums text-white leading-none">{{ seriesPositionLabel }}</span>
                 </div>
               </TooltipTrigger>
               <TooltipContent>
