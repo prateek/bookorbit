@@ -15,6 +15,7 @@ import ViewHeaderDisplayControls from '@/components/view-header/ViewHeaderDispla
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { formatNumber } from '@/i18n/formatters'
 import { cn } from '@/lib/utils'
+import { onAppResumed } from '@/components/sidebar/useAppResume'
 import type { BookViewMode } from '@/composables/useDisplaySettings'
 import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
 import { useLibraries } from '@/features/library/composables/useLibraries'
@@ -35,7 +36,7 @@ const mainRef = ref<HTMLElement | null>(null)
 useScrollRestoreOnActivate(mainRef)
 
 const { libraries, fetchLibraries } = useLibraries()
-const { items, total, facets, loading, error, hasMore, q, sort, order, libraryId, completionStatus, load } = useSeriesList()
+const { items, total, facets, loading, error, hasMore, q, sort, order, libraryId, completionStatus, load, refresh } = useSeriesList()
 
 const CARD_WIDTH_KEY = 'bookorbit:seriesCardWidth'
 const GRID_GAP_KEY = 'bookorbit:seriesGridGap'
@@ -256,6 +257,10 @@ onMounted(async () => {
 
   await nextTick()
   if (sentinel.value) observer.observe(sentinel.value)
+})
+
+onAppResumed(() => {
+  if (initialLoadComplete.value) void refresh()
 })
 
 onUnmounted(() => {

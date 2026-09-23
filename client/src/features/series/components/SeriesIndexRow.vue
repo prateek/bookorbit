@@ -8,7 +8,16 @@ import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
 import BookCoverArtwork from '@/features/book/components/BookCoverArtwork.vue'
 import SeriesVolumeTrack from './SeriesVolumeTrack.vue'
 import SeriesLibraryChip from './SeriesLibraryChip.vue'
-import { parseAddedAt, seriesAuthorLine, seriesExtraAuthorCount, seriesRowFacts, seriesCoverSlots } from '../lib/series-summary'
+import {
+  parseAddedAt,
+  seriesAuthorLine,
+  seriesExtraAuthorCount,
+  seriesNextKickerKey,
+  seriesNextValue,
+  seriesRowFacts,
+  seriesCoverSlots,
+  seriesUnreadCount,
+} from '../lib/series-summary'
 
 const props = defineProps<{ series: SeriesSummary }>()
 
@@ -44,21 +53,18 @@ const caption = computed(() => {
   return base
 })
 
-const nextKicker = computed(() => {
-  if (facts.value.isComplete) return t('series.index.finished')
-  if (facts.value.readingVolumes > 0) return t('series.index.reading')
-  return facts.value.readVolumes > 0 ? t('series.index.next') : t('series.index.start')
-})
+const nextKicker = computed(() => t(seriesNextKickerKey(facts.value, props.series.nextStatus)))
+const nextValue = computed(() => seriesNextValue(props.series, facts.value))
 
-const nextValue = computed(() => {
-  if (facts.value.isComplete || !props.series.nextTitle) return null
-  const number = props.series.nextIndex ? `#${props.series.nextIndex}` : null
-  return [number, props.series.nextTitle].filter(Boolean).join(' · ')
-})
+const addedDate = computed(() => parseAddedAt(props.series.lastAddedAt))
+const addedLabel = computed(() => (addedDate.value ? formatRelativeFromNow(addedDate.value) : '-'))
 
-const addedLabel = computed(() => {
-  const date = parseAddedAt(props.series.lastAddedAt)
-  return date ? formatRelativeFromNow(date) : '-'
+const unreadCount = computed(() => seriesUnreadCount(props.series))
+const mobileMeta = computed(() => {
+  const parts: string[] = []
+  if (addedDate.value) parts.push(t('series.index.updated', { when: formatRelativeFromNow(addedDate.value) }))
+  if (unreadCount.value > 0 && !facts.value.isComplete) parts.push(t('series.track.unreadCount', { count: unreadCount.value }))
+  return parts.join(' · ')
 })
 
 const rowLabel = computed(() => t('series.card.label', { name: props.series.name, read: facts.value.readVolumes, total: facts.value.ownedVolumes }))
@@ -137,6 +143,13 @@ function handleOpen() {
     </div>
 
     <div class="cell-added truncate text-right text-[11.5px] tabular-nums text-muted-foreground">{{ addedLabel }}</div>
+
+    <div class="cell-mobile min-w-0" data-testid="series-row-mobile">
+      <div v-if="nextValue" class="truncate text-[12.5px] text-foreground">
+        {{ t('series.index.nextLine', { kicker: nextKicker, name: nextValue }) }}
+      </div>
+      <div v-if="mobileMeta" class="truncate text-[11.5px] tabular-nums text-muted-foreground">{{ mobileMeta }}</div>
+    </div>
   </div>
 </template>
 
@@ -151,6 +164,10 @@ function handleOpen() {
   grid-template-columns:
     [cv] 88px [nm] minmax(150px, 1.45fr) [tk] minmax(150px, 2fr)
     [pg] 62px [nx] minmax(110px, 1.05fr) [ad] 82px;
+}
+
+.cell-mobile {
+  display: none;
 }
 
 .series-index-row:hover .row-go,
@@ -182,7 +199,8 @@ function handleOpen() {
     grid-template-columns: [cv] auto [nm] minmax(0, 1fr) [pg] auto;
     grid-template-areas:
       'cv nm pg'
-      'cv tk tk';
+      'cv tk tk'
+      'cv mb mb';
     height: auto;
     min-height: var(--index-row-height);
     padding: 10px 12px;
@@ -204,6 +222,13 @@ function handleOpen() {
   .cell-track {
     grid-area: tk;
     align-self: start;
+  }
+  .cell-mobile {
+    display: block;
+    grid-area: mb;
+  }
+  .cell-mobile:empty {
+    display: none;
   }
 }
 

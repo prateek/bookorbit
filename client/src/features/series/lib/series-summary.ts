@@ -6,8 +6,9 @@ import type { SeriesSummary, SeriesVolumeSlot } from '@bookorbit/types'
  *
  * The volume counts come from the ladder rather than from `bookCount`, because a library holding
  * the same volume twice - one ebook, one audiobook - owns two books and one volume, and "3 of 7"
- * only reads correctly when it counts volumes. When there is no ladder to count, the book counts
- * stand in.
+ * only reads correctly when it counts volumes. When there is no ladder to count, or the ladder is
+ * cut short (`volumesTruncated`), the book counts stand in: a capped ladder only holds its first
+ * rungs, so counting it would report "0/60" for a series of 89.
  */
 export type SeriesRowFacts = {
   ownedVolumes: number
@@ -24,9 +25,10 @@ export type SeriesRowFacts = {
 
 export function seriesRowFacts(series: SeriesSummary): SeriesRowFacts {
   const slots = series.volumes
-  const owned = slots.length > 0 ? slots.filter((slot) => slot.bookId !== null).length : series.bookCount
-  const read = slots.length > 0 ? slots.filter((slot) => slot.status === 'read').length : series.readCount
-  const reading = slots.length > 0 ? slots.filter((slot) => slot.status === 'reading').length : series.readingCount
+  const countLadder = slots.length > 0 && !series.volumesTruncated
+  const owned = countLadder ? slots.filter((slot) => slot.bookId !== null).length : series.bookCount
+  const read = countLadder ? slots.filter((slot) => slot.status === 'read').length : series.readCount
+  const reading = countLadder ? slots.filter((slot) => slot.status === 'reading').length : series.readingCount
 
   return {
     ownedVolumes: owned,
@@ -39,6 +41,29 @@ export function seriesRowFacts(series: SeriesSummary): SeriesRowFacts {
     hasGaps: series.gapCount > 0,
     isNumbered: slots.some((slot) => slot.index !== null),
   }
+}
+
+/** Books the user has not marked read. Counts books rather than volumes, like the server does. */
+export function seriesUnreadCount(series: SeriesSummary): number {
+  return Math.max(0, series.bookCount - series.readCount)
+}
+
+/**
+ * Message key for the word in front of the up-next volume. "Reading" only when that volume is
+ * itself in progress: a stale in-progress mark on an earlier volume does not make the next one so.
+ */
+export function seriesNextKickerKey(facts: SeriesRowFacts, nextStatus?: SeriesSummary['nextStatus']): string {
+  if (facts.isComplete) return 'series.index.finished'
+  if (nextStatus === 'reading') return 'series.index.reading'
+  if (nextStatus == null && facts.readingVolumes > 0) return 'series.index.reading'
+  return facts.readVolumes > 0 || facts.readingVolumes > 0 ? 'series.index.next' : 'series.index.start'
+}
+
+/** "#12 · Title" for the up-next volume, or null when there is nothing left to open. */
+export function seriesNextValue(series: SeriesSummary, facts: SeriesRowFacts): string | null {
+  if (facts.isComplete || !series.nextTitle) return null
+  const number = series.nextIndex ? `#${series.nextIndex}` : null
+  return [number, series.nextTitle].filter(Boolean).join(' · ')
 }
 
 /** Volumes that have a cover to show, in series order. Missing rungs hold no book. */

@@ -260,4 +260,42 @@ describe('useSeriesList', () => {
 
     expect(mockFetchSeries).toHaveBeenCalledWith(expect.objectContaining({ q: undefined }))
   })
+
+  it('refreshes only the first page in place and drops the pages after it', async () => {
+    const { items, total, facets, loading, hasMore, load, refresh } = useSeriesList()
+    mockFetchSeries
+      .mockResolvedValueOnce(makePage({ items: [makeSeries({ id: 1 })], total: 3 }))
+      .mockResolvedValueOnce(makePage({ items: [makeSeries({ id: 2 })], total: 3, page: 1 }))
+    await load(true)
+    await load()
+
+    mockFetchSeries.mockResolvedValueOnce(makePage({ items: [makeSeries({ id: 1, bookCount: 5 })], total: 4, facets: { ...EMPTY_FACETS, all: 4 } }))
+    const pending = refresh()
+    expect(loading.value).toBe(false)
+    expect(items.value.map((s) => s.id)).toEqual([1, 2])
+    await pending
+
+    expect(mockFetchSeries).toHaveBeenCalledTimes(3)
+    expect(mockFetchSeries).toHaveBeenNthCalledWith(3, expect.objectContaining({ page: 0 }))
+    expect(items.value.map((s) => [s.id, s.bookCount])).toEqual([[1, 5]])
+    expect(total.value).toBe(4)
+    expect(facets.value.all).toBe(4)
+    expect(hasMore.value).toBe(true)
+
+    mockFetchSeries.mockResolvedValueOnce(makePage({ items: [makeSeries({ id: 2 })], total: 4, page: 1 }))
+    await load()
+    expect(mockFetchSeries).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
+  })
+
+  it('keeps the list when a refresh fails', async () => {
+    const { items, error, load, refresh } = useSeriesList()
+    mockFetchSeries.mockResolvedValueOnce(makePage({ items: [makeSeries({ id: 1 })], total: 1 }))
+    await load(true)
+
+    mockFetchSeries.mockRejectedValueOnce(new Error('boom'))
+    await refresh()
+
+    expect(items.value.map((s) => s.id)).toEqual([1])
+    expect(error.value).toBeNull()
+  })
 })
