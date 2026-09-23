@@ -31,6 +31,7 @@ function makeController() {
     findBooks: vi.fn(),
     findNextBook: vi.fn(),
     markRead: vi.fn(),
+    setFollowing: vi.fn(),
   };
 
   const controller = new SeriesController(seriesService as any);
@@ -94,5 +95,18 @@ describe('SeriesController', () => {
     expect(Reflect.getMetadata(FORBIDDEN_PERMISSION_KEY, SeriesController.prototype.markRead)).toMatchObject({
       permission: Permission.DemoRestricted,
     });
+  });
+
+  it("follow and unfollow set the current user's follow state for the series", async () => {
+    const { controller, seriesService } = makeController();
+    const user = makeUser();
+    seriesService.setFollowing.mockImplementation((_user, seriesId: number, following: boolean) => Promise.resolve({ seriesId, following }));
+
+    await expect(controller.follow(user, 42)).resolves.toEqual({ seriesId: 42, following: true });
+    await expect(controller.unfollow(user, 42)).resolves.toEqual({ seriesId: 42, following: false });
+    expect(seriesService.setFollowing.mock.calls).toEqual([
+      [user, 42, true],
+      [user, 42, false],
+    ]);
   });
 });

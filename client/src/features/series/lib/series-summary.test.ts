@@ -35,6 +35,7 @@ function summary(overrides: Partial<SeriesSummary> = {}): SeriesSummary {
     nextBookId: null,
     nextIndex: null,
     nextTitle: null,
+    following: true,
     ...overrides,
   }
 }

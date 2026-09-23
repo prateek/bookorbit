@@ -66,6 +66,7 @@ import { useBulkEditMetadata } from '@/features/book/composables/useBulkEditMeta
 import type { BulkEditFields } from '@/features/book/composables/useBulkEditMetadata'
 import type { BookCard, GroupRule, SortField } from '@bookorbit/types'
 import EntityNotFound from '@/components/EntityNotFound.vue'
+import { filterUsesSeriesFollowing, onSeriesFollowChangedWhileAway } from '@/features/series/composables/useSeriesFollowChanges'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -455,6 +456,12 @@ watch(
 
 onMounted(async () => {
   await retrySmartScopeLoad()
+})
+
+onSeriesFollowChangedWhileAway(() => {
+  if (!filterUsesSeriesFollowing(smartScope.value?.filter)) return
+  resetBooks()
+  refreshBuckets()
 })
 
 async function retrySmartScopeLoad() {

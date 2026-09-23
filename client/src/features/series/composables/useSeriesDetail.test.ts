@@ -46,6 +46,7 @@ describe('useSeriesDetail', () => {
         expectedBookCount: null,
         readingCount: 0,
         next: null,
+        following: true,
       },
     })
 
@@ -126,6 +127,7 @@ describe('useSeriesDetail', () => {
         expectedBookCount: null,
         readingCount: 0,
         next: null,
+        following: true,
       },
     })
     await pendingLoad
@@ -152,6 +154,7 @@ describe('useSeriesDetail', () => {
           expectedBookCount: null,
           readingCount: 0,
           next: null,
+          following: true,
         },
       })
       .mockResolvedValueOnce({
@@ -169,6 +172,7 @@ describe('useSeriesDetail', () => {
           expectedBookCount: null,
           readingCount: 0,
           next: null,
+          following: true,
         },
       })
 
@@ -203,6 +207,7 @@ describe('useSeriesDetail', () => {
         expectedBookCount: null,
         readingCount: 0,
         next: null,
+        following: true,
       },
     })
 
@@ -227,6 +232,7 @@ describe('useSeriesDetail', () => {
         expectedBookCount: null,
         readingCount: 0,
         next: null,
+        following: true,
       },
     })
 
@@ -262,6 +268,7 @@ describe('useSeriesDetail', () => {
         expectedBookCount: null,
         readingCount: 0,
         next: null,
+        following: true,
       },
     })
     await pendingLoad
@@ -284,6 +291,7 @@ describe('useSeriesDetail', () => {
         expectedBookCount: null,
         readingCount: 0,
         next: null,
+        following: true,
       },
     })
 
@@ -319,6 +327,7 @@ describe('useSeriesDetail', () => {
         expectedBookCount: null,
         readingCount: 0,
         next: null,
+        following: true,
       },
     })
     await pendingLoad
@@ -341,6 +350,7 @@ describe('useSeriesDetail', () => {
         expectedBookCount: null,
         readingCount: 0,
         next: null,
+        following: true,
       },
     })
 
@@ -399,6 +409,7 @@ describe('useSeriesDetail', () => {
         expectedBookCount: null,
         readingCount: 0,
         next: null,
+        following: true,
       },
     })
     await resetLoad
@@ -418,6 +429,7 @@ describe('useSeriesDetail', () => {
         expectedBookCount: null,
         readingCount: 0,
         next: null,
+        following: true,
       },
     })
     await firstLoad
@@ -464,6 +476,7 @@ describe('useSeriesDetail', () => {
         expectedBookCount: null,
         readingCount: 0,
         next: null,
+        following: true,
       },
     })
     await resetLoad
@@ -484,6 +497,7 @@ describe('useSeriesDetail', () => {
       possibleGaps: [],
       expectedBookCount: null,
       next: null,
+      following: true,
     }
 
     function page(ids: number[], pageNumber: number) {

@@ -6,6 +6,7 @@ import { ArrowUpDown, Filter, Library, Rows3, Search, X } from '@lucide/vue'
 
 import ViewHeader from '@/components/ViewHeader.vue'
 import { onAppResumed } from '@/components/sidebar/useAppResume'
+import { onSeriesFollowChangedWhileAway } from '../composables/useSeriesFollowChanges'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { BookViewMode } from '@/composables/useDisplaySettings'
 import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
@@ -257,9 +258,12 @@ onMounted(async () => {
   }
 })
 
-onAppResumed(() => {
+function refreshLoadedList() {
   if (initialLoadComplete.value) void refresh()
-})
+}
+
+onAppResumed(refreshLoadedList)
+onSeriesFollowChangedWhileAway(refreshLoadedList)
 
 onUnmounted(() => {
   observer?.disconnect()

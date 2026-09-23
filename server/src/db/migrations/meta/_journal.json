@@ -715,6 +715,13 @@
       "when": 1790634252133,
       "tag": "0101_mobile-serial-fixes",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1790634252134,
+      "tag": "0102_add_user_unfollowed_series",
+      "breakpoints": true
     }
   ]
 }

@@ -1213,6 +1213,30 @@
     "useGuards": []
   },
   {
+    "file": "server/src/modules/series/series.controller.ts",
+    "className": "SeriesController",
+    "methodName": "follow",
+    "httpMethod": "PUT",
+    "path": "/series/:seriesId/follow",
+    "permissions": [],
+    "libraryAccess": [],
+    "isPublic": false,
+    "allowDefault": false,
+    "useGuards": []
+  },
+  {
+    "file": "server/src/modules/series/series.controller.ts",
+    "className": "SeriesController",
+    "methodName": "unfollow",
+    "httpMethod": "DELETE",
+    "path": "/series/:seriesId/follow",
+    "permissions": [],
+    "libraryAccess": [],
+    "isPublic": false,
+    "allowDefault": false,
+    "useGuards": []
+  },
+  {
     "file": "server/src/modules/book-dock/book-dock.controller.ts",
     "className": "BookDockController",
     "methodName": "refetchMetadata",
