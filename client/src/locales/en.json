@@ -4463,6 +4463,12 @@
   },
   "auth": {
     "backToSignIn": "Back to sign in",
+    "sessionUnavailable": {
+      "title": "Can't reach BookOrbit",
+      "message": "You might be offline, or the server may be restarting. Your place is kept, so try again once you're connected.",
+      "retry": "Try again",
+      "retrying": "Trying again..."
+    },
     "themePicker": {
       "switchToLight": "Switch to light",
       "switchToDark": "Switch to dark",

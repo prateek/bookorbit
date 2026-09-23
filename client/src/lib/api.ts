@@ -110,6 +110,25 @@ export class NetworkError extends Error {
   }
 }
 
+const SERVER_UNAVAILABLE_STATUSES = new Set([502, 503, 504])
+
+/** A gateway answered, but the BookOrbit server behind it did not: restarting, upgrading or down. */
+export class ServerUnavailableError extends Error {
+  constructor(readonly status: number) {
+    super(i18n.global.t('errors.network'))
+    this.name = 'ServerUnavailableError'
+  }
+}
+
+export function isServerUnavailableStatus(status: number): boolean {
+  return SERVER_UNAVAILABLE_STATUSES.has(status)
+}
+
+/** The request says nothing about the session, so a signed-in user must not be signed out over it. */
+export function isServerUnreachable(reason: unknown): boolean {
+  return reason instanceof NetworkError || reason instanceof ServerUnavailableError
+}
+
 async function rawFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers)
   if (_accessToken) headers.set('Authorization', `Bearer ${_accessToken}`)
@@ -123,6 +142,7 @@ async function rawFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
 
 async function attemptRefresh(): Promise<string> {
   const res = await rawFetch('/api/v1/auth/refresh', { method: 'POST' })
+  if (isServerUnavailableStatus(res.status)) throw new ServerUnavailableError(res.status)
   if (!res.ok) throw new Error('refresh failed')
   const data: RefreshResponse = await res.json()
   const recovered = _sawAuthFailure
@@ -158,7 +178,8 @@ export async function api(input: RequestInfo | URL, init?: RequestInit & { _isRe
 
   try {
     await refreshAccessToken()
-  } catch {
+  } catch (reason) {
+    if (isServerUnreachable(reason)) throw reason
     _onAuthFailure?.()
     throw new Error('Session expired')
   }

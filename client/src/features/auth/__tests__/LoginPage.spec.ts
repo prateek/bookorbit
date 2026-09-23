@@ -142,3 +142,23 @@ describe('LoginPage post-registration notice', () => {
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
   })
 })
+
+describe('LoginPage on a phone', () => {
+  it('stops the keyboard from capitalizing or correcting the username', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const input = wrapper.get('#username')
+    expect(input.attributes('autocapitalize')).toBe('none')
+    expect(input.attributes('autocorrect')).toBe('off')
+    expect(input.attributes('spellcheck')).toBe('false')
+  })
+
+  it('names every appearance button for assistive technology', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const labels = wrapper.findAll('button.theme-btn').map((button) => button.attributes('aria-label'))
+    expect(labels).toEqual(['Switch to dark', 'Change corner radius', 'Change background', 'Change accent color'])
+  })
+})

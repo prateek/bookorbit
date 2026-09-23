@@ -6,13 +6,13 @@ import { Logger } from 'nestjs-pino';
 import type { ConfigType } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
-import { join } from 'path';
+import { join, relative, sep } from 'path';
 import fastifyCookie from '@fastify/cookie';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyCompress from '@fastify/compress';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { appConfig } from './config/config';
 import { setupSwaggerDocs } from './swagger';
 import {
@@ -28,6 +28,17 @@ import {
 } from './common/utils/bootstrap.utils';
 
 const MAX_COVER_BYTES = 20 * 1024 * 1024;
+const PUBLIC_ROOT = join(__dirname, '..', 'public');
+// Vite's build output: assets/<name>-<8 char hash>.<ext>. Subfolders such as assets/foliate are
+// copied from client/public unhashed, so they keep the default revalidating cache policy.
+const HASHED_BUILD_ASSET = /^assets\/[^/]+-[A-Za-z0-9_-]{8}\.[A-Za-z0-9]+$/;
+
+function setStaticCacheHeaders(reply: FastifyReply, filePath: string): void {
+  const publicPath = relative(PUBLIC_ROOT, filePath).split(sep).join('/');
+  if (HASHED_BUILD_ASSET.test(publicPath)) {
+    void reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+}
 
 async function bootstrap() {
   const allowCloudflareInsights = parseBooleanEnv(process.env.CSP_ALLOW_CLOUDFLARE_INSIGHTS, false);
@@ -118,8 +129,9 @@ async function bootstrap() {
     };
 
     await app.register(fastifyStatic as never, {
-      root: join(__dirname, '..', 'public'),
+      root: PUBLIC_ROOT,
       prefix: '/',
+      setHeaders: setStaticCacheHeaders,
     });
   }
 

@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 type VoidFn = () => void
 
 const routerPushMock = vi.hoisted(() => vi.fn<(to: string) => void>())
+const routerReplaceMock = vi.hoisted(() => vi.fn<(to: unknown) => Promise<void>>())
+const currentRoute = vi.hoisted(() => ({
+  value: { query: {} as Record<string, unknown>, matched: [{}], meta: {} as Record<string, unknown>, fullPath: '/' },
+}))
 const setAccessTokenMock = vi.hoisted(() => vi.fn<(token: string | null) => void>())
 const setOnAuthFailureMock = vi.hoisted(() => vi.fn<(fn: VoidFn) => void>())
 const refreshAccessTokenMock = vi.hoisted(() => vi.fn<() => Promise<string>>())
@@ -15,20 +19,34 @@ const cancelPendingThemeSyncMock = vi.hoisted(() => vi.fn<VoidFn>())
 const cancelPendingDisplaySettingsSyncMock = vi.hoisted(() => vi.fn<VoidFn>())
 const disconnectAuthorEnrichmentSocketMock = vi.hoisted(() => vi.fn<VoidFn>())
 const disconnectBookMetadataFetchSocketMock = vi.hoisted(() => vi.fn<VoidFn>())
-const currentRouteMock = vi.hoisted(() => ({ value: { query: {}, meta: {} as { public?: boolean } } }))
 
 vi.mock('@/router', () => ({
   default: {
     push: routerPushMock,
-    currentRoute: currentRouteMock,
+    replace: routerReplaceMock,
+    currentRoute,
   },
 }))
 
-vi.mock('@/lib/api', () => ({
-  api: apiMock,
-  refreshAccessToken: refreshAccessTokenMock,
-  setAccessToken: setAccessTokenMock,
-  setOnAuthFailure: setOnAuthFailureMock,
+vi.mock('@/lib/api', () => {
+  class NetworkError extends Error {}
+  class ServerUnavailableError extends Error {}
+  return {
+    api: apiMock,
+    NetworkError,
+    ServerUnavailableError,
+    isServerUnavailableStatus: (status: number) => status >= 502 && status <= 504,
+    isServerUnreachable: (reason: unknown) => reason instanceof NetworkError || reason instanceof ServerUnavailableError,
+    refreshAccessToken: refreshAccessTokenMock,
+    setAccessToken: setAccessTokenMock,
+    setOnAuthFailure: setOnAuthFailureMock,
+  }
+})
+
+vi.mock('@/composables/useLocaleSync', () => ({
+  cancelPendingLocaleSync: vi.fn<VoidFn>(),
+  hydrateLocalePreference: vi.fn<() => Promise<void>>(),
+  initLocaleSync: vi.fn<VoidFn>(),
 }))
 
 vi.mock('@/composables/useThemeSync', () => ({
@@ -77,6 +95,9 @@ describe('useAuth', () => {
   beforeEach(() => {
     vi.resetModules()
     routerPushMock.mockReset()
+    routerReplaceMock.mockReset()
+    routerReplaceMock.mockResolvedValue(undefined)
+    currentRoute.value = { query: {}, matched: [{}], meta: {}, fullPath: '/' }
     setAccessTokenMock.mockReset()
     setOnAuthFailureMock.mockReset()
     refreshAccessTokenMock.mockReset()
@@ -89,7 +110,6 @@ describe('useAuth', () => {
     cancelPendingDisplaySettingsSyncMock.mockReset()
     disconnectAuthorEnrichmentSocketMock.mockReset()
     disconnectBookMetadataFetchSocketMock.mockReset()
-    currentRouteMock.value = { query: {}, meta: {} }
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof fetch>().mockResolvedValue({
@@ -153,17 +173,80 @@ describe('useAuth', () => {
     onAuthFailure()
 
     expect(setAccessTokenMock).toHaveBeenCalledWith(null)
-    expect(routerPushMock).toHaveBeenCalledWith('/login')
+    expect(routerReplaceMock).toHaveBeenCalledWith({ path: '/login' })
   })
 
   it('stays on a public page when the session is rejected', async () => {
-    currentRouteMock.value = { query: {}, meta: { public: true } }
+    currentRoute.value = { query: {}, matched: [{}], meta: { public: true }, fullPath: '/reset-password' }
     await import('../useAuth')
     const onAuthFailure = setOnAuthFailureMock.mock.calls[0]![0]
 
     onAuthFailure()
 
     expect(setAccessTokenMock).toHaveBeenCalledWith(null)
+    expect(routerReplaceMock).not.toHaveBeenCalled()
     expect(routerPushMock).not.toHaveBeenCalled()
+  })
+
+  it('replaces the login page with the requested chapter after signing in', async () => {
+    currentRoute.value = { query: { redirect: '/read/1159/1159?format=epub' }, matched: [{}], meta: { public: true }, fullPath: '/login' }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue({ ok: true, json: async () => ({ accessToken: 't', user: { isDefaultPassword: false } }) } as Response),
+    )
+    apiMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ isDefaultPassword: false, settings: {} }) } as Response)
+    const { useAuth } = await import('../useAuth')
+
+    await useAuth().login('ada', 'correct-horse')
+
+    expect(routerReplaceMock).toHaveBeenCalledWith('/read/1159/1159?format=epub')
+    expect(routerPushMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores a redirect that would leave the app', async () => {
+    currentRoute.value = { query: { redirect: '//evil.example/path' }, matched: [{}], meta: { public: true }, fullPath: '/login' }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue({ ok: true, json: async () => ({ accessToken: 't', user: { isDefaultPassword: false } }) } as Response),
+    )
+    apiMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ isDefaultPassword: false, settings: {} }) } as Response)
+    const { useAuth } = await import('../useAuth')
+
+    await useAuth().login('ada', 'correct-horse')
+
+    expect(routerReplaceMock).toHaveBeenCalledWith('/')
+  })
+
+  it('keeps the page the user was on when the session is rejected', async () => {
+    currentRoute.value = { query: { format: 'epub' }, matched: [{}], meta: {}, fullPath: '/read/1159/1159?format=epub' }
+    await import('../useAuth')
+    const onAuthFailure = setOnAuthFailureMock.mock.calls[0]![0]
+
+    onAuthFailure()
+
+    expect(setAccessTokenMock).toHaveBeenCalledWith(null)
+    expect(routerReplaceMock).toHaveBeenCalledWith({ path: '/login', query: { redirect: '/read/1159/1159?format=epub' } })
+  })
+
+  it('reports the session as unavailable, not signed out, when the server cannot be reached', async () => {
+    const { NetworkError } = await import('@/lib/api')
+    refreshAccessTokenMock.mockRejectedValue(new NetworkError('Load failed'))
+    const { useAuth } = await import('../useAuth')
+    const auth = useAuth()
+
+    await auth.init()
+
+    expect(auth.user.value).toBeNull()
+    expect(auth.sessionUnavailable.value).toBe(true)
+  })
+
+  it('treats a rejected refresh as signed out', async () => {
+    refreshAccessTokenMock.mockRejectedValue(new Error('refresh failed'))
+    const { useAuth } = await import('../useAuth')
+    const auth = useAuth()
+
+    await auth.init()
+
+    expect(auth.sessionUnavailable.value).toBe(false)
   })
 })
