@@ -722,6 +722,13 @@
       "when": 1790634252134,
       "tag": "0102_add_user_unfollowed_series",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1790634252135,
+      "tag": "0103_count_series_as_one_book",
+      "breakpoints": true
     }
   ]
 }

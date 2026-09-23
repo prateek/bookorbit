@@ -22,6 +22,7 @@ import {
   sortReadingDailyStatsSegments,
   type ReadingDailyStatsSegment,
 } from '../../common/utils/reading-daily-stats.utils';
+import { bookCountUnitSql, countBookUnitsSql } from '../../common/utils/book-count-sql.utils';
 import { resolveTimeZone } from '../../common/utils/timezone.utils';
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
@@ -31,6 +32,7 @@ import {
   bookMetadata,
   books,
   genres,
+  libraries,
   readingAttempts,
   readingProgress,
   readingSessions,
@@ -222,17 +224,16 @@ export class UserStatisticsRepository {
    * than an instant, so it carries no zone to convert and is bucketed as stored.
    */
   async getActivityCompletionTimeline(userId: number, libraryIds: number[] | null): Promise<UserCompletionTimelinePoint[]> {
-    const yearExpr = sql<number>`extract(year from ${readingAttempts.endedOn})::int`;
-    const monthExpr = sql<number>`extract(month from ${readingAttempts.endedOn})::int`;
-
-    return this.db
-      .select({
-        year: yearExpr,
-        month: monthExpr,
-        count: sql<number>`count(*)::int`,
-      })
+    const unit = bookCountUnitSql(readingAttempts.id);
+    // A series unit starts over each calendar year, so the months of a year sum to the distinct
+    // books finished that year, the same total the dashboard reading goal counts.
+    const seriesUnitYear = sql`case when ${unit} < 0 then extract(year from ${readingAttempts.endedOn}) end`;
+    const firstCompletion = this.db
+      .select({ endedOn: sql<string>`min(${readingAttempts.endedOn})`.as('first_ended_on') })
       .from(readingAttempts)
       .innerJoin(books, eq(books.id, readingAttempts.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(
         and(
           eq(readingAttempts.userId, userId),
@@ -242,8 +243,18 @@ export class UserStatisticsRepository {
           this.libraryFilter(libraryIds),
         ),
       )
-      .groupBy(yearExpr, monthExpr)
-      .orderBy(yearExpr, monthExpr);
+      .groupBy(unit, seriesUnitYear)
+      .as('activity_first_completion');
+
+    return this.db
+      .select({
+        year: sql<number>`extract(year from ${firstCompletion.endedOn})::int`,
+        month: sql<number>`extract(month from ${firstCompletion.endedOn})::int`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(firstCompletion)
+      .groupBy(sql`1`, sql`2`)
+      .orderBy(sql`1`, sql`2`);
   }
 
   async getActivityPaceSummary(userId: number, libraryIds: number[] | null, days = 1825): Promise<ActivityPaceSummary> {
@@ -480,15 +491,18 @@ export class UserStatisticsRepository {
     const libraryFilter = this.libraryFilter(libraryIds);
 
     // Status counts come from user_book_status (respects manual overrides)
+    const unit = bookCountUnitSql(userBookStatus.bookId);
     const [statusRow] = await this.db
       .select({
-        trackedBooks: sql<number>`count(*)::int`,
-        startedBooks: sql<number>`count(*) filter (where ${userBookStatus.status} in ('reading', 'on_hold', 'rereading', 'read', 'skimmed', 'abandoned'))::int`,
-        inProgressBooks: sql<number>`count(*) filter (where ${userBookStatus.status} in ('reading', 'on_hold', 'rereading'))::int`,
-        completedBooks: sql<number>`count(*) filter (where ${userBookStatus.status} = 'read')::int`,
+        trackedBooks: countBookUnitsSql(userBookStatus.bookId),
+        startedBooks: sql<number>`count(distinct ${unit}) filter (where ${userBookStatus.status} in ('reading', 'on_hold', 'rereading', 'read', 'skimmed', 'abandoned'))::int`,
+        inProgressBooks: sql<number>`count(distinct ${unit}) filter (where ${userBookStatus.status} in ('reading', 'on_hold', 'rereading'))::int`,
+        completedBooks: sql<number>`count(distinct ${unit}) filter (where ${userBookStatus.status} = 'read')::int`,
       })
       .from(userBookStatus)
       .innerJoin(books, eq(books.id, userBookStatus.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(and(eq(userBookStatus.userId, userId), libraryFilter));
 
     // meanProgressPercent stays derived from actual reading position
@@ -835,9 +849,7 @@ export class UserStatisticsRepository {
     filterLibraryIds?: number[],
     days = 1825,
   ): Promise<UserCompletionTimelinePoint[]> {
-    const accessible = await this.getAccessibleLibraryIds(userId, isSuperuser);
-    const libraryFilter = this.libraryFilter(this.intersectLibraryIds(accessible, filterLibraryIds));
-    const since = this.formatDayKey(this.sinceDateForDays(days));
+    const where = await this.completedAttemptsInWindow(userId, isSuperuser, filterLibraryIds, days);
     const yearExpr = sql<number>`extract(year from ${readingAttempts.endedOn})::int`;
     const monthExpr = sql<number>`extract(month from ${readingAttempts.endedOn})::int`;
 
@@ -845,26 +857,57 @@ export class UserStatisticsRepository {
       .select({
         year: yearExpr,
         month: monthExpr,
-        count: sql<number>`count(*)::int`,
+        count: countBookUnitsSql(readingAttempts.id),
       })
       .from(readingAttempts)
       .innerJoin(books, eq(books.id, readingAttempts.bookId))
-      .where(
-        and(
-          eq(readingAttempts.userId, userId),
-          eq(readingAttempts.outcome, 'completed'),
-          isNotNull(readingAttempts.endedOn),
-          isNull(readingAttempts.deletedAt),
-          gte(readingAttempts.endedOn, since),
-          libraryFilter,
-        ),
-      )
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .where(where)
       .groupBy(yearExpr, monthExpr)
       .orderBy(yearExpr, monthExpr);
   }
 
+  /**
+   * Monthly completions for the cumulative goal line. Unlike the per-month chart, a series unit is
+   * placed only in the month of its first finished book inside the window, so a serial read across
+   * several months adds one to the running total instead of one per month.
+   */
   async getMonthlyCompletions(userId: number, isSuperuser: boolean, filterLibraryIds?: number[], days = 365): Promise<UserCompletionTimelinePoint[]> {
-    return this.getCompletionTimeline(userId, isSuperuser, filterLibraryIds, days);
+    const where = await this.completedAttemptsInWindow(userId, isSuperuser, filterLibraryIds, days);
+    const firstCompletion = this.db
+      .select({ endedOn: sql<string>`min(${readingAttempts.endedOn})`.as('first_ended_on') })
+      .from(readingAttempts)
+      .innerJoin(books, eq(books.id, readingAttempts.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .where(where)
+      .groupBy(bookCountUnitSql(readingAttempts.id))
+      .as('goal_first_completion');
+
+    return this.db
+      .select({
+        year: sql<number>`extract(year from ${firstCompletion.endedOn})::int`,
+        month: sql<number>`extract(month from ${firstCompletion.endedOn})::int`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(firstCompletion)
+      .groupBy(sql`1`, sql`2`)
+      .orderBy(sql`1`, sql`2`);
+  }
+
+  private async completedAttemptsInWindow(userId: number, isSuperuser: boolean, filterLibraryIds: number[] | undefined, days: number) {
+    const accessible = await this.getAccessibleLibraryIds(userId, isSuperuser);
+    const libraryFilter = this.libraryFilter(this.intersectLibraryIds(accessible, filterLibraryIds));
+    const since = this.formatDayKey(this.sinceDateForDays(days));
+    return and(
+      eq(readingAttempts.userId, userId),
+      eq(readingAttempts.outcome, 'completed'),
+      isNotNull(readingAttempts.endedOn),
+      isNull(readingAttempts.deletedAt),
+      gte(readingAttempts.endedOn, since),
+      libraryFilter,
+    );
   }
 
   async getProgressFunnelInRange(

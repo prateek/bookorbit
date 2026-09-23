@@ -129,6 +129,10 @@ export class CreateLibraryDto {
   markAsFinishedPercentComplete?: number;
 
   @IsOptional()
+  @IsBoolean()
+  countSeriesAsOneBook?: boolean;
+
+  @IsOptional()
   @ValidateIf((o: { fileNamingPattern?: unknown }) => o.fileNamingPattern !== null)
   @IsString()
   @MaxLength(500)

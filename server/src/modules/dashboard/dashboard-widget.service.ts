@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 
 import type {
   CurrentlyReadingWidgetData,
@@ -54,7 +54,7 @@ const RHYTHM_WINDOW_DAYS = 14;
 const PROJECTION_RECENT_DAYS = 30;
 
 @Injectable()
-export class DashboardWidgetService {
+export class DashboardWidgetService implements OnModuleInit {
   private readonly logger = new Logger(DashboardWidgetService.name);
   private readonly liveCache = new StatsCache({ ttlMs: DASHBOARD_LIVE_TTL_MS, maxEntries: DASHBOARD_CACHE_MAX_ENTRIES });
   private readonly staleCache = new StatsCache({ ttlMs: DASHBOARD_STALE_TTL_MS, maxEntries: DASHBOARD_CACHE_MAX_ENTRIES });
@@ -74,6 +74,12 @@ export class DashboardWidgetService {
 
   private async getLibraryIds(user: RequestUser): Promise<number[]> {
     return resolveDashboardLibraryIds(await this.libraryService.findAccessibleLibraryIds(user), user);
+  }
+
+  onModuleInit(): void {
+    this.libraryService.onBookCountingChanged((userIds) => {
+      for (const userId of userIds) this.clearCacheForUser(userId);
+    });
   }
 
   private readerClock(user: RequestUser): ReaderClock {

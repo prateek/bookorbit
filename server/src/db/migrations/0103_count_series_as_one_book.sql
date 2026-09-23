@@ -1,0 +1,1 @@
+ALTER TABLE "libraries" ADD COLUMN "count_series_as_one_book" boolean DEFAULT false NOT NULL;

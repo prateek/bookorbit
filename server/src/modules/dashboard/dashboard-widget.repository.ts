@@ -33,6 +33,7 @@ import {
   userBookStatus,
   userReadingDailyStats,
 } from '../../db/schema';
+import { countBookUnitsSql } from '../../common/utils/book-count-sql.utils';
 import { buildContentFilterClauses } from '../../common/utils/content-filter-sql.utils';
 import { toDateKeyInTimeZone } from '../../common/utils/timezone.utils';
 import { computeLongestStreak, computeStreakData, resolveResumeModes } from './dashboard-widget.calculations';
@@ -91,9 +92,11 @@ export class DashboardWidgetRepository {
 
     const cfClauses = this.getContentFilterClauses(contentFilters);
     const [row] = await this.db
-      .select({ count: sql<number>`count(*)::int` })
+      .select({ count: countBookUnitsSql(readingAttempts.id) })
       .from(readingAttempts)
       .innerJoin(books, eq(books.id, readingAttempts.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .where(
         and(
           eq(readingAttempts.userId, userId),
@@ -437,9 +440,11 @@ export class DashboardWidgetRepository {
     const presentFilter = eq(books.status, 'present');
 
     const authorCountsSubq = this.db
-      .select({ c: sql<number>`count(${userBookStatus.bookId})::int`.as('c') })
+      .select({ c: countBookUnitsSql(userBookStatus.bookId).as('c') })
       .from(userBookStatus)
       .innerJoin(books, eq(books.id, userBookStatus.bookId))
+      .innerJoin(libraries, eq(libraries.id, books.libraryId))
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
       .innerJoin(bookAuthors, eq(bookAuthors.bookId, books.id))
       .where(and(eq(userBookStatus.userId, userId), eq(userBookStatus.status, 'read'), libFilter, presentFilter, ...cfClauses))
       .groupBy(bookAuthors.authorId)
@@ -489,14 +494,17 @@ export class DashboardWidgetRepository {
         ),
       this.db.select({ count: sql<number>`coalesce(max(${authorCountsSubq.c}), 0)::int` }).from(authorCountsSubq),
       this.db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: countBookUnitsSql(userBookStatus.bookId) })
         .from(userBookStatus)
         .innerJoin(books, eq(books.id, userBookStatus.bookId))
+        .innerJoin(libraries, eq(libraries.id, books.libraryId))
+        .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
         .where(and(eq(userBookStatus.userId, userId), eq(userBookStatus.status, 'read'), libFilter, presentFilter, ...cfClauses)),
       this.db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: countBookUnitsSql(userBookStatus.bookId) })
         .from(userBookStatus)
         .innerJoin(books, eq(books.id, userBookStatus.bookId))
+        .innerJoin(libraries, eq(libraries.id, books.libraryId))
         .innerJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
         .where(
           and(
@@ -821,10 +829,11 @@ export class DashboardWidgetRepository {
       this.db
         .select({
           avg: sql<number>`coalesce(avg(${bookMetadata.pageCount}), 0)::int`,
-          total: sql<number>`count(*)::int`,
+          total: countBookUnitsSql(userBookStatus.bookId),
         })
         .from(userBookStatus)
         .innerJoin(books, eq(books.id, userBookStatus.bookId))
+        .innerJoin(libraries, eq(libraries.id, books.libraryId))
         .innerJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
         .where(and(eq(userBookStatus.userId, userId), eq(userBookStatus.status, 'read'), libFilter, presentFilter, ...cfClauses)),
       this.db
@@ -1037,9 +1046,11 @@ export class DashboardWidgetRepository {
         .innerJoin(bookAuthors, eq(bookAuthors.bookId, books.id))
         .where(and(readFilter, libFilter, presentFilter, ...cfClauses)),
       this.db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: countBookUnitsSql(userBookStatus.bookId) })
         .from(userBookStatus)
         .innerJoin(books, eq(books.id, userBookStatus.bookId))
+        .innerJoin(libraries, eq(libraries.id, books.libraryId))
+        .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
         .where(and(readFilter, libFilter, presentFilter, ...cfClauses)),
       this.db
         .select({ year: bookMetadata.publishedYear })

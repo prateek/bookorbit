@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatNumber, formatPercent } from '@/i18n/formatters'
+import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import LibraryCreatorCard from './LibraryCreatorCard.vue'
 
 const { t } = useI18n()
@@ -14,11 +15,13 @@ const FINISH_MAX = 100
 const props = defineProps<{
   readingThreshold: number
   markAsFinishedPercentComplete: number
+  countSeriesAsOneBook: boolean
 }>()
 
 const emit = defineEmits<{
   'update:readingThreshold': [value: number]
   'update:markAsFinishedPercentComplete': [value: number]
+  'update:countSeriesAsOneBook': [value: boolean]
 }>()
 
 const startFraction = computed(() => fractionOf(props.readingThreshold, START_MIN, START_MAX))
@@ -27,6 +30,10 @@ const finishFraction = computed(() => fractionOf(props.markAsFinishedPercentComp
 function fractionOf(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return 0
   return Math.min(1, Math.max(0, (value - min) / (max - min)))
+}
+
+function handleCountSeriesAsOneBookToggle() {
+  emit('update:countSeriesAsOneBook', !props.countSeriesAsOneBook)
 }
 
 function onReadingThresholdInput(event: Event) {
@@ -165,6 +172,20 @@ function percent(value: number): string {
           {{ t('library.creator.reading.range', { min: formatPercent(0.9), max: formatPercent(1) }) }}
         </p>
       </div>
+    </div>
+
+    <div class="mt-4 flex items-start justify-between gap-4 rounded-lg border border-border bg-card p-4">
+      <div>
+        <p class="text-sm font-medium text-foreground">{{ t('library.creator.reading.countSeriesAsOneBook.title') }}</p>
+        <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {{ t('library.creator.reading.countSeriesAsOneBook.hint') }}
+        </p>
+      </div>
+      <ToggleSwitch
+        :model-value="countSeriesAsOneBook"
+        :aria-label="t('library.creator.reading.countSeriesAsOneBook.title')"
+        @update:model-value="handleCountSeriesAsOneBookToggle"
+      />
     </div>
   </LibraryCreatorCard>
 </template>
