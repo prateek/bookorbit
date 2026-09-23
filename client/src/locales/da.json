@@ -4597,8 +4597,6 @@
       "resultCount": "{shown} af {total}",
       "noMatches": "Ingen match",
       "noMatchesHint": "Prøv et andet søgeord.",
-      "bookCount": "Bøger: {count}",
-      "showCount": "Shows: {count}",
       "librariesEmptyHint": "Opret et bibliotek for at begynde at tilføje bøger.",
       "podcastLibrariesEmptyHint": "Create a podcast library to start following shows.",
       "smartScopesEmptyHint": "Smart scopes gemme et sæt filtre, du bruger ofte.",

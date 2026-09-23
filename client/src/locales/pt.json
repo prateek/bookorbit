@@ -7285,8 +7285,6 @@
       "resultCount": "{shown} de {total}",
       "noMatches": "Sem resultados",
       "noMatchesHint": "Tente um termo de pesquisa diferente.",
-      "bookCount": "Livros: {count}",
-      "showCount": "Shows: {count}",
       "librariesEmptyHint": "Criar uma biblioteca para começar a adicionar livros.",
       "podcastLibrariesEmptyHint": "Create a podcast library to start following shows.",
       "smartScopesEmptyHint": "Escopos inteligentes salvam um conjunto de filtros que você usa com frequência.",

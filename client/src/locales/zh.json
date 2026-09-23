@@ -5694,7 +5694,6 @@
       "resultCount": "共 {total} 条，展示 {shown} 条",
       "noMatches": "没有匹配",
       "noMatchesHint": "尝试一个不同的搜索词。",
-      "bookCount": "书籍数量：{count}",
       "librariesEmptyHint": "创建一个库开始添加书籍。",
       "smartScopesEmptyHint": "智能书架保存您经常使用的一组过滤器。",
       "collectionsEmptyHint": "收藏群组你手上挑选的书籍。"

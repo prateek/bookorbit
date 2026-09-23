@@ -5174,8 +5174,6 @@
       "resultCount": "{shown} di {total}",
       "noMatches": "Nessuna corrispondenza",
       "noMatchesHint": "Prova con un altro termine di ricerca.",
-      "bookCount": "Libri: {count}",
-      "showCount": "Shows: {count}",
       "librariesEmptyHint": "Crea una biblioteca per iniziare ad aggiungere libri.",
       "podcastLibrariesEmptyHint": "Create a podcast library to start following shows.",
       "smartScopesEmptyHint": "I filtri intelligenti salvano un insieme di filtri che usi spesso.",

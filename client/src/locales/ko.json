@@ -6129,7 +6129,6 @@
       "resultCount": "{shown} / {total}",
       "noMatches": "일치하는 항목 없음",
       "noMatchesHint": "다른 검색어를 사용해 보세요.",
-      "bookCount": "책 개수: {count}개",
       "librariesEmptyHint": "책을 추가하려면 라이브러리를 만들어 주세요.",
       "smartScopesEmptyHint": "스마트 스코프는 자주 사용하는 필터를 기억합니다.",
       "collectionsEmptyHint": "컬렉션은 사용자가 직접 고른 책들을 그룹화합니다."

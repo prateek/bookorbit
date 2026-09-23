@@ -4,7 +4,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatNumber } from '@/i18n/formatters'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowUpDown, ChevronDown, ChevronLeft, ImageMinus, Layers, LayoutGrid, List, Upload } from '@lucide/vue'
+import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ImageMinus, Layers, LayoutGrid, List, Upload } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type { AuthorDetail, AuthorSummary, BookCard } from '@bookorbit/types'
@@ -33,7 +33,11 @@ import {
 import { useAuthorBooks } from '../composables/useAuthorBooks'
 import { useAuthorDetail } from '../composables/useAuthorDetail'
 import { useAuthorMetadataPreview } from '../composables/useAuthorMetadataPreview'
+import { useSeriesContinue } from '../composables/useSeriesContinue'
+import AuthorSeriesRow from '../components/AuthorSeriesRow.vue'
+import { isSerialAuthor } from '../lib/author-work'
 import EntityNotFound from '@/components/EntityNotFound.vue'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -42,11 +46,56 @@ const mainRef = ref<HTMLElement | null>(null)
 useScrollRestoreOnActivate(mainRef)
 const { hasPermission, isSuperuser } = usePermissions()
 const { width: windowWidth } = useWindowSize()
+const isMobileLayout = computed(() => windowWidth.value < 640)
 
 const { portraitCoverSize, gridGap } = useDisplaySettings()
 const { libraries, fetchLibraries } = useLibraries()
 
-const authorBooksViewMode = ref<'grid' | 'list'>('grid')
+type AuthorBooksViewMode = 'grid' | 'list'
+
+/**
+ * Phones open on list rows, where a serial shows its unread count and a Continue button;
+ * wider screens open on the cover grid. A choice made on either is remembered for that form
+ * factor only, so picking grid on a desktop does not turn the phone back into covers.
+ */
+const VIEW_MODE_STORAGE_KEY = 'bookorbit:author-books-view-mode'
+const viewModeFormFactor = computed(() => (isMobileLayout.value ? 'phone' : 'wide'))
+
+function readStoredViewMode(formFactor: string): AuthorBooksViewMode | null {
+  try {
+    const value = window.localStorage.getItem(`${VIEW_MODE_STORAGE_KEY}:${formFactor}`)
+    return value === 'grid' || value === 'list' ? value : null
+  } catch {
+    return null
+  }
+}
+
+const storedViewModes = ref<Record<string, AuthorBooksViewMode | null>>({
+  phone: readStoredViewMode('phone'),
+  wide: readStoredViewMode('wide'),
+})
+
+const authorBooksViewMode = computed<AuthorBooksViewMode>(
+  () => storedViewModes.value[viewModeFormFactor.value] ?? (isMobileLayout.value ? 'list' : 'grid'),
+)
+
+function setAuthorBooksViewMode(mode: AuthorBooksViewMode) {
+  const formFactor = viewModeFormFactor.value
+  storedViewModes.value = { ...storedViewModes.value, [formFactor]: mode }
+  try {
+    window.localStorage.setItem(`${VIEW_MODE_STORAGE_KEY}:${formFactor}`, mode)
+  } catch {
+    // Private windows can refuse storage; the choice still holds for this visit.
+  }
+}
+
+function showGridView() {
+  setAuthorBooksViewMode('grid')
+}
+
+function showListView() {
+  setAuthorBooksViewMode('list')
+}
 
 const authorId = computed(() => Number(route.params.id))
 const { author, loading: loadingAuthor, error: authorError, notFound: authorNotFound, load: loadAuthor } = useAuthorDetail(authorId)
@@ -67,13 +116,16 @@ const {
 // One flag for every author page, so the state carries from one author to the next rather than
 // being re-chosen per author; the toggle below writes it back. Tracked rather than read once,
 // because on a cold load of an author URL the signed-in user - and so the preference - can
-// arrive after this component is set up.
+// arrive after this component is set up. Phones always group by series: a flat list of a serial
+// writer's thousand chapters is not something anyone scrolls on a phone.
 const { getEffectivePreference, setPreference } = useSeriesCollapsePreference()
 watch(
-  () => getEffectivePreference({ authorPages: true }),
+  () => isMobileLayout.value || getEffectivePreference({ authorPages: true }),
   (value) => (collapseSeries.value = value),
   { immediate: true },
 )
+const serialAuthor = computed(() => (author.value ? isSerialAuthor(author.value) : false))
+const { continuingSeriesId, continueSeries } = useSeriesContinue()
 const authorName = computed(() => author.value?.name ?? '')
 const pageTitle = computed(() => {
   if (author.value?.name) return t('author.detail.pageTitleNamed', { name: author.value.name })
@@ -130,13 +182,36 @@ const selectedMergeBookCount = computed(() => {
   return mergeCandidates.value.filter((candidate) => selected.has(candidate.id)).reduce((sum, candidate) => sum + candidate.bookCount, 0)
 })
 
-const BOOK_SORT_OPTIONS = [{ value: 'addedAt' }, { value: 'title' }, { value: 'publishedYear' }] as const
+/** The phone sort sheet offers whole orderings, so a field and a direction are one tap rather than two controls. */
+const SORT_CHOICES = [
+  { sort: 'addedAt', order: 'desc', label: 'author.detail.books.sortOptions.recent' },
+  { sort: 'addedAt', order: 'asc', label: 'author.detail.books.sortOptions.oldest' },
+  { sort: 'title', order: 'asc', label: 'author.detail.books.sortOptions.title' },
+  { sort: 'publishedYear', order: 'desc', label: 'author.detail.books.sortOptions.published' },
+] as const
+type SortChoice = (typeof SORT_CHOICES)[number]
 
-const bookSortOptions = computed(() => [
-  { value: 'addedAt', label: t('author.detail.books.sort.recentlyAdded') },
-  { value: 'title', label: t('author.detail.books.sort.title') },
-  { value: 'publishedYear', label: t('author.detail.books.sort.publishedYear') },
-])
+const sortSheetOpen = ref(false)
+const showLibraryFilter = computed(() => libraries.value.length > 1)
+
+function isActiveSortChoice(choice: SortChoice): boolean {
+  return sort.value === choice.sort && order.value === choice.order
+}
+
+function applySortChoice(choice: SortChoice) {
+  sort.value = choice.sort
+  order.value = choice.order
+  sortSheetOpen.value = false
+}
+
+function openSortSheet() {
+  sortSheetOpen.value = true
+}
+
+function openSeries(book: BookCard) {
+  if (book.seriesId == null) return
+  void router.push({ name: 'series-detail', params: { seriesId: book.seriesId }, query: { from: route.fullPath } })
+}
 
 // 'move-to-library' is part of the shared card contract; this view does not
 // opt in, so it never fires here.
@@ -409,7 +484,6 @@ const mergeDialogDescription = computed(() => {
   return t('author.detail.mergeDialog.description')
 })
 
-const isMobileLayout = computed(() => windowWidth.value < 640)
 const authorBookCoverSize = computed(() => {
   const configuredSize = Number(portraitCoverSize.value)
   const normalizedSize = Number.isFinite(configuredSize) && configuredSize > 0 ? configuredSize : 130
@@ -426,17 +500,6 @@ const authorBookGridGap = computed(() => {
 function onLibraryFilterChange(event: Event) {
   const value = (event.target as HTMLSelectElement).value
   libraryId.value = value ? Number(value) : null
-}
-
-function onMobileSortChange(event: Event) {
-  const value = (event.target as HTMLSelectElement).value
-  if (BOOK_SORT_OPTIONS.some((option) => option.value === value)) {
-    sort.value = value as (typeof BOOK_SORT_OPTIONS)[number]['value']
-  }
-}
-
-function toggleBookOrder() {
-  order.value = order.value === 'asc' ? 'desc' : 'asc'
 }
 
 async function refreshMetadata() {
@@ -512,12 +575,13 @@ defineOptions({ name: 'AuthorDetailView' })
 <template>
   <div class="flex h-full flex-col">
     <main ref="mainRef" class="flex flex-1 min-h-0 w-full min-w-0 flex-col overflow-y-auto overflow-x-hidden pr-0 sm:pr-2">
-      <div class="mb-3 mt-2 mr-0 sm:mr-4 flex items-center gap-2 px-1">
+      <!-- Grown in layout rather than with touch-target: the scroller clips an overlay reaching above it. -->
+      <div class="mb-2 mt-1 flex items-center px-1 pointer-coarse:mb-0 pointer-coarse:mt-0">
         <button
-          class="touch-target inline-flex h-8 items-center gap-1 rounded-md border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          class="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground pointer-coarse:min-h-11 pointer-coarse:pr-4"
           @click="goBack"
         >
-          <ChevronLeft :size="14" />
+          <ChevronLeft :size="16" />
           {{ t('common.back') }}
         </button>
       </div>
@@ -649,83 +713,67 @@ defineOptions({ name: 'AuthorDetailView' })
           </div>
         </section>
 
-        <section class="mt-4 rounded-lg border border-border/70 bg-card/60 p-3">
-          <div class="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <h2 class="text-sm font-semibold text-foreground">{{ t('author.detail.books.heading') }}</h2>
-            <div class="w-full space-y-2 sm:hidden">
-              <div class="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-2">
-                <div class="relative min-w-0">
-                  <select
-                    :value="sort"
-                    class="h-8 w-full appearance-none rounded-md border border-input bg-background px-2.5 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
-                    @change="onMobileSortChange"
-                  >
-                    <option v-for="opt in bookSortOptions" :key="opt.value" :value="opt.value">
-                      {{ opt.label }}
-                    </option>
-                  </select>
-                  <ArrowUpDown :size="13" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                </div>
-
+        <section class="mt-3 sm:mt-4 sm:rounded-lg sm:border sm:border-border/70 sm:bg-card/60 sm:p-3">
+          <div class="mb-2 flex flex-col gap-2 sm:mb-3 md:flex-row md:items-center md:justify-between">
+            <div class="flex items-center gap-2 sm:hidden">
+              <h2 class="min-w-0 flex-1 px-1 text-[17px] font-semibold text-foreground">
+                {{ serialAuthor ? t('author.detail.books.headingSerials') : t('author.detail.books.heading') }}
+                <span v-if="total > 0" class="ml-1 text-sm font-normal text-muted-foreground tabular-nums">{{ formatNumber(total) }}</span>
+              </h2>
+              <button
+                type="button"
+                data-testid="author-books-sort-trigger"
+                class="inline-flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                @click="openSortSheet"
+              >
+                <ArrowUpDown :size="16" aria-hidden="true" />
+                {{ t('author.detail.books.sortButton') }}
+              </button>
+              <div class="flex shrink-0 items-center" role="group">
                 <button
-                  class="h-8 rounded-md border border-input bg-background px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  @click="toggleBookOrder"
-                >
-                  {{ order === 'asc' ? t('author.detail.books.asc') : t('author.detail.books.desc') }}
-                </button>
-
-                <button
-                  data-testid="author-collapse-series-toggle-mobile"
-                  class="flex h-8 w-8 items-center justify-center rounded-md border transition-colors"
+                  type="button"
+                  class="flex size-11 items-center justify-center rounded-full transition-colors"
                   :class="
-                    collapseSeries
-                      ? 'border-primary text-primary bg-primary/10'
-                      : 'border-input text-muted-foreground bg-background hover:text-foreground hover:bg-muted'
+                    authorBooksViewMode === 'list' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   "
-                  :aria-label="collapseToggleLabel"
-                  :aria-pressed="collapseSeries"
-                  :title="collapseToggleLabel"
-                  @click="handleToggleCollapse"
+                  :aria-label="t('author.detail.books.viewList')"
+                  :aria-pressed="authorBooksViewMode === 'list'"
+                  @click="showListView"
                 >
-                  <Layers :size="14" />
+                  <List :size="18" aria-hidden="true" />
                 </button>
-
-                <div class="flex items-center rounded-md border border-input bg-background">
-                  <button
-                    class="flex h-8 w-8 items-center justify-center rounded-l-md transition-colors"
-                    :class="
-                      authorBooksViewMode === 'grid' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                    "
-                    @click="authorBooksViewMode = 'grid'"
-                  >
-                    <LayoutGrid :size="14" />
-                  </button>
-                  <button
-                    class="flex h-8 w-8 items-center justify-center rounded-r-md transition-colors"
-                    :class="
-                      authorBooksViewMode === 'list' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                    "
-                    @click="authorBooksViewMode = 'list'"
-                  >
-                    <List :size="14" />
-                  </button>
-                </div>
-              </div>
-
-              <div class="relative min-w-0">
-                <select
-                  :value="libraryId ?? ''"
-                  class="h-8 w-full appearance-none rounded-md border border-input bg-background px-2.5 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
-                  @change="onLibraryFilterChange"
+                <button
+                  type="button"
+                  class="flex size-11 items-center justify-center rounded-full transition-colors"
+                  :class="
+                    authorBooksViewMode === 'grid' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  "
+                  :aria-label="t('author.detail.books.viewGrid')"
+                  :aria-pressed="authorBooksViewMode === 'grid'"
+                  @click="showGridView"
                 >
-                  <option value="">{{ t('author.detail.books.allLibraries') }}</option>
-                  <option v-for="library in libraries" :key="library.id" :value="library.id">
-                    {{ library.name }}
-                  </option>
-                </select>
-                <ChevronDown :size="14" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <LayoutGrid :size="18" aria-hidden="true" />
+                </button>
               </div>
             </div>
+
+            <div v-if="showLibraryFilter" class="relative min-w-0 sm:hidden">
+              <select
+                :value="libraryId ?? ''"
+                class="h-11 w-full appearance-none rounded-md border border-input bg-background px-3 pr-8 text-sm text-foreground outline-none transition-colors focus:border-primary/60"
+                @change="onLibraryFilterChange"
+              >
+                <option value="">{{ t('author.detail.books.allLibraries') }}</option>
+                <option v-for="library in libraries" :key="library.id" :value="library.id">
+                  {{ library.name }}
+                </option>
+              </select>
+              <ChevronDown :size="14" class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            </div>
+
+            <h2 class="hidden text-sm font-semibold text-foreground sm:block">
+              {{ serialAuthor ? t('author.detail.books.headingSerials') : t('author.detail.books.heading') }}
+            </h2>
 
             <div class="hidden flex-wrap items-center gap-2 sm:flex">
               <select
@@ -746,6 +794,7 @@ defineOptions({ name: 'AuthorDetailView' })
               </select>
 
               <select
+                v-if="showLibraryFilter"
                 :value="libraryId ?? ''"
                 class="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none transition-colors focus:border-primary/60 sm:w-auto"
                 @change="onLibraryFilterChange"
@@ -776,7 +825,9 @@ defineOptions({ name: 'AuthorDetailView' })
                   :class="
                     authorBooksViewMode === 'grid' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   "
-                  @click="authorBooksViewMode = 'grid'"
+                  :aria-label="t('author.detail.books.viewGrid')"
+                  :aria-pressed="authorBooksViewMode === 'grid'"
+                  @click="showGridView"
                 >
                   <LayoutGrid :size="14" />
                 </button>
@@ -785,7 +836,9 @@ defineOptions({ name: 'AuthorDetailView' })
                   :class="
                     authorBooksViewMode === 'list' ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   "
-                  @click="authorBooksViewMode = 'list'"
+                  :aria-label="t('author.detail.books.viewList')"
+                  :aria-pressed="authorBooksViewMode === 'list'"
+                  @click="showListView"
                 >
                   <List :size="14" />
                 </button>
@@ -812,7 +865,17 @@ defineOptions({ name: 'AuthorDetailView' })
           />
 
           <div v-if="authorBooksViewMode === 'list' && books.length > 0" class="flex flex-col divide-y divide-border">
-            <BookListRow v-for="book in books" :key="book.id" :book="book" @action="handleBookAction(book, $event)" />
+            <template v-for="book in books" :key="book.id">
+              <AuthorSeriesRow
+                v-if="book.collapsedSeries"
+                :book="book"
+                :serial="serialAuthor"
+                :continuing="continuingSeriesId !== null && continuingSeriesId === book.seriesId"
+                @open="openSeries"
+                @continue="continueSeries"
+              />
+              <BookListRow v-else :book="book" @action="handleBookAction(book, $event)" />
+            </template>
           </div>
 
           <div ref="sentinel" class="mt-4 flex h-8 items-center justify-center">
@@ -847,5 +910,29 @@ defineOptions({ name: 'AuthorDetailView' })
     />
 
     <DeleteBookDialog :open="deleteBookId !== null" :deleting="deletingBook" @confirm="confirmDelete" @cancel="cancelDelete" />
+
+    <Sheet v-model:open="sortSheetOpen">
+      <SheetContent side="bottom" class="rounded-t-xl pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <SheetHeader>
+          <SheetTitle>{{ t('author.detail.books.sortSheetTitle') }}</SheetTitle>
+          <SheetDescription class="sr-only">{{ t('author.detail.books.sortSheetTitle') }}</SheetDescription>
+        </SheetHeader>
+        <div class="flex flex-col px-2" role="radiogroup" :aria-label="t('author.detail.books.sortSheetTitle')">
+          <button
+            v-for="choice in SORT_CHOICES"
+            :key="`${choice.sort}:${choice.order}`"
+            type="button"
+            role="radio"
+            :aria-checked="isActiveSortChoice(choice)"
+            class="flex min-h-12 items-center justify-between rounded-md px-3 text-base transition-colors active:bg-muted"
+            :class="isActiveSortChoice(choice) ? 'font-medium text-foreground' : 'text-muted-foreground'"
+            @click="applySortChoice(choice)"
+          >
+            {{ t(choice.label) }}
+            <Check v-if="isActiveSortChoice(choice)" :size="18" class="text-primary" aria-hidden="true" />
+          </button>
+        </div>
+      </SheetContent>
+    </Sheet>
   </div>
 </template>

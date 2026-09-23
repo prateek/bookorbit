@@ -7,6 +7,7 @@ import { formatNumber, formatRelativeFromNow } from '@/i18n/formatters'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import AuthorPortrait from './AuthorPortrait.vue'
 import { hasInformativeSortName } from '../lib/author-identity'
+import { isSerialAuthor } from '../lib/author-work'
 
 const props = withDefaults(
   defineProps<{
@@ -60,15 +61,22 @@ const barWidth = computed(() => {
   return Math.max(12, Math.round(Math.sqrt(props.author.bookCount / max) * 100))
 })
 
+const workSummary = computed(() =>
+  isSerialAuthor(props.author)
+    ? t('author.index.serialSummary', { series: props.author.seriesCount ?? 0, chapters: props.author.bookCount })
+    : t('author.index.bookCount', { count: props.author.bookCount }),
+)
+
 const secondaryLine = computed(() => {
   const parts: string[] = []
   if (showSortName.value && props.author.sortName) parts.push(props.author.sortName)
-  parts.push(t('author.index.bookCount', { count: props.author.bookCount }))
+  parts.push(workSummary.value)
   if (lastAdded.value) parts.push(lastAdded.value)
   return parts.join(' · ')
 })
 
-const accessibleLabel = computed(() => t('author.index.rowLabel', { name: props.author.name, count: props.author.bookCount }))
+const accessibleLabel = computed(() => t('author.index.rowLabelSummary', { name: props.author.name, summary: workSummary.value }))
+const hasActions = computed(() => Boolean(props.canRefresh || props.canDelete))
 
 const menuOpen = ref(false)
 const busy = computed(() => Boolean(props.refreshing || props.deleting))
@@ -114,6 +122,7 @@ function handleDelete() {
 
     <div
       class="pointer-events-none relative z-10 flex w-full min-w-0 items-center gap-2.5 px-2 py-1 @container/row sm:gap-3"
+      :class="hasActions && !selectionMode ? 'pointer-coarse:pr-10' : ''"
       :style="{ minHeight: `${metrics.row}px` }"
     >
       <span
@@ -171,8 +180,8 @@ function handleDelete() {
       <DropdownMenuTrigger as-child>
         <button
           type="button"
-          class="absolute right-1.5 top-1/2 z-20 size-6 -translate-y-1/2 place-items-center rounded-md border border-border bg-card text-muted-foreground shadow-xs transition-colors hover:text-foreground focus-visible:grid group-focus-within/row:grid group-hover/row:grid"
-          :class="busy || menuOpen ? 'grid' : 'hidden'"
+          class="touch-target absolute right-1.5 top-1/2 z-20 size-6 -translate-y-1/2 place-items-center rounded-md border border-border bg-card text-muted-foreground shadow-xs transition-colors hover:text-foreground focus-visible:grid group-focus-within/row:grid group-hover/row:grid"
+          :class="[busy || menuOpen ? 'grid' : 'hidden', hasActions ? 'pointer-coarse:grid' : '']"
           :aria-label="t('author.index.actionsFor', { name: author.name })"
           @click.stop
         >

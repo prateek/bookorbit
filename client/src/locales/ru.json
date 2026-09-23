@@ -4692,8 +4692,6 @@
       "resultCount": "{shown} из {total}",
       "noMatches": "Нет совпадений",
       "noMatchesHint": "Попробуйте другое слово для поиска.",
-      "bookCount": "Книги: {count}",
-      "showCount": "Shows: {count}",
       "librariesEmptyHint": "Создайте библиотеку для добавления книг.",
       "podcastLibrariesEmptyHint": "Create a podcast library to start following shows.",
       "smartScopesEmptyHint": "Умные списки сохраняют часто используемый набор фильтров.",
