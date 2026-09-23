@@ -14,6 +14,8 @@ const { data, loading, error } = useMetadataFreshnessGauge()
 const option = shallowRef({})
 
 const totalBooks = computed(() => data.value.totalBooks)
+// A library whose books were never matched to a provider has nothing to go stale, so a 0% gauge would be a permanent false alarm.
+const neverFetchedAll = computed(() => totalBooks.value > 0 && data.value.neverFetchedCount >= totalBooks.value)
 const statCards = computed(() => {
   const total = totalBooks.value
   const percent = (count: number) => (total > 0 ? `${Math.round((count / total) * 100)}%` : '0%')
@@ -34,7 +36,7 @@ function scoreColor(score: number): string {
 }
 
 watchEffect(() => {
-  if (data.value.totalBooks === 0) {
+  if (data.value.totalBooks === 0 || neverFetchedAll.value) {
     option.value = {}
     return
   }
@@ -60,8 +62,8 @@ watchEffect(() => {
         max: 100,
         startAngle: 210,
         endAngle: -30,
-        center: ['50%', '58%'],
-        radius: '95%',
+        center: ['50%', '55%'],
+        radius: '82%',
         splitNumber: 5,
         axisLine: {
           lineStyle: {
@@ -77,12 +79,12 @@ watchEffect(() => {
         },
         // Keep the 5-band ramp visible; progress overlay picks theme primary color.
         progress: { show: false },
-        pointer: { show: true, width: 4, length: '70%', itemStyle: { color: activeColor } },
+        pointer: { show: true, width: 4, length: '52%', itemStyle: { color: activeColor } },
         axisTick: { show: false },
         splitLine: { distance: -16, length: 6 },
-        axisLabel: { distance: -24, fontSize: 10 },
-        detail: { valueAnimation: true, formatter: '{value}%', fontSize: 24, fontWeight: 700, color: activeColor, offsetCenter: [0, '22%'] },
-        title: { show: true, offsetCenter: [0, '44%'], fontSize: 11, color: foreground },
+        axisLabel: { distance: 18, fontSize: 11 },
+        detail: { valueAnimation: true, formatter: '{value}%', fontSize: 24, fontWeight: 700, color: activeColor, offsetCenter: [0, '42%'] },
+        title: { show: true, offsetCenter: [0, '68%'], fontSize: 11, color: foreground },
         data: [{ value: data.value.freshnessScore, name: 'Freshness' }],
       },
     ],
@@ -91,14 +93,23 @@ watchEffect(() => {
 </script>
 
 <template>
-  <ChartCard :title="t('statistics.charts.metadataFreshness.title')" :icon="Gauge" :color-index="2" :loading :error :empty="totalBooks === 0">
+  <ChartCard
+    :title="t('statistics.charts.metadataFreshness.title')"
+    :icon="Gauge"
+    :color-index="2"
+    :loading
+    :error
+    :empty="totalBooks === 0 || neverFetchedAll"
+    :empty-title="neverFetchedAll ? t('statistics.charts.metadataFreshness.neverFetchedTitle') : undefined"
+    :empty-description="neverFetchedAll ? t('statistics.charts.metadataFreshness.neverFetchedDescription') : undefined"
+  >
     <div class="flex h-full flex-col">
       <VChart :option="option" autoresize style="height: 76%" />
       <div class="mt-0 grid grid-cols-3 gap-2 px-1">
         <div v-for="card in statCards" :key="card.label" class="bg-muted/40 border-border/60 rounded-md border px-2 py-1 text-center">
-          <p class="text-muted-foreground text-[10px] leading-none">{{ card.label }}</p>
+          <p class="text-muted-foreground text-[11px] leading-none">{{ card.label }}</p>
           <p class="mt-1 text-sm leading-none font-semibold tabular-nums">{{ card.value }}</p>
-          <p class="text-muted-foreground text-[10px] leading-none">{{ card.sub }}</p>
+          <p class="text-muted-foreground text-[11px] leading-none">{{ card.sub }}</p>
         </div>
       </div>
     </div>

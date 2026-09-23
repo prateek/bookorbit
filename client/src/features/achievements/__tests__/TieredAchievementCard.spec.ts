@@ -174,14 +174,17 @@ describe('TieredAchievementCard', () => {
 
   it('clicking toggles expansion', async () => {
     const wrapper = mount(TieredAchievementCard, { props: { group: makeGroup() } })
+    const toggle = wrapper.get('button')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
     expect(wrapper.find('[class*="border-t"]').exists()).toBe(false)
-    await wrapper.trigger('click')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
     expect(wrapper.find('[class*="border-t"]').exists()).toBe(true)
   })
 
   it('expanded panel shows tier list', async () => {
     const wrapper = mount(TieredAchievementCard, { props: { group: makeGroup() } })
-    await wrapper.trigger('click')
+    await wrapper.get('button').trigger('click')
     expect(wrapper.text()).toContain('Ink Initiate')
     expect(wrapper.text()).toContain('Spine Scout')
     expect(wrapper.text()).toContain('Story Stalwart')
@@ -190,7 +193,7 @@ describe('TieredAchievementCard', () => {
 
   it('expanded panel shows tier dates for earned tiers', async () => {
     const wrapper = mount(TieredAchievementCard, { props: { group: makeGroup() } })
-    await wrapper.trigger('click')
+    await wrapper.get('button').trigger('click')
     const expectedDate = new Date('2026-05-15T00:00:00Z').toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'short',

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatDate } from '@/i18n/formatters'
-import { Check, Lock } from '@lucide/vue'
+import { Check, ChevronDown, Lock } from '@lucide/vue'
 import type { AchievementItem, AchievementRarity } from '@bookorbit/types'
 import { resolveLucideIcon } from '../utils/resolveLucideIcon'
 
@@ -126,55 +126,67 @@ function formatAchievementDate(dateStr: string | null): string | null {
   })
 }
 
+// Only earned cards have detail to reveal, so only they are a control.
+const expandable = computed<boolean>(() => props.achievement.earned)
+
 function handleClick(): void {
-  if (!isHiddenAndLocked.value) {
+  if (expandable.value) {
     isExpanded.value = !isExpanded.value
   }
 }
 </script>
 
 <template>
-  <div :class="['relative rounded-xl border p-3 transition-all', cardClasses, { 'animate-pulse': isHiddenAndLocked }]" @click="handleClick">
+  <div :class="['relative rounded-xl border transition-all', cardClasses, { 'animate-pulse': isHiddenAndLocked }]">
     <div v-if="achievement.earned" class="absolute top-2 right-2 rounded-full bg-green-500/20 p-0.5">
       <Check class="size-3 text-green-400" />
     </div>
 
-    <div class="flex items-start gap-3">
-      <div class="mt-0.5 shrink-0">
-        <component :is="IconComponent" :class="['size-9', iconColorClass]" />
-      </div>
-      <div :class="['min-w-0 flex-1', achievement.earned ? 'pr-6' : '']">
-        <div class="flex items-start justify-between gap-2">
-          <span :class="['text-sm font-semibold leading-tight', isLocked ? 'text-current' : 'text-foreground']">
+    <component
+      :is="expandable ? 'button' : 'div'"
+      v-bind="expandable ? { type: 'button', 'aria-expanded': isExpanded } : {}"
+      class="block w-full rounded-xl p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      @click="handleClick"
+    >
+      <span class="flex items-start gap-3">
+        <span class="mt-0.5 shrink-0">
+          <component :is="IconComponent" :class="['size-9', iconColorClass]" />
+        </span>
+        <span :class="['block min-w-0 flex-1', achievement.earned ? 'pr-6' : '']">
+          <span :class="['block text-sm font-semibold leading-tight', isLocked ? 'text-current' : 'text-foreground']">
             {{ isHiddenAndLocked ? t('achievements.secretAchievement') : achievement.name }}
           </span>
-          <span v-if="!isHiddenAndLocked" :class="['shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', rarityClass(achievement.rarity)]">
-            {{ rarityLabel[achievement.rarity] }}
+          <span v-if="!isHiddenAndLocked" :class="['mt-1 line-clamp-2 block text-xs leading-4', isLocked ? 'text-current' : 'text-muted-foreground']">
+            {{ achievement.description }}
           </span>
-          <span v-else class="text-muted-foreground shrink-0 text-xs">???</span>
-        </div>
-        <p v-if="!isHiddenAndLocked" :class="['mt-1 min-h-8 line-clamp-2 text-xs leading-4', isLocked ? 'text-current' : 'text-muted-foreground']">
-          {{ achievement.description }}
-        </p>
-      </div>
-    </div>
-
-    <template v-if="!isHiddenAndLocked">
-      <div v-if="progressPercent != null" class="mt-5 flex items-center gap-2">
-        <div class="bg-foreground/10 h-1.5 flex-1 overflow-hidden rounded-full">
-          <div class="h-full rounded-full bg-current transition-all" :style="{ width: `${progressPercent}%` }" />
-        </div>
-        <span :class="['text-xs tabular-nums', isLocked ? 'text-current' : 'text-muted-foreground']">
-          {{ achievement.currentProgress }} / {{ achievement.threshold }}
         </span>
-      </div>
+      </span>
 
-      <p v-if="earnedDate" class="text-muted-foreground mt-5 text-xs">{{ earnedDate }}</p>
+      <span class="mt-2 flex items-center gap-2 text-xs">
+        <span v-if="!isHiddenAndLocked" :class="['shrink-0 rounded-full px-2 py-0.5 font-medium', rarityClass(achievement.rarity)]">
+          {{ rarityLabel[achievement.rarity] }}
+        </span>
+        <span v-else class="text-muted-foreground shrink-0">???</span>
+        <template v-if="!isHiddenAndLocked && progressPercent != null">
+          <span class="bg-foreground/10 h-1.5 flex-1 overflow-hidden rounded-full">
+            <span class="block h-full rounded-full bg-current transition-all" :style="{ width: `${progressPercent}%` }" />
+          </span>
+          <span :class="['tabular-nums', isLocked ? 'text-current' : 'text-muted-foreground']">
+            {{ achievement.currentProgress }} / {{ achievement.threshold }}
+          </span>
+        </template>
+        <span v-else-if="earnedDate" class="text-muted-foreground min-w-0 flex-1 truncate">{{ earnedDate }}</span>
+        <ChevronDown
+          v-if="expandable"
+          aria-hidden="true"
+          :class="['text-muted-foreground ml-auto size-4 shrink-0 transition-transform motion-reduce:transition-none', isExpanded && 'rotate-180']"
+        />
+      </span>
+    </component>
 
-      <div v-if="isExpanded && achievement.earned" class="border-border mt-3 border-t pt-3">
-        <p v-if="contextBookTitle" class="text-muted-foreground text-xs">{{ t('achievements.whileReading', { title: contextBookTitle }) }}</p>
-        <p class="text-muted-foreground mt-1 text-xs">{{ achievement.description }}</p>
-      </div>
-    </template>
+    <div v-if="isExpanded && achievement.earned" class="border-border mx-3 mb-3 border-t pt-3">
+      <p v-if="contextBookTitle" class="text-muted-foreground text-xs">{{ t('achievements.whileReading', { title: contextBookTitle }) }}</p>
+      <p class="text-muted-foreground mt-1 text-xs">{{ achievement.description }}</p>
+    </div>
   </div>
 </template>

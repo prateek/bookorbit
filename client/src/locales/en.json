@@ -3558,7 +3558,10 @@
       "all": "All",
       "earned": "Earned ({count})",
       "inProgress": "In Progress ({count})",
-      "locked": "Locked ({count})"
+      "locked": "Locked ({count})",
+      "earnedShort": "Earned",
+      "inProgressShort": "In Progress",
+      "lockedShort": "Locked"
     }
   },
   "adminFeature": {
@@ -4114,16 +4117,17 @@
         "noMatch": "No highlights match your filters.",
         "resetFilters": "Reset filters",
         "trashEmpty": "Trash is empty",
-        "noAnnotations": "No annotations yet. Highlights you create on the web or your e-reader appear here.",
+        "noAnnotations": "No highlights yet",
         "noMatchHint": "Try a shorter phrase, or clear the colour and book filters.",
-        "noAnnotationsBody": "Everything you mark, in any book and on any device, collects here.",
+        "noAnnotationsBody": "Highlights and notes you make while reading, here or on an e-reader, collect on this page.",
         "readHere": "Read here",
         "readHereBody": "Select text in the reader and pick a colour.",
         "syncKobo": "Sync a Kobo",
         "syncKoboBody": "Marks made on the device arrive on the next sync.",
         "syncKoreader": "Sync KOReader",
         "syncKoreaderBody": "The plugin uploads annotations with their positions.",
-        "goToLibrary": "Go to the library"
+        "goToLibrary": "Go to the library",
+        "continueReading": "Continue reading"
       },
       "toast": {
         "movedToTrash": "Moved to trash",
@@ -9876,7 +9880,10 @@
       "button": "Configure",
       "title": "Configure Charts",
       "description": "Drag to reorder, toggle to show or hide.",
-      "reset": "Reset to defaults"
+      "descriptionTouch": "Use the arrows to reorder, toggle to show or hide.",
+      "reset": "Reset to defaults",
+      "moveUp": "Move {chart} up",
+      "moveDown": "Move {chart} down"
     },
     "summary": {
       "books": "Books",
@@ -9945,7 +9952,9 @@
         "title": "Metadata Completeness"
       },
       "metadataFreshness": {
-        "title": "Metadata Freshness"
+        "title": "Metadata Freshness",
+        "neverFetchedTitle": "No metadata fetched yet",
+        "neverFetchedDescription": "None of these books has been matched to a metadata provider, so there is nothing to go stale."
       },
       "metadataScoreDistribution": {
         "title": "Metadata Score Distribution"
@@ -9974,7 +9983,7 @@
       },
       "completionLatency": {
         "title": "Completion Latency",
-        "notEnoughData": "Need at least {count} completed books for this chart."
+        "notEnoughData": "Needs at least {count} finished books with a recorded start date."
       },
       "completionTimeline": {
         "title": "Completion Timeline",
@@ -10004,7 +10013,7 @@
         "modeCounts": "Counts",
         "modeDropoff": "Drop-off",
         "started": "Started {count}",
-        "notEnoughData": "Need at least {count} started books for this chart.",
+        "notEnoughData": "Needs reading sessions that record progress in at least {count} books.",
         "noDropOffTitle": "No drop-off observed",
         "noDropOffDescription": "Every started book progressed through all funnel stages in this period."
       },

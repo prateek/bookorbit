@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatDate } from '@/i18n/formatters'
-import { Check, CheckCircle2, Circle } from '@lucide/vue'
+import { Check, CheckCircle2, ChevronDown, Circle } from '@lucide/vue'
 import type { AchievementRarity } from '@bookorbit/types'
 import type { TieredGroup } from '../types'
 import { resolveLucideIcon } from '../utils/resolveLucideIcon'
@@ -125,46 +125,55 @@ function handleClick(): void {
 </script>
 
 <template>
-  <div :class="['relative rounded-xl border p-3 transition-all', cardClasses]" @click="handleClick">
+  <div :class="['relative rounded-xl border transition-all', cardClasses]">
     <div v-if="isAllComplete" class="absolute top-2 right-2 rounded-full bg-green-500/20 p-0.5">
       <Check class="size-3 text-green-400" />
     </div>
 
-    <div class="flex items-start gap-3">
-      <div class="mt-0.5 shrink-0">
-        <component :is="IconComponent" :class="['size-9', iconColorClass]" />
-      </div>
-      <div :class="['min-w-0 flex-1', isAllComplete ? 'pr-6' : '']">
-        <div class="flex items-start justify-between gap-2">
-          <span :class="['text-sm font-semibold leading-tight', isLocked ? 'text-current' : 'text-foreground']">{{ group.displayName }}</span>
-          <span :class="['shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', rarityClass(group.rarity)]">
-            {{ rarityLabel[group.rarity] }}
+    <button
+      type="button"
+      :aria-expanded="isExpanded"
+      class="block w-full rounded-xl p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      @click="handleClick"
+    >
+      <span class="flex items-start gap-3">
+        <span class="mt-0.5 shrink-0">
+          <component :is="IconComponent" :class="['size-9', iconColorClass]" />
+        </span>
+        <span :class="['block min-w-0 flex-1', isAllComplete ? 'pr-6' : '']">
+          <span :class="['block text-sm font-semibold leading-tight', isLocked ? 'text-current' : 'text-foreground']">{{ group.displayName }}</span>
+          <span :class="['mt-1 line-clamp-2 block text-xs leading-4', isLocked ? 'text-current' : 'text-muted-foreground']">
+            {{ group.displayDescription }}
           </span>
-        </div>
-        <p :class="['mt-1 min-h-8 line-clamp-2 text-xs leading-4', isLocked ? 'text-current' : 'text-muted-foreground']">
-          {{ group.displayDescription }}
-        </p>
-      </div>
-    </div>
+        </span>
+      </span>
 
-    <div :class="['mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs', isLocked ? 'text-current' : 'text-muted-foreground']">
-      <div class="flex shrink-0 items-center gap-1">
-        <div v-for="tier in group.tiers" :key="tier.key" :class="['size-2 rounded-full', pipClass(tier.rarity, tier.earned)]" />
-      </div>
-      <span class="shrink-0">{{ t('achievements.tierProgress', { earned: group.earnedCount, total: group.totalTiers }) }}</span>
-      <template v-if="progressPercent != null">
-        <span :class="['shrink-0', isLocked ? 'text-current/70' : 'text-border']">·</span>
-        <span class="min-w-0">{{
-          t('achievements.progressToNext', {
-            current: group.currentProgress,
-            threshold: group.nextUnearned?.threshold,
-            name: group.nextUnearned?.name,
-          })
-        }}</span>
-      </template>
-    </div>
+      <span :class="['mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs', isLocked ? 'text-current' : 'text-muted-foreground']">
+        <span :class="['shrink-0 rounded-full px-2 py-0.5 font-medium', rarityClass(group.rarity)]">
+          {{ rarityLabel[group.rarity] }}
+        </span>
+        <span class="flex shrink-0 items-center gap-1">
+          <span v-for="tier in group.tiers" :key="tier.key" :class="['block size-2 rounded-full', pipClass(tier.rarity, tier.earned)]" />
+        </span>
+        <span class="shrink-0">{{ t('achievements.tierProgress', { earned: group.earnedCount, total: group.totalTiers }) }}</span>
+        <template v-if="progressPercent != null">
+          <span :class="['shrink-0', isLocked ? 'text-current/70' : 'text-border']">·</span>
+          <span class="min-w-0">{{
+            t('achievements.progressToNext', {
+              current: group.currentProgress,
+              threshold: group.nextUnearned?.threshold,
+              name: group.nextUnearned?.name,
+            })
+          }}</span>
+        </template>
+        <ChevronDown
+          aria-hidden="true"
+          :class="['text-muted-foreground ml-auto size-4 shrink-0 transition-transform motion-reduce:transition-none', isExpanded && 'rotate-180']"
+        />
+      </span>
+    </button>
 
-    <div v-if="isExpanded" class="border-border mt-3 border-t pt-3">
+    <div v-if="isExpanded" class="border-border mx-3 mb-3 border-t pt-3">
       <ul class="flex flex-col gap-1.5">
         <li v-for="tier in group.tiers" :key="tier.key" class="flex items-center gap-2 text-xs">
           <CheckCircle2 v-if="tier.earned" class="size-3.5 shrink-0 text-green-500" />
