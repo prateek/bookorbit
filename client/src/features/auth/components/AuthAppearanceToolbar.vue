@@ -120,6 +120,13 @@ async function handleSelectLanguage(locale: Locale) {
   transition: background-color 0.15s ease;
 }
 
+@media (max-width: 767px), (pointer: coarse) {
+  .auth-appearance-button {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+}
+
 .auth-appearance-button:hover,
 .auth-appearance-button:focus-visible {
   background: color-mix(in oklch, var(--card) 92%, transparent);

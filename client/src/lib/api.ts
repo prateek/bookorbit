@@ -163,6 +163,19 @@ export async function fetchWithAuthProxyRecovery(input: RequestInfo | URL, init?
   return isAuthProxyRedirect(res) ? reloadForAuthProxy() : res
 }
 
+/** A gateway answered, but the BookOrbit server behind it did not: restarting, upgrading or down. */
+export class ServerUnavailableError extends NetworkError {
+  constructor(readonly status: number) {
+    super(i18n.global.t('errors.network'))
+    this.name = 'ServerUnavailableError'
+  }
+}
+
+/** The request says nothing about the session, so a signed-in user must not be signed out over it. */
+export function isServerUnreachable(reason: unknown): boolean {
+  return reason instanceof NetworkError || reason instanceof ServerUnavailableError
+}
+
 async function rawFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers)
   if (_accessToken) headers.set('Authorization', `Bearer ${_accessToken}`)
@@ -176,7 +189,8 @@ async function rawFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
 
 async function attemptRefresh(): Promise<string> {
   const res = await rawFetch('/api/v1/auth/refresh', { method: 'POST' })
-  if (!res.ok) throw isServerUnavailableStatus(res.status) ? new NetworkError(`refresh answered ${res.status}`) : new Error('refresh failed')
+  if (isServerUnavailableStatus(res.status)) throw new ServerUnavailableError(res.status)
+  if (!res.ok) throw new Error('refresh failed')
   const data: RefreshResponse = await res.json()
   const recovered = _sawAuthFailure
   setAccessToken(data.accessToken)
@@ -212,8 +226,7 @@ export async function api(input: RequestInfo | URL, init?: RequestInit & { _isRe
   try {
     await refreshAccessToken()
   } catch (reason) {
-    // The refresh never got an answer, so the session may well be intact. Keep it.
-    if (reason instanceof NetworkError) throw reason
+    if (isServerUnreachable(reason)) throw reason
     _onAuthFailure?.()
     throw new Error('Session expired')
   }

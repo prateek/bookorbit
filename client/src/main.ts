@@ -35,6 +35,48 @@ ariaHiddenObserver.observe(document.body, {
   attributeFilter: ['aria-hidden'],
 })
 
+const STALE_CHUNK_RELOAD_KEY = 'bookorbit:stale-chunk-reload-at'
+const STALE_CHUNK_RELOAD_WINDOW_MS = 30_000
+const CHUNK_LOAD_ERROR_PATTERN = /dynamically imported module|Importing a module script failed|Unable to preload CSS/i
+
+// After a server upgrade the old build's lazy chunks are gone, and a tap that needs one fails
+// silently. One reload picks up the new build; the timestamp stops a reload loop when the chunk
+// is missing for some other reason.
+function reloadOnceForStaleChunk(url?: string): boolean {
+  if (!navigator.onLine) return false
+  try {
+    const lastReloadAt = Number(sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY) ?? 0)
+    if (Date.now() - lastReloadAt < STALE_CHUNK_RELOAD_WINDOW_MS) return false
+    sessionStorage.setItem(STALE_CHUNK_RELOAD_KEY, String(Date.now()))
+  } catch {
+    return false
+  }
+  if (url) window.location.assign(url)
+  else window.location.reload()
+  return true
+}
+
+// Lazy route components load after the global guards, so a chunk that fails mid-navigation should
+// reload into the page the user tapped, not the one they were leaving.
+let pendingNavigationHref: string | null = null
+router.beforeEach((to) => {
+  pendingNavigationHref = router.resolve(to.fullPath).href
+})
+router.afterEach((to) => {
+  if (pendingNavigationHref === router.resolve(to.fullPath).href) pendingNavigationHref = null
+})
+
+window.addEventListener('vite:preloadError', (event) => {
+  if (reloadOnceForStaleChunk(pendingNavigationHref ?? undefined)) event.preventDefault()
+})
+
+router.onError((error: unknown, to) => {
+  pendingNavigationHref = null
+  const message = error instanceof Error ? error.message : String(error)
+  if (!CHUNK_LOAD_ERROR_PATTERN.test(message)) return
+  reloadOnceForStaleChunk(router.resolve(to.fullPath).href)
+})
+
 const app = createApp(App)
 
 app.use(createPinia())
@@ -43,7 +85,11 @@ app.use(i18n)
 // Load and apply the initial locale (stored preference or browser language) before mount
 // so the first paint is already localized. Server-synced locale is applied later during auth.
 const localeStore = useLocaleStore()
-await localeStore.setLocale(localeStore.locale)
+try {
+  await localeStore.setLocale(localeStore.locale)
+} catch {
+  // English is bundled, so a locale chunk that cannot load must not keep the app from starting.
+}
 
 // Resolve setup status/auth before installing router.
 // app.use(router) triggers initial navigation and guard execution.
@@ -54,14 +100,33 @@ app.mount('#app')
 installAppBadgeClearing()
 
 function prefetchPdfReader() {
-  void Promise.all([import('./features/reader/pdf-v4/PdfV4ReaderView.vue'), import('@embedpdf/pdfium/pdfium.wasm?url')]).then(([, wasm]) => {
-    void fetch(wasm.default, { cache: 'force-cache' })
-  })
+  void Promise.all([import('./features/reader/pdf-v4/PdfV4ReaderView.vue'), import('@embedpdf/pdfium/pdfium.wasm?url')])
+    .then(([, wasm]) => fetch(wasm.default, { cache: 'force-cache' }))
+    .catch(() => {
+      // Prefetch is best-effort; opening a PDF loads the reader on demand.
+    })
 }
 
-const idleWindow = window as Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number }
-if (idleWindow.requestIdleCallback) {
-  idleWindow.requestIdleCallback(prefetchPdfReader, { timeout: 10_000 })
-} else {
-  window.setTimeout(prefetchPdfReader, 5_000)
+function prefersLeanDownloads(): boolean {
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
+  if (connection?.saveData) return true
+  return typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
 }
+
+function whenIdle(callback: () => void) {
+  const idleWindow = window as Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number }
+  if (idleWindow.requestIdleCallback) {
+    idleWindow.requestIdleCallback(callback, { timeout: 10_000 })
+  } else {
+    window.setTimeout(callback, 5_000)
+  }
+}
+
+// The PDF reader and pdfium.wasm are large, so they are warmed only once someone opens a book on a
+// desktop-class connection, never on launch.
+let pdfReaderPrefetchQueued = false
+router.afterEach((to, _from, failure) => {
+  if (failure || pdfReaderPrefetchQueued || to.name !== 'book-detail') return
+  pdfReaderPrefetchQueued = true
+  if (!prefersLeanDownloads()) whenIdle(prefetchPdfReader)
+})

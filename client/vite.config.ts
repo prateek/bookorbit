@@ -90,6 +90,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // Foliate ships under stable, unhashed URLs, and precaching them once served a stale engine
+        // on Firefox (#575). Network-first keeps updates immediate and still reads EPUBs offline.
         globIgnores: ['**/assets/foliate/**'],
         importScripts: ['push-sw.js'],
         // Keep the offline shell at a separate path. Workbox maps '/' and its query variants to
@@ -119,6 +121,20 @@ export default defineConfig({
                 fallbackURL: offlineShellUrl,
               },
               // Status 0 here would include an auth proxy's opaqueredirect and cache it as the page.
+              cacheableResponse: {
+                statuses: [200],
+              },
+            },
+          },
+          {
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/assets/foliate/'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'foliate-engine',
+              networkTimeoutSeconds: 4,
+              expiration: {
+                maxEntries: 60,
+              },
               cacheableResponse: {
                 statuses: [200],
               },

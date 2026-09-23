@@ -76,6 +76,7 @@ defineExpose({ focusAndSelect })
         v-model="model"
         :type="inputType"
         :autocomplete="autocomplete"
+        :autocorrect="autocomplete === 'username' ? 'off' : undefined"
         :required="required"
         :minlength="minlength"
         :maxlength="maxlength"

@@ -4,8 +4,9 @@ import {
   api,
   fetchWithAuthProxyRecovery,
   isServerUnavailableStatus,
-  NetworkError,
+  isServerUnreachable,
   refreshAccessToken,
+  ServerUnavailableError,
   setAccessToken,
   setOnAuthFailure,
 } from '@/lib/api'
@@ -14,6 +15,7 @@ import { cancelPendingDisplaySettingsSync, initDisplaySettingsSync, loadDisplayS
 import { cancelPendingThemeSync, initThemeSync, loadFromServer } from '@/composables/useThemeSync'
 import { cancelPendingLocaleSync, hydrateLocalePreference, initLocaleSync } from '@/composables/useLocaleSync'
 import { useSetupStatus } from './useSetupStatus'
+import { captureRedirectTarget, loginLocation, sanitizeRedirect } from '../lib/auth-redirect'
 import { disconnectAuthorEnrichmentSocket } from '@/features/settings/composables/useAuthorEnrichmentStatus'
 import { disconnectBookMetadataFetchSocket } from '@/features/book-metadata-fetch/composables/useBookMetadataFetchStatus'
 import { resetWhatsNew } from '@/features/whats-new/composables/useWhatsNew'
@@ -32,6 +34,8 @@ export type SessionOutcome = 'authenticated' | 'anonymous' | 'unreachable'
 
 const user = ref<AuthUser | null>(null)
 const isLoading = ref(false)
+/** The last session check could not reach the server, so whether the user is signed in is unknown. */
+const sessionUnavailable = ref(false)
 let sessionRefreshTimer: number | null = null
 
 function canRefreshSession() {
@@ -83,17 +87,19 @@ function clearAuth() {
 }
 
 setOnAuthFailure(() => {
+  const redirect = captureRedirectTarget(router)
   clearAuth()
   // Public pages are reached without a session, so a rejected request there is not a reason to
   // leave. Moving on would strand a reset or magic link, or drop the sign-in redirect.
   if (router.currentRoute.value.meta.public) return
   const { needsSetup } = useSetupStatus()
-  router.push(needsSetup.value ? '/setup' : '/login')
+  void router.replace(needsSetup.value ? '/setup' : loginLocation(redirect))
 })
 
 async function me(): Promise<void> {
   const res = await api('/api/v1/auth/me')
-  if (!res.ok) throw isServerUnavailableStatus(res.status) ? new NetworkError(`me answered ${res.status}`) : new Error('Failed to load user')
+  if (isServerUnavailableStatus(res.status)) throw new ServerUnavailableError(res.status)
+  if (!res.ok) throw new Error('Failed to load user')
   user.value = await res.json()
 }
 
@@ -136,13 +142,17 @@ export function useAuth() {
   async function init(): Promise<SessionOutcome> {
     isLoading.value = true
     let outcome: SessionOutcome = 'authenticated'
+    sessionUnavailable.value = false
     try {
       await refreshAccessToken()
       await me()
       await hydratePreferences()
       startSessionRefresh()
     } catch (reason) {
-      if (!user.value) outcome = reason instanceof NetworkError ? 'unreachable' : 'anonymous'
+      if (!user.value) outcome = isServerUnreachable(reason) ? 'unreachable' : 'anonymous'
+      if (isServerUnreachable(reason) && !user.value) {
+        sessionUnavailable.value = true
+      }
     } finally {
       // An unreachable server is asked again, so the syncs start once, with whichever answer comes back.
       if (outcome !== 'unreachable') {
@@ -174,12 +184,8 @@ export function useAuth() {
     await hydratePreferences({ refreshUser: true })
     startSessionRefresh()
 
-    if (user.value?.isDefaultPassword) {
-      router.push('/')
-    } else {
-      const redirect = router.currentRoute.value.query.redirect as string | undefined
-      router.push(redirect ?? '/')
-    }
+    const redirect = user.value?.isDefaultPassword ? null : sanitizeRedirect(router.currentRoute.value.query.redirect)
+    void router.replace(redirect ?? '/')
   }
 
   async function setup(payload: { username: string; name: string; email: string; password: string; setupToken?: string }): Promise<void> {
@@ -262,5 +268,5 @@ export function useAuth() {
     router.push('/')
   }
 
-  return { user, isLoading, init, login, loginWithMagicLink, logout, me, register, setup }
+  return { user, isLoading, sessionUnavailable, init, login, loginWithMagicLink, logout, me, register, setup }
 }
