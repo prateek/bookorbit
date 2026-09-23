@@ -11,7 +11,7 @@ import type {
 
 import { ReadingAttemptRepository, type AttemptProjection } from './reading-attempt.repository';
 import { ReadingAttemptEventsService } from './reading-attempt-events.service';
-import { READING_DATE_ERROR_CODES } from './user-book-status.constants';
+import { READING_DATE_ERROR_CODES, progressAloneStartsReading } from './user-book-status.constants';
 import { hasReachedProgressThreshold } from '../../common/utils/progress-threshold.utils';
 
 function dateToUtcDate(value: string | null): Date | null {
@@ -273,6 +273,7 @@ export class ReadingAttemptService {
     occurredOn: string;
     origin: Exclude<ReadingAttemptOrigin, 'manual' | 'hardcover' | 'migration'>;
     progress: number;
+    readThreshold: number;
     finishThreshold: number;
     strongRereadEvidence: boolean;
     meaningfulActivity: boolean;
@@ -332,7 +333,9 @@ export class ReadingAttemptService {
         });
         changed = true;
       }
-      if (!active && !isFinished && (input.progress > 0 || input.strongRereadEvidence || input.meaningfulActivity)) {
+      const startsAttempt =
+        progressAloneStartsReading(input.progress, input.readThreshold, input.origin) || input.strongRereadEvidence || input.meaningfulActivity;
+      if (!active && !isFinished && startsAttempt) {
         active = await this.repo.createActive(tx, {
           userId: input.userId,
           bookId: input.bookId,
