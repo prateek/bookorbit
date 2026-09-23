@@ -72,7 +72,7 @@ function tileClass(size: StatisticsChartSize): string {
       v-for="(chart, index) in charts"
       :key="chart.id"
       :class="tileClass(STATISTICS_CHART_META[chart.id].size)"
-      class="animate-fade-up"
+      class="animate-fade-up has-[[data-chart-not-applicable]]:hidden max-md:has-[[data-chart-empty-state]]:order-last"
       :style="{ animationDelay: `${index * 60}ms` }"
     >
       <component :is="CHART_COMPONENTS[chart.id]" />

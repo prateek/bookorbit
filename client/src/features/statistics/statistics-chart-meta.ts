@@ -26,7 +26,7 @@ import {
   Zap,
 } from '@lucide/vue'
 
-import { DEFAULT_LIBRARY_CHART_ORDER, DEFAULT_USER_CHART_ORDER, type StatisticsChartId } from '@bookorbit/types'
+import { DEFAULT_USER_CHART_ORDER, type StatisticsChartId } from '@bookorbit/types'
 
 export type StatisticsChartSize = '1x1' | '2x1' | '2x2' | '1x2' | '3x1' | '4x1'
 export type StatisticsChartCategory = 'library' | 'user'
@@ -239,7 +239,28 @@ export const STATISTICS_CHART_META: Record<StatisticsChartId, StatisticsChartMet
   },
 }
 
-export const LIBRARY_CHART_IDS: StatisticsChartId[] = DEFAULT_LIBRARY_CHART_ORDER.filter((id): id is StatisticsChartId => id in STATISTICS_CHART_META)
+/** What is in the library leads; health and metadata-provider gauges follow, since many libraries never fetch metadata. */
+export const LIBRARY_CHART_IDS: StatisticsChartId[] = [
+  'top-series',
+  'books-added-over-time',
+  'top-authors',
+  'genre-distribution',
+  'format-distribution',
+  'language-distribution',
+  'storage-by-format',
+  'largest-books',
+  'publication-decade',
+  'publication-year-timeline',
+  'page-count-distribution',
+  'format-share-over-time',
+  'acquisition-lag-scatter',
+  'genre-cooccurrence',
+  'library-integrity-gauge',
+  'metadata-score-distribution',
+  'metadata-freshness-gauge',
+  'metadata-completeness',
+  'library-metadata-completeness',
+]
 
 export const USER_CHART_IDS: StatisticsChartId[] = DEFAULT_USER_CHART_ORDER.filter((id): id is StatisticsChartId => id in STATISTICS_CHART_META)
 

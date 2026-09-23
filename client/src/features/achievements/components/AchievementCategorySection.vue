@@ -101,7 +101,7 @@ const filteredItems = computed<DisplayItem[]>(() => {
 
     <p v-if="filteredItems.length === 0" class="text-muted-foreground py-4 text-center text-sm">{{ t('achievements.noMatchFilter') }}</p>
 
-    <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-6">
+    <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-3 sm:gap-6">
       <template v-for="item in filteredItems" :key="item.type === 'tiered' ? item.groupKey : item.achievement.key">
         <TieredAchievementCard v-if="item.type === 'tiered'" :group="item" />
         <AchievementCard v-else :achievement="item.achievement" />

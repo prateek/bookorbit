@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useMediaQuery } from '@vueuse/core'
 import { Bell, BellOff, CheckCheck, Trash2 } from '@lucide/vue'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
@@ -16,6 +17,8 @@ const { t } = useI18n()
 const { notifications, unreadCount, loading, hasMore, fetchNotifications, markAsRead, markAllAsRead, dismiss, clearAll } = useNotifications()
 
 const sheetOpen = ref(false)
+// Phones get a bottom sheet so the shared swipe-down dismiss applies; a side drawer there leaves a sliver and no gesture out.
+const isCompact = useMediaQuery('(max-width: 767px)')
 const confirmClearOpen = ref(false)
 
 watch(sheetOpen, (open) => {
@@ -81,10 +84,16 @@ function handleLoadMore() {
         </SheetTrigger>
       </TooltipTrigger>
 
-      <SheetContent side="right" class="w-[90vw] sm:max-w-md p-0 flex flex-col gap-0">
+      <SheetContent
+        :side="isCompact ? 'bottom' : 'right'"
+        :class="['p-0 flex flex-col gap-0', isCompact ? 'max-h-[85dvh] rounded-t-xl pb-[env(safe-area-inset-bottom)]' : 'w-[90vw] sm:max-w-md']"
+      >
+        <div v-if="isCompact" aria-hidden="true" class="pointer-events-none absolute inset-x-0 top-0 flex justify-center pt-1.5">
+          <span class="h-1 w-10 rounded-full bg-border" />
+        </div>
         <SheetHeader class="flex flex-row items-center justify-between border-b px-4 py-3 h-14 shrink-0 space-y-0">
           <div>
-            <SheetTitle class="text-sm font-semibold text-foreground">{{ t('notifications.title') }}</SheetTitle>
+            <SheetTitle class="text-sm font-semibold text-foreground max-md:text-[17px]">{{ t('notifications.title') }}</SheetTitle>
             <SheetDescription class="sr-only">{{ t('notifications.description') }}</SheetDescription>
           </div>
           <div class="flex items-center gap-1 pr-8">
@@ -133,7 +142,12 @@ function handleLoadMore() {
           </div>
 
           <div v-if="hasMore && !loading" class="p-4">
-            <Button variant="ghost" size="sm" class="w-full text-xs text-muted-foreground border border-dashed" @click="handleLoadMore">
+            <Button
+              variant="ghost"
+              size="sm"
+              class="w-full text-xs text-muted-foreground border border-dashed pointer-coarse:h-11 pointer-coarse:text-sm"
+              @click="handleLoadMore"
+            >
               {{ t('notifications.loadMore') }}
             </Button>
           </div>
