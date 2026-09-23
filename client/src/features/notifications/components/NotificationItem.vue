@@ -7,7 +7,7 @@ import { useNotifications } from '../composables/useNotifications'
 import { NOTIFICATION_CATEGORY_ICONS } from '../lib/notification-category-groups'
 
 const props = defineProps<{ notification: NotificationItem }>()
-const emit = defineEmits<{ read: [id: number]; dismiss: [id: number] }>()
+const emit = defineEmits<{ read: [id: number]; dismiss: [id: number]; navigate: [] }>()
 
 const router = useRouter()
 const { formatRelativeTime } = useNotifications()
@@ -48,6 +48,7 @@ function handleClick() {
   if (actionUrl) {
     if (actionUrl.startsWith('/')) {
       router.push(actionUrl)
+      emit('navigate')
     } else {
       window.open(actionUrl, '_blank')
     }
@@ -64,7 +65,7 @@ function handleDismiss(e: Event) {
   <div class="group relative">
     <button
       type="button"
-      class="flex w-full cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 pr-10 text-left transition-all hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      class="flex w-full cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 pr-10 text-left pointer-coarse:pr-12 transition-all hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       :class="
         notification.read
           ? 'border-border/30 bg-muted/20 hover:border-border/50 hover:bg-muted/40'
@@ -98,7 +99,7 @@ function handleDismiss(e: Event) {
             <span class="text-[11px] text-muted-foreground">{{ relativeTime }}</span>
           </div>
         </div>
-        <p v-if="notification.message" class="mt-1 truncate text-xs text-muted-foreground">
+        <p v-if="notification.message" class="mt-1 line-clamp-3 break-words text-xs text-muted-foreground">
           {{ notification.message }}
         </p>
       </div>
@@ -107,7 +108,7 @@ function handleDismiss(e: Event) {
     <button
       type="button"
       :aria-label="$t('notifications.dismiss')"
-      class="absolute right-2 top-2 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+      class="absolute right-2 top-2 flex items-center justify-center rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 pointer-coarse:right-0 pointer-coarse:top-0 pointer-coarse:size-11 pointer-coarse:opacity-100"
       @click="handleDismiss"
     >
       <X :size="14" aria-hidden="true" />
