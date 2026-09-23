@@ -166,6 +166,7 @@ describe('ReadingAttemptService', () => {
         occurredOn: '2026-07-12',
         origin: 'kobo',
         progress: 25,
+        readThreshold: 0.25,
         finishThreshold: 98,
         strongRereadEvidence: false,
         meaningfulActivity: false,
@@ -193,6 +194,7 @@ describe('ReadingAttemptService', () => {
       occurredOn: '2026-07-12',
       origin: 'kobo',
       progress: 25,
+      readThreshold: 0.25,
       finishThreshold: 98,
       strongRereadEvidence: true,
       meaningfulActivity: false,
@@ -222,6 +224,7 @@ describe('ReadingAttemptService', () => {
       occurredOn: '2026-07-12',
       origin: 'kobo',
       progress: 99,
+      readThreshold: 0.25,
       finishThreshold: 98,
       strongRereadEvidence: true,
       meaningfulActivity: false,
@@ -230,6 +233,68 @@ describe('ReadingAttemptService', () => {
     expect(result?.status).toBe('read');
     expect(fake.rows).toHaveLength(2);
     expect(fake.rows[1]).toMatchObject({ startedOn: '2026-07-12', endedOn: '2026-07-12', outcome: 'completed' });
+  });
+
+  describe('starting an attempt from progress alone', () => {
+    const peek = { userId: 1, bookId: 10, occurredOn: '2026-07-12', origin: 'bookorbit' as const, finishThreshold: 98, strongRereadEvidence: false };
+
+    it.each([0.5, 2])('treats %s%% progress without session activity as a peek', async (progress) => {
+      const result = await service.recordActivity({ ...peek, progress, readThreshold: 0.25, meaningfulActivity: false });
+
+      expect(result).toBeNull();
+      expect(fake.rows).toHaveLength(0);
+      expect(fake.projections).toHaveLength(0);
+    });
+
+    it('honors a library reading threshold above the peek floor', async () => {
+      const below = await service.recordActivity({ ...peek, progress: 9, readThreshold: 10, meaningfulActivity: false });
+      expect(below).toBeNull();
+      expect(fake.rows).toHaveLength(0);
+
+      const above = await service.recordActivity({ ...peek, progress: 10, readThreshold: 10, meaningfulActivity: false });
+      expect(above?.status).toBe('reading');
+      expect(fake.rows).toHaveLength(1);
+    });
+
+    it('starts reading once progress alone passes the peek floor', async () => {
+      const result = await service.recordActivity({ ...peek, progress: 2.5, readThreshold: 0.25, meaningfulActivity: false });
+
+      expect(result?.status).toBe('reading');
+      expect(fake.rows[0]).toMatchObject({ startedOn: '2026-07-12', outcome: null, origin: 'bookorbit' });
+    });
+
+    it('measures Kobo pushes against the Kobo sync threshold instead of the peek floor', async () => {
+      const below = await service.recordActivity({ ...peek, origin: 'kobo', progress: 0.5, readThreshold: 1, meaningfulActivity: false });
+      expect(below).toBeNull();
+      expect(fake.rows).toHaveLength(0);
+
+      const above = await service.recordActivity({ ...peek, origin: 'kobo', progress: 1.5, readThreshold: 1, meaningfulActivity: false });
+      expect(above?.status).toBe('reading');
+      expect(fake.rows[0]).toMatchObject({ origin: 'kobo' });
+    });
+
+    it('does not start reading at zero progress even with a zero threshold', async () => {
+      const result = await service.recordActivity({ ...peek, origin: 'kobo', progress: 0, readThreshold: 0, meaningfulActivity: false });
+
+      expect(result).toBeNull();
+      expect(fake.rows).toHaveLength(0);
+    });
+
+    it('starts reading at low progress when a meaningful session backs it', async () => {
+      const result = await service.recordActivity({ ...peek, progress: 0.5, readThreshold: 0.25, meaningfulActivity: true });
+
+      expect(result?.status).toBe('reading');
+      expect(fake.rows).toHaveLength(1);
+    });
+
+    it('keeps an attempt that is already active when progress drops back below the floor', async () => {
+      await fake.repo.createActive({}, { userId: 1, bookId: 10, startedOn: '2026-07-01', origin: 'bookorbit' });
+
+      const result = await service.recordActivity({ ...peek, progress: 1, readThreshold: 0.25, meaningfulActivity: false });
+
+      expect(result?.status).toBe('reading');
+      expect(fake.rows).toHaveLength(1);
+    });
   });
 
   it('completes the active attempt without creating a duplicate', async () => {
@@ -251,6 +316,7 @@ describe('ReadingAttemptService', () => {
       occurredOn: '2026-07-12',
       origin: 'bookorbit',
       progress: 99,
+      readThreshold: 0.25,
       finishThreshold: 98,
       strongRereadEvidence: false,
       meaningfulActivity: true,
@@ -549,6 +615,7 @@ describe('ReadingAttemptService', () => {
         occurredOn: '2026-07-12',
         origin: 'kobo',
         progress: 100,
+        readThreshold: 0.25,
         finishThreshold: 98,
         strongRereadEvidence: false,
         meaningfulActivity: true,

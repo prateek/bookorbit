@@ -42,6 +42,29 @@ export class NotificationRepository {
       .returning();
   }
 
+  async findUnreadInGroup(
+    userIds: number[],
+    groupKey: string,
+  ): Promise<Map<number, Pick<Notification, 'title' | 'message' | 'actionUrl'> & { meta: Record<string, unknown> | null }>> {
+    if (userIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({
+        userId: notifications.userId,
+        title: notifications.title,
+        message: notifications.message,
+        actionUrl: notifications.actionUrl,
+        meta: notifications.meta,
+      })
+      .from(notifications)
+      .where(and(inArray(notifications.userId, userIds), eq(notifications.groupKey, groupKey), eq(notifications.read, false)));
+    return new Map(
+      rows.map((row) => [
+        row.userId,
+        { title: row.title, message: row.message, actionUrl: row.actionUrl, meta: (row.meta as Record<string, unknown> | null) ?? null },
+      ]),
+    );
+  }
+
   async findByUser(userId: number, limit: number, offset: number): Promise<{ items: Notification[]; total: number }> {
     const [items, [{ value: total }]] = await Promise.all([
       this.db

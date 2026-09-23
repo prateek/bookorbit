@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, max, min, notExists, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { BOOK_FORMATS, isAudioFormat, type ContentFilterRules, type ReadStatus } from '@bookorbit/types';
+import { BOOK_FORMATS, compareSeriesIndices, isAudioFormat, parseSeriesIndex, type ContentFilterRules, type ReadStatus } from '@bookorbit/types';
 
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
@@ -14,11 +14,73 @@ type UpNextInSeriesRow = { id: number };
 type RandomCandidateRow = { sampleIndex: number; id: number };
 const AUDIO_FORMATS = BOOK_FORMATS.filter(isAudioFormat);
 const CONTINUE_SCROLLER_EXCLUDED_READ_STATUSES = ['unread', 'read', 'skimmed', 'abandoned'] as const satisfies readonly ReadStatus[];
+// Reading progress alone is not enough: opening a chapter below the library reading threshold
+// records progress without starting the book, and those peeks must stay off the shelf.
+const CONTINUE_READING_STATUSES = ['reading', 'rereading'] as const satisfies readonly ReadStatus[];
 const DISCOVERY_EXCLUDED_READ_STATUSES = ['reading', 'rereading', 'on_hold', 'read', 'skimmed', 'abandoned'] as const satisfies readonly ReadStatus[];
 // Three independent pivots per requested row tolerate moderate collisions from
 // sparse eligibility. The ceiling prevents large requests from multiplying probes.
 const RANDOM_PIVOT_MULTIPLIER = 3;
 const RANDOM_MAX_PIVOTS = 60;
+// Recently added is read in keyset pages so one serial dropping hundreds of chapters cannot
+// fill the shelf: each later page skips the series already grouped. Both caps bound the work.
+const RECENTLY_ADDED_PAGE_MULTIPLIER = 10;
+const RECENTLY_ADDED_MIN_PAGE = 100;
+const RECENTLY_ADDED_MAX_PAGE = 500;
+const RECENTLY_ADDED_MAX_PAGES = 4;
+
+type RecentlyAddedRow = { id: number; seriesId: number | null; seriesIndex: string | null; addedAt: Date };
+// The keyset cursor keeps Postgres' microsecond text form: a JS Date would round it to the
+// millisecond and skip rows that land between the rounded and the stored value.
+type RecentlyAddedPageRow = RecentlyAddedRow & { addedAtKey: string };
+
+/** One recently added book, or every recently added book of one series, as a single shelf entry. */
+export interface RecentlyAddedGroup {
+  /** The earliest entry by series order: the first new chapter a reader would open. */
+  bookId: number;
+  seriesId: number | null;
+  /** Grouped books in series order. Bounded by the scanned pages, so a very large drop undercounts. */
+  bookIds: number[];
+  latestAddedAt: Date;
+}
+
+function compareRecentlyAddedSeriesOrder(left: RecentlyAddedRow, right: RecentlyAddedRow): number {
+  const leftIndex = parseSeriesIndex(left.seriesIndex);
+  const rightIndex = parseSeriesIndex(right.seriesIndex);
+  if (leftIndex != null && rightIndex != null) {
+    const byIndex = compareSeriesIndices(leftIndex, rightIndex);
+    if (byIndex !== 0) return byIndex;
+  } else if (leftIndex != null) {
+    return -1;
+  } else if (rightIndex != null) {
+    return 1;
+  }
+  const byAddedAt = left.addedAt.getTime() - right.addedAt.getTime();
+  return byAddedAt !== 0 ? byAddedAt : left.id - right.id;
+}
+
+export function groupRecentlyAddedRows(rows: RecentlyAddedRow[], limit: number): RecentlyAddedGroup[] {
+  const groups = new Map<string, RecentlyAddedRow[]>();
+  const seenIds = new Set<number>();
+  for (const row of rows) {
+    if (seenIds.has(row.id)) continue;
+    seenIds.add(row.id);
+    const key = row.seriesId == null ? `book:${row.id}` : `series:${row.seriesId}`;
+    const existing = groups.get(key);
+    if (existing) existing.push(row);
+    else if (groups.size < limit) groups.set(key, [row]);
+  }
+
+  return [...groups.values()].map((members) => {
+    const ordered = [...members].sort(compareRecentlyAddedSeriesOrder);
+    return {
+      bookId: ordered[0].id,
+      seriesId: ordered[0].seriesId,
+      bookIds: ordered.map((member) => member.id),
+      latestAddedAt: members[0].addedAt,
+    };
+  });
+}
 
 @Injectable()
 export class DashboardRepository {
@@ -37,6 +99,56 @@ export class DashboardRepository {
       .limit(limit);
 
     return rows.map((row) => row.id);
+  }
+
+  /**
+   * The recently added shelf with each series folded into one entry, newest series first.
+   *
+   * Pages walk `added_at` newest first. The first page groups whatever it finds; every later page
+   * skips the series already grouped, so a large drop from one series costs one page instead of
+   * crowding everything else off the shelf.
+   */
+  async findRecentlyAddedGroups(accessibleLibraryIds: number[], limit: number, contentFilters?: ContentFilterRules): Promise<RecentlyAddedGroup[]> {
+    if (accessibleLibraryIds.length === 0 || limit <= 0) return [];
+    const cfClauses = contentFilters ? buildContentFilterClauses(contentFilters, this.db) : [];
+    const pageSize = Math.min(Math.max(limit * RECENTLY_ADDED_PAGE_MULTIPLIER, RECENTLY_ADDED_MIN_PAGE), RECENTLY_ADDED_MAX_PAGE);
+
+    const rows: RecentlyAddedRow[] = [];
+    const groupedSeriesIds = new Set<number>();
+    let groupCount = 0;
+    let cursor: RecentlyAddedPageRow | null = null;
+
+    for (let page = 0; page < RECENTLY_ADDED_MAX_PAGES && groupCount < limit; page++) {
+      const excludedSeriesIds = page === 0 ? [] : [...groupedSeriesIds];
+      const pageRows: RecentlyAddedPageRow[] = await this.db
+        .select({
+          id: books.id,
+          seriesId: bookMetadata.seriesId,
+          seriesIndex: bookMetadata.seriesIndex,
+          addedAt: books.addedAt,
+          addedAtKey: sql<string>`${books.addedAt}::text`,
+        })
+        .from(books)
+        .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+        .where(
+          and(
+            inArray(books.libraryId, accessibleLibraryIds),
+            cursor ? sql`(${books.addedAt}, ${books.id}) < (${cursor.addedAtKey}::timestamptz, ${cursor.id}::integer)` : undefined,
+            excludedSeriesIds.length > 0 ? or(isNull(bookMetadata.seriesId), notInArray(bookMetadata.seriesId, excludedSeriesIds)) : undefined,
+            ...cfClauses,
+          ),
+        )
+        .orderBy(desc(books.addedAt), desc(books.id))
+        .limit(pageSize);
+
+      rows.push(...pageRows);
+      groupCount = groupRecentlyAddedRows(rows, limit).length;
+      for (const row of pageRows) if (row.seriesId != null) groupedSeriesIds.add(row.seriesId);
+      if (pageRows.length < pageSize) break;
+      cursor = pageRows[pageRows.length - 1];
+    }
+
+    return groupRecentlyAddedRows(rows, limit);
   }
 
   /**
@@ -80,14 +192,14 @@ export class DashboardRepository {
       .from(books)
       .leftJoin(bookFiles, eq(bookFiles.id, books.primaryFileId))
       .leftJoin(readingProgress, and(eq(readingProgress.bookFileId, bookFiles.id), eq(readingProgress.userId, userId)))
-      .leftJoin(userBookStatus, and(eq(userBookStatus.bookId, books.id), eq(userBookStatus.userId, userId)))
+      .innerJoin(userBookStatus, and(eq(userBookStatus.bookId, books.id), eq(userBookStatus.userId, userId)))
       .where(
         and(
           inArray(books.libraryId, accessibleLibraryIds),
           eq(books.status, 'present'),
           or(isNull(bookFiles.format), notInArray(bookFiles.format, AUDIO_FORMATS)),
           sql`${readingProgress.percentage} > 0 and ${readingProgress.percentage} < 100`,
-          or(isNull(userBookStatus.bookId), notInArray(userBookStatus.status, [...CONTINUE_SCROLLER_EXCLUDED_READ_STATUSES])),
+          inArray(userBookStatus.status, [...CONTINUE_READING_STATUSES]),
           ...cfClauses,
         ),
       )
@@ -105,14 +217,14 @@ export class DashboardRepository {
       .from(books)
       .leftJoin(bookFiles, eq(bookFiles.id, books.primaryFileId))
       .leftJoin(readingProgress, and(eq(readingProgress.bookFileId, bookFiles.id), eq(readingProgress.userId, userId)))
-      .leftJoin(userBookStatus, and(eq(userBookStatus.bookId, books.id), eq(userBookStatus.userId, userId)))
+      .innerJoin(userBookStatus, and(eq(userBookStatus.bookId, books.id), eq(userBookStatus.userId, userId)))
       .where(
         and(
           inArray(books.libraryId, accessibleLibraryIds),
           eq(books.status, 'present'),
           or(isNull(bookFiles.format), notInArray(bookFiles.format, AUDIO_FORMATS)),
           sql`${readingProgress.percentage} > 0 and ${readingProgress.percentage} < 100`,
-          or(isNull(userBookStatus.bookId), notInArray(userBookStatus.status, [...CONTINUE_SCROLLER_EXCLUDED_READ_STATUSES])),
+          inArray(userBookStatus.status, [...CONTINUE_READING_STATUSES]),
           ...cfClauses,
         ),
       );
@@ -262,6 +374,7 @@ export class DashboardRepository {
           ${books.libraryId} as library_id,
 	          ${bookMetadata.seriesId} as series_id,
           ${bookMetadata.seriesIndex} as series_index,
+          ${bookMetadata.publishedDate} as published_date,
           ${books.addedAt} as added_at,
           ${mergedProgress} as current_progress,
           case
@@ -285,7 +398,6 @@ export class DashboardRepository {
         where ${books.libraryId} in (${libraryIdList})
           and ${books.status} = 'present'
 	          and ${bookMetadata.seriesId} is not null
-          and ${bookMetadata.seriesIndex} is not null
           ${filterSql}
       ),
       ordered_series as (
@@ -294,6 +406,7 @@ export class DashboardRepository {
           ssb.library_id,
 	          ssb.series_id,
           ssb.series_index,
+          ssb.published_date,
           ssb.added_at,
           ssb.current_progress,
           ssb.is_completed,
@@ -301,29 +414,30 @@ export class DashboardRepository {
           lag(ssb.is_completed) over (
 	            partition by ssb.library_id, ssb.series_id
             order by ${seriesIndexSortKey(sql.raw('ssb.series_index'))} asc,
-              ssb.series_index collate "C" asc, ssb.added_at asc, ssb.id asc
+              ssb.series_index collate "C" asc, ssb.published_date asc nulls last, ssb.added_at asc, ssb.id asc
           ) as previous_is_completed,
           lag(ssb.completion_updated_at) over (
 	            partition by ssb.library_id, ssb.series_id
             order by ${seriesIndexSortKey(sql.raw('ssb.series_index'))} asc,
-              ssb.series_index collate "C" asc, ssb.added_at asc, ssb.id asc
+              ssb.series_index collate "C" asc, ssb.published_date asc nulls last, ssb.added_at asc, ssb.id asc
           ) as previous_completion_updated_at
         from scoped_series_books ssb
       ),
       next_candidates as (
 	        select distinct on (os.library_id, os.series_id)
           os.id,
-          os.previous_completion_updated_at
+          os.previous_completion_updated_at,
+          os.added_at
         from ordered_series os
         where os.previous_is_completed = true
           and os.is_completed = false
           and os.current_progress = 0
 	        order by os.library_id, os.series_id, ${seriesIndexSortKey(sql.raw('os.series_index'))} asc,
-            os.series_index collate "C" asc, os.added_at asc, os.id asc
+            os.series_index collate "C" asc, os.published_date asc nulls last, os.added_at asc, os.id asc
       )
       select nc.id
       from next_candidates nc
-      order by nc.previous_completion_updated_at desc nulls last, nc.id desc
+      order by greatest(nc.previous_completion_updated_at, nc.added_at) desc nulls last, nc.id desc
       limit ${limit}
     `);
 
@@ -364,6 +478,7 @@ export class DashboardRepository {
       eq(books.status, 'present'),
       hasNoProgress,
       hasNoExcludedReadStatus,
+      this.isFirstInSeries(accessibleLibraryIds),
       ...cfClauses,
     )!;
 
@@ -390,6 +505,45 @@ export class DashboardRepository {
     }
 
     return [...sampledIds, ...fallbackRows.map((row) => row.id)].slice(0, limit);
+  }
+
+  /**
+   * Books outside any series, or the earliest present entry of theirs. Discovery should start a
+   * series at its beginning rather than drop the reader into chapter 900 of a serial. Each probe
+   * walks bm_series_id_index_book_id_idx and stops at the first earlier entry it finds.
+   */
+  private isFirstInSeries(accessibleLibraryIds: number[]): SQL {
+    const libraryIdList = sql.join(
+      accessibleLibraryIds.map((libraryId) => sql`${libraryId}`),
+      sql`, `,
+    );
+    const hasEarlierEntry = (predicate: SQL) => sql`exists (
+      select 1
+      from ${bookMetadata} earlier
+      inner join ${books} earlier_book on earlier_book.id = earlier.book_id
+      where earlier.series_id = self.series_id
+        and earlier.book_id <> self.book_id
+        and earlier_book.status = 'present'
+        and earlier_book.library_id in (${libraryIdList})
+        and ${predicate}
+    )`;
+    const earlierByIndex = sql`(${seriesIndexSortKey(sql.raw('earlier.series_index'))}, earlier.series_index collate "C", coalesce(earlier.published_date, 'infinity'::date), earlier.book_id)
+      < (${seriesIndexSortKey(sql.raw('self.series_index'))}, self.series_index collate "C", coalesce(self.published_date, 'infinity'::date), self.book_id)`;
+    // Unindexed chapters sort after indexed ones, then by release date, matching the series reading order.
+    const earlierUnindexed = sql`(earlier.series_index is not null
+      or (coalesce(earlier.published_date, 'infinity'::date), earlier.book_id) < (coalesce(self.published_date, 'infinity'::date), self.book_id))`;
+
+    return sql`not exists (
+      select 1
+      from ${bookMetadata} self
+      where self.book_id = ${books.id}
+        and self.series_id is not null
+        and (
+          (self.series_index is not null and ${hasEarlierEntry(earlierByIndex)})
+          or (self.series_index is null and ${hasEarlierEntry(earlierUnindexed)})
+        )
+      offset 0
+    )`;
   }
 
   private async findDistributedRandomCandidates(pivots: number[], eligibility: SQL): Promise<number[]> {

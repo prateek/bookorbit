@@ -1,7 +1,7 @@
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 
-import { DashboardRepository } from './dashboard.repository';
+import { DashboardRepository, groupRecentlyAddedRows } from './dashboard.repository';
 import { audiobookProgress, bookFiles, books, readingProgress, userBookStatus } from '../../db/schema';
 
 function makeLimitChain<T>(rows: T) {
@@ -84,25 +84,95 @@ describe('DashboardRepository', () => {
     expect(listChain.limit).toHaveBeenCalledWith(2);
   });
 
-  it('maps continue-reading rows to id list and excludes unread plus terminal read statuses', async () => {
+  it('groups recently added rows by series and orders each group by series index', () => {
+    const at = (minute: number) => new Date(Date.UTC(2026, 0, 1, 0, minute));
+    const groups = groupRecentlyAddedRows(
+      [
+        { id: 30, seriesId: 4, seriesIndex: '12', addedAt: at(9) },
+        { id: 29, seriesId: 4, seriesIndex: '10', addedAt: at(8) },
+        { id: 12, seriesId: null, seriesIndex: null, addedAt: at(7) },
+        { id: 28, seriesId: 4, seriesIndex: '11', addedAt: at(6) },
+        { id: 40, seriesId: 5, seriesIndex: '2', addedAt: at(5) },
+        { id: 30, seriesId: 4, seriesIndex: '12', addedAt: at(9) },
+        { id: 41, seriesId: 6, seriesIndex: '1', addedAt: at(4) },
+      ],
+      3,
+    );
+
+    expect(groups).toEqual([
+      { bookId: 29, seriesId: 4, bookIds: [29, 28, 30], latestAddedAt: at(9) },
+      { bookId: 12, seriesId: null, bookIds: [12], latestAddedAt: at(7) },
+      { bookId: 40, seriesId: 5, bookIds: [40], latestAddedAt: at(5) },
+    ]);
+  });
+
+  it('pages past a series that fills the first recently added page', async () => {
+    const at = (minute: number) => new Date(Date.UTC(2026, 0, 1, 0, minute));
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      id: 1000 - index,
+      seriesId: 4,
+      seriesIndex: String(900 - index),
+      addedAt: at(59),
+      addedAtKey: '2026-01-01 00:59:00.123456+00',
+    }));
+    const secondPage = [{ id: 7, seriesId: null, seriesIndex: null, addedAt: at(1), addedAtKey: '2026-01-01 00:01:00+00' }];
+    const firstChain = makeLimitChain(firstPage);
+    const secondChain = makeLimitChain(secondPage);
+    const db = { select: vi.fn().mockReturnValueOnce(firstChain).mockReturnValueOnce(secondChain) };
+    const repo = new DashboardRepository(db as never);
+
+    const groups = await repo.findRecentlyAddedGroups([10], 2);
+    const secondWhere = compileSql(secondChain.where.mock.calls[0]?.[0]);
+
+    expect(groups.map((group) => [group.bookId, group.bookIds.length])).toEqual([
+      [901, 100],
+      [7, 1],
+    ]);
+    expect(firstChain.limit).toHaveBeenCalledWith(100);
+    expect(secondWhere).toContain('::timestamptz');
+    expect(secondWhere).toContain('not in');
+    expect(collectValues(secondChain.where.mock.calls[0]?.[0])).toEqual(expect.arrayContaining(['2026-01-01 00:59:00.123456+00', 4]));
+  });
+
+  it('maps continue-reading rows to id list and requires a reading or rereading status', async () => {
     const listChain = makeLimitChain([{ id: 40 }, { id: 9 }]);
     const db = { select: vi.fn().mockReturnValue(listChain) };
     const repo = new DashboardRepository(db as never);
 
     const result = await repo.findContinueReadingBookIds([8], 55, 10);
     const whereArg = listChain.where.mock.calls[0]?.[0];
+    const whereSql = compileSql(whereArg);
     const whereValues = collectValues(whereArg);
 
     expect(result).toEqual([40, 9]);
-    expect(listChain.leftJoin).toHaveBeenCalledTimes(3);
+    expect(listChain.leftJoin).toHaveBeenCalledTimes(2);
     expect(listChain.leftJoin.mock.calls[0]?.[0]).toBe(bookFiles);
     expect(listChain.leftJoin.mock.calls[1]?.[0]).toBe(readingProgress);
-    expect(listChain.leftJoin.mock.calls[2]?.[0]).toBe(userBookStatus);
+    expect(listChain.innerJoin).toHaveBeenCalledTimes(1);
+    expect(listChain.innerJoin.mock.calls[0]?.[0]).toBe(userBookStatus);
     expect(listChain.leftJoin.mock.calls.some((call) => call[0] === audiobookProgress)).toBe(false);
-    expect(whereValues).toEqual(expect.arrayContaining(['unread', 'read', 'skimmed', 'abandoned']));
-    expect(listChain.innerJoin).not.toHaveBeenCalled();
+    expect(whereSql).toContain('"user_book_status"."status" in');
+    expect(whereSql).not.toContain('"user_book_status"."book_id" is null');
+    expect(whereValues).toEqual(expect.arrayContaining(['reading', 'rereading']));
     expect(listChain.orderBy).toHaveBeenCalledTimes(1);
     expect(listChain.limit).toHaveBeenCalledWith(10);
+  });
+
+  it('counts continue-reading books with the same status gate as the id query', async () => {
+    const countChain = { from: vi.fn(), leftJoin: vi.fn(), innerJoin: vi.fn(), where: vi.fn() };
+    countChain.from.mockReturnValue(countChain);
+    countChain.leftJoin.mockReturnValue(countChain);
+    countChain.innerJoin.mockReturnValue(countChain);
+    countChain.where.mockResolvedValue([{ value: 3 }]);
+    const listChain = makeLimitChain([]);
+    const db = { select: vi.fn().mockReturnValueOnce(countChain).mockReturnValueOnce(listChain) };
+    const repo = new DashboardRepository(db as never);
+
+    await expect(repo.countContinueReadingBooks([8], 55)).resolves.toBe(3);
+    await repo.findContinueReadingBookIds([8], 55, 10);
+
+    expect(countChain.innerJoin.mock.calls[0]?.[0]).toBe(userBookStatus);
+    expect(compileSql(countChain.where.mock.calls[0]?.[0])).toBe(compileSql(listChain.where.mock.calls[0]?.[0]));
   });
 
   it('maps continue-listening rows and excludes unread plus terminal read statuses', async () => {
@@ -193,6 +263,8 @@ describe('DashboardRepository', () => {
     expect(queryText).not.toContain('left join "user_book_status"');
     expect(queryText).toContain('where forward_candidate.id is null');
     expect(queryText).toContain('order by "books"."id" desc');
+    expect(queryText).toContain('from "book_metadata" self');
+    expect(queryText).toContain('earlier.series_index collate "C"');
     expect(Math.random).toHaveBeenCalledTimes(9);
   });
 

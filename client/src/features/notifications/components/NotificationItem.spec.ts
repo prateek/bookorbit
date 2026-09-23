@@ -69,6 +69,14 @@ describe('NotificationItem', () => {
     await wrapper.findAll('button')[0].trigger('click')
 
     expect(push).toHaveBeenCalledExactlyOnceWith('/requests?tab=all')
+    expect(wrapper.emitted('navigate')).toHaveLength(1)
+  })
+
+  it('keeps the dismiss button visible and finger-sized on touch screens', async () => {
+    const { wrapper } = await mountItem(notification())
+    const dismiss = wrapper.get(`button[aria-label="${en.notifications.dismiss}"]`)
+
+    expect(dismiss.classes()).toEqual(expect.arrayContaining(['pointer-coarse:opacity-100', 'pointer-coarse:size-11']))
   })
 
   it.each([

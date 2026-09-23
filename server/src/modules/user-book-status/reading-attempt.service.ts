@@ -10,7 +10,7 @@ import type {
 } from '@bookorbit/types';
 
 import { ReadingAttemptRepository } from './reading-attempt.repository';
-import { READING_DATE_ERROR_CODES } from './user-book-status.constants';
+import { READING_DATE_ERROR_CODES, progressAloneStartsReading } from './user-book-status.constants';
 
 function dateToUtcDate(value: string | null): Date | null {
   return value ? new Date(`${value}T00:00:00.000Z`) : null;
@@ -251,6 +251,7 @@ export class ReadingAttemptService {
     occurredOn: string;
     origin: Exclude<ReadingAttemptOrigin, 'manual' | 'hardcover' | 'migration'>;
     progress: number;
+    readThreshold: number;
     finishThreshold: number;
     strongRereadEvidence: boolean;
     meaningfulActivity: boolean;
@@ -282,7 +283,9 @@ export class ReadingAttemptService {
           origin: input.origin,
         });
       }
-      if (!active && !isFinished && (input.progress > 0 || input.strongRereadEvidence || input.meaningfulActivity)) {
+      const startsAttempt =
+        progressAloneStartsReading(input.progress, input.readThreshold, input.origin) || input.strongRereadEvidence || input.meaningfulActivity;
+      if (!active && !isFinished && startsAttempt) {
         active = await this.repo.createActive(tx, {
           userId: input.userId,
           bookId: input.bookId,

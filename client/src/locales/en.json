@@ -8968,6 +8968,11 @@
     "description": "Review and manage your notifications.",
     "markAllRead": "Mark all read",
     "clear": "Clear",
+    "clearConfirm": {
+      "title": "Clear all notifications?",
+      "description": "This removes every notification, read or unread. It cannot be undone.",
+      "confirm": "Clear all"
+    },
     "empty": "No notifications yet",
     "loadMore": "Load more notifications",
     "dismiss": "Dismiss notification",

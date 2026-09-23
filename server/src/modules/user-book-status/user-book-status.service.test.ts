@@ -803,6 +803,15 @@ describe('reading dates are filed on the reader local day', () => {
   // 8:08 PM on the 19th in Chicago is already the 20th in UTC.
   const EVENING_IN_CHICAGO = new Date('2026-09-20T01:08:15.815Z');
 
+  it("passes the library's reading threshold to the attempt lifecycle", async () => {
+    await attemptService.autoUpdate(1, 10, 5, 10, 98, { timeZone: 'UTC' });
+    expect(mockAttempts.recordActivity).toHaveBeenCalledWith(expect.objectContaining({ progress: 5, readThreshold: 10, finishThreshold: 98 }));
+
+    mockAttempts.recordActivity.mockClear();
+    await attemptService.autoUpdate(1, 10, 5, null, null, { timeZone: 'UTC' });
+    expect(mockAttempts.recordActivity).toHaveBeenCalledWith(expect.objectContaining({ readThreshold: 0.25 }));
+  });
+
   it('files an evening finish west of UTC on the day the reader just lived', async () => {
     await attemptService.autoUpdate(1, 10, 100, 25, 98, { occurredAt: EVENING_IN_CHICAGO, timeZone: 'America/Chicago' });
 

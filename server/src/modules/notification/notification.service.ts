@@ -44,13 +44,22 @@ const PODCAST_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set([
   NotificationType.PodcastDownloadFailed,
 ]);
 
-export interface NotifyPayload {
-  type: NotificationType;
+export interface NotificationContent {
   title: string;
-  message?: string;
-  actionUrl?: string;
-  meta?: Record<string, unknown>;
+  message?: string | null;
+  actionUrl?: string | null;
+  meta?: Record<string, unknown> | null;
+}
+
+export interface NotifyPayload extends NotificationContent {
+  type: NotificationType;
   scope: NotificationScope;
+  /**
+   * Folds this occurrence into the reader's unread notification of the same group. Without it a
+   * repeat replaces the unread content, which is right for status but loses tallies: two scans
+   * that each added books would otherwise show only the second scan's count.
+   */
+  collapse?: (unread: NotificationContent) => NotificationContent;
 }
 
 @Injectable()
@@ -89,15 +98,21 @@ export class NotificationService {
       }
 
       const groupKey = this.buildGroupKey(payload);
-      const rows: NewNotification[] = eligibleUserIds.map((userId) => ({
-        userId,
-        type: payload.type,
-        title: payload.title,
-        message: payload.message ?? null,
-        actionUrl: payload.actionUrl ?? null,
-        meta: payload.meta ?? null,
-        groupKey,
-      }));
+      const unreadByUserId =
+        groupKey && payload.collapse ? await this.repo.findUnreadInGroup(eligibleUserIds, groupKey) : new Map<number, NotificationContent>();
+      const rows: NewNotification[] = eligibleUserIds.map((userId) => {
+        const unread = unreadByUserId.get(userId);
+        const content: NotificationContent = unread && payload.collapse ? payload.collapse(unread) : payload;
+        return {
+          userId,
+          type: payload.type,
+          title: content.title,
+          message: content.message ?? null,
+          actionUrl: content.actionUrl ?? null,
+          meta: content.meta ?? null,
+          groupKey,
+        };
+      });
       const persisted = await this.repo.insertOrCollapse(rows);
       let insertedCount = 0;
       let collapsedCount = 0;
