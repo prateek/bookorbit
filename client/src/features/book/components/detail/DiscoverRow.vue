@@ -1,25 +1,31 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BookOpen, User, Sparkles, ChevronLeft, ChevronRight } from '@lucide/vue'
+import { RouterLink } from 'vue-router'
 
-import type { BookRecommendation, SeriesBookRecommendation } from '@bookorbit/types'
+import type { RelatedShelfItem, SeriesBookRecommendation } from '@bookorbit/types'
 import { api } from '@/lib/api'
 import BookCarousel from '@/features/book/components/detail/BookCarousel.vue'
+import SeriesChapterStrip from '@/features/book/components/detail/SeriesChapterStrip.vue'
+import ShelfScrollButtons from '@/features/book/components/detail/ShelfScrollButtons.vue'
+import { relatedShelfCard, withoutItemsIn } from '@/features/book/components/detail/related-shelf'
 
 type Section = 'series' | 'author' | 'similar'
 
 const props = withDefaults(
   defineProps<{
     bookId: number
+    seriesId?: number | null
     seriesName: string | null
     authorCount: number
+    /** The author's name when the book has exactly one, for the "More by" heading. */
+    authorName?: string | null
     /** Cover size for the shelf; 'lg' is the book detail layout. */
     size?: 'md' | 'lg'
     /** Drops the top rule and margin when the row sits in its own grid cell. */
     flush?: boolean
   }>(),
-  { size: 'md', flush: false },
+  { seriesId: null, authorName: null, size: 'md', flush: false },
 )
 
 const emit = defineEmits<{
@@ -30,205 +36,152 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const seriesBooks = ref<SeriesBookRecommendation[]>([])
-const authorBooks = ref<BookRecommendation[]>([])
-const similarBooks = ref<BookRecommendation[]>([])
-
+const authorItems = ref<RelatedShelfItem[]>([])
+const similarItems = ref<RelatedShelfItem[]>([])
 const loading = ref<Record<Section, boolean>>({ series: false, author: false, similar: false })
-const fetched = ref<Set<Section>>(new Set())
-
-const activeSection = ref<Section | null>(null)
 
 const seriesCarouselRef = ref<InstanceType<typeof BookCarousel> | null>(null)
 const authorCarouselRef = ref<InstanceType<typeof BookCarousel> | null>(null)
 const similarCarouselRef = ref<InstanceType<typeof BookCarousel> | null>(null)
 
-const activeCarouselRef = computed(() => {
-  if (activeSection.value === 'series') return seriesCarouselRef.value
-  if (activeSection.value === 'author') return authorCarouselRef.value
-  return similarCarouselRef.value
-})
+let requestToken = 0
 
 const hasOtherSeriesBooks = computed(() => seriesBooks.value.some((b) => b.id !== props.bookId))
+const filteredSimilar = computed(() => withoutItemsIn(similarItems.value, authorItems.value))
 
-const excludeFromSimilar = computed(() => [...seriesBooks.value.map((b) => b.id), ...authorBooks.value.map((b) => b.id)])
+const authorCards = computed(() => authorItems.value.map((item) => relatedShelfCard(item, t)))
+const similarCards = computed(() => filteredSimilar.value.map((item) => relatedShelfCard(item, t)))
 
-const filteredSimilar = computed(() => {
-  const excluded = new Set(excludeFromSimilar.value)
-  return similarBooks.value.filter((b) => !excluded.has(b.id))
-})
+const showSeries = computed(() => loading.value.series || hasOtherSeriesBooks.value)
+const showAuthor = computed(() => loading.value.author || authorItems.value.length > 0)
+const showSimilar = computed(() => loading.value.similar || filteredSimilar.value.length > 0)
+const hasAnyContent = computed(() => showSeries.value || showAuthor.value || showSimilar.value)
 
-function booksForSection(section: Section) {
-  if (section === 'series') return hasOtherSeriesBooks.value ? seriesBooks.value : []
-  if (section === 'author') return authorBooks.value
-  return filteredSimilar.value
+const authorHeading = computed(() =>
+  props.authorName ? t('book.detail.discover.moreByAuthor', { name: props.authorName }) : t('book.detail.discover.moreByAuthors'),
+)
+
+const ENDPOINTS: Record<Section, (bookId: number) => string> = {
+  series: (bookId) => `/api/v1/books/${bookId}/series-books`,
+  author: (bookId) => `/api/v1/books/${bookId}/author-books?group=series`,
+  similar: (bookId) => `/api/v1/books/${bookId}/recommendations?group=series`,
 }
 
-// Pills are purely data-driven — never derived from props — so no phantom pills appear
-// when navigating to a book whose props suggest data that the fetch hasn't confirmed yet.
-const availablePills = computed<Section[]>(() => {
-  const pills: Section[] = []
-  if (hasOtherSeriesBooks.value) pills.push('series')
-  if (authorBooks.value.length > 0) pills.push('author')
-  if (filteredSimilar.value.length > 0) pills.push('similar')
-  return pills
-})
-
-const pillLabels = computed<Record<Section, string>>(() => ({
-  series: t('book.detail.discover.moreInSeries'),
-  author: t('book.detail.discover.byAuthor'),
-  similar: t('book.detail.discover.similarBooks'),
-}))
-
-const pillIcons: Record<Section, typeof BookOpen> = {
-  series: BookOpen,
-  author: User,
-  similar: Sparkles,
-}
-
-async function fetchSection(section: Section) {
-  if (fetched.value.has(section)) return
-  fetched.value = new Set([...fetched.value, section])
+async function fetchSection(section: Section, token: number) {
   loading.value = { ...loading.value, [section]: true }
-
   try {
-    const endpointMap: Record<Section, string> = {
-      series: `/api/v1/books/${props.bookId}/series-books`,
-      author: `/api/v1/books/${props.bookId}/author-books`,
-      similar: `/api/v1/books/${props.bookId}/recommendations`,
-    }
-    const res = await api(endpointMap[section])
-    if (!res.ok) return
-
+    const res = await api(ENDPOINTS[section](props.bookId))
+    if (!res.ok || token !== requestToken) return
     const data = await res.json()
+    if (token !== requestToken) return
     if (section === 'series') seriesBooks.value = data
-    else if (section === 'author') authorBooks.value = data
-    else similarBooks.value = data
+    else if (section === 'author') authorItems.value = data
+    else similarItems.value = data
   } catch {
+    // Related shelves are optional; a failed lookup leaves its section out.
   } finally {
-    loading.value = { ...loading.value, [section]: false }
+    if (token === requestToken) loading.value = { ...loading.value, [section]: false }
   }
 }
 
-async function selectSection(section: Section) {
-  activeSection.value = section
-  await fetchSection(section)
+async function loadShelves() {
+  const token = ++requestToken
+  seriesBooks.value = []
+  authorItems.value = []
+  similarItems.value = []
+  loading.value = { series: false, author: false, similar: false }
+
+  const sections: Section[] = []
+  if (props.seriesName || props.seriesId != null) sections.push('series')
+  if (props.authorCount > 0) sections.push('author')
+  sections.push('similar')
+  await Promise.all(sections.map((section) => fetchSection(section, token)))
 }
 
-function handleScroll(direction: 'left' | 'right') {
-  activeCarouselRef.value?.scroll(direction)
+function handleSeriesScrollBack() {
+  seriesCarouselRef.value?.scroll('left')
 }
 
-async function initSection() {
-  const candidates: Section[] = []
-  if (props.seriesName) candidates.push('series')
-  if (props.authorCount > 0) candidates.push('author')
-  candidates.push('similar')
-  await Promise.all(candidates.map((s) => fetchSection(s)))
-  activeSection.value = candidates.find((s) => booksForSection(s).length > 0) ?? null
+function handleSeriesScrollForward() {
+  seriesCarouselRef.value?.scroll('right')
 }
 
-onMounted(initSection)
+function handleAuthorScrollBack() {
+  authorCarouselRef.value?.scroll('left')
+}
+
+function handleAuthorScrollForward() {
+  authorCarouselRef.value?.scroll('right')
+}
+
+function handleSimilarScrollBack() {
+  similarCarouselRef.value?.scroll('left')
+}
+
+function handleSimilarScrollForward() {
+  similarCarouselRef.value?.scroll('right')
+}
+
+onMounted(loadShelves)
 
 watch(
   () => props.bookId,
-  async (newId, oldId) => {
-    if (newId === oldId) return
-    seriesBooks.value = []
-    authorBooks.value = []
-    similarBooks.value = []
-    fetched.value = new Set()
-    loading.value = { series: false, author: false, similar: false }
-    activeSection.value = null
-    await initSection()
+  (newId, oldId) => {
+    if (newId !== oldId) void loadShelves()
   },
 )
 
 watch(seriesBooks, (books) => emit('series-books', books))
-
-const hasAnyContent = computed(() => availablePills.value.length > 0 || Object.values(loading.value).some(Boolean))
 </script>
 
 <template>
-  <div v-if="hasAnyContent" :class="flush ? 'flex h-full min-h-0 flex-col' : 'mt-8 pt-6 border-t border-border'">
-    <div class="flex items-center justify-between mb-4">
-      <div class="inline-flex items-center gap-1 rounded-lg bg-muted/55 p-1">
-        <button
-          v-for="pill in availablePills"
-          :key="pill"
-          class="flex h-7 items-center justify-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium transition-colors"
-          :class="
-            activeSection === pill
-              ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
-              : 'text-muted-foreground hover:text-foreground hover:bg-background/70'
-          "
-          @click="selectSection(pill)"
-        >
-          <component :is="pillIcons[pill]" :size="12" />
-          <span>{{ pillLabels[pill] }}</span>
-        </button>
-      </div>
-
-      <div class="flex items-center gap-1">
-        <button
-          class="h-6 w-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          @click="handleScroll('left')"
-        >
-          <ChevronLeft :size="14" />
-        </button>
-        <button
-          class="h-6 w-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          @click="handleScroll('right')"
-        >
-          <ChevronRight :size="14" />
-        </button>
-      </div>
-    </div>
-
-    <Transition name="discover-fade" mode="out-in">
-      <div :key="activeSection ?? 'init'">
-        <div v-if="activeSection === null" class="flex gap-3 overflow-x-auto pb-2">
-          <div v-for="i in 10" :key="i" class="w-24 shrink-0">
-            <div class="w-full rounded-sm bg-muted animate-shimmer" style="aspect-ratio: 2/3" />
-          </div>
+  <div v-if="hasAnyContent" class="flex flex-col gap-8" :class="flush ? 'min-h-0' : 'mt-8 pt-6 border-t border-border'">
+    <section v-if="showSeries" data-test="discover-series" aria-labelledby="discover-series-heading">
+      <div class="mb-2 flex min-h-11 items-center justify-between gap-3">
+        <h2 id="discover-series-heading" class="min-w-0 truncate text-[15px] font-semibold">{{ t('book.detail.discover.inThisSeries') }}</h2>
+        <div class="flex shrink-0 items-center gap-1">
+          <RouterLink
+            v-if="seriesId != null"
+            data-test="discover-series-all"
+            :to="{ name: 'series-detail', params: { seriesId } }"
+            class="inline-flex min-h-11 items-center px-2 text-sm font-medium text-primary hover:underline underline-offset-2"
+          >
+            {{ t('book.detail.discover.seeAll') }}
+          </RouterLink>
+          <ShelfScrollButtons class="@max-[46rem]/book-detail:hidden" @back="handleSeriesScrollBack" @forward="handleSeriesScrollForward" />
         </div>
-        <BookCarousel
-          :size="size"
-          v-else-if="activeSection === 'series'"
-          ref="seriesCarouselRef"
-          :books="booksForSection('series')"
-          :loading="loading.series"
-          :current-book-id="bookId"
-          :show-series-index="true"
-          :show-header="false"
-        />
-        <BookCarousel
-          :size="size"
-          v-else-if="activeSection === 'author'"
-          ref="authorCarouselRef"
-          :books="booksForSection('author')"
-          :loading="loading.author"
-          :show-header="false"
-        />
-        <BookCarousel
-          :size="size"
-          v-else-if="activeSection === 'similar'"
-          ref="similarCarouselRef"
-          :books="booksForSection('similar')"
-          :loading="loading.similar"
-          :show-header="false"
-        />
       </div>
-    </Transition>
+      <div v-if="loading.series" class="space-y-1 @min-[46rem]/book-detail:hidden" aria-hidden="true">
+        <div v-for="i in 6" :key="i" class="h-11 rounded-md bg-muted animate-shimmer" />
+      </div>
+      <SeriesChapterStrip v-else class="@min-[46rem]/book-detail:hidden" :books="seriesBooks" :current-book-id="bookId" />
+      <BookCarousel
+        ref="seriesCarouselRef"
+        class="hidden @min-[46rem]/book-detail:block"
+        :size="size"
+        :books="seriesBooks"
+        :loading="loading.series"
+        :current-book-id="bookId"
+        :show-series-index="true"
+        :show-header="false"
+        captioned
+      />
+    </section>
+
+    <section v-if="showAuthor" data-test="discover-author" aria-labelledby="discover-author-heading">
+      <div class="mb-2 flex min-h-11 items-center justify-between gap-3">
+        <h2 id="discover-author-heading" class="min-w-0 truncate text-[15px] font-semibold">{{ authorHeading }}</h2>
+        <ShelfScrollButtons @back="handleAuthorScrollBack" @forward="handleAuthorScrollForward" />
+      </div>
+      <BookCarousel ref="authorCarouselRef" :size="size" :books="authorCards" :loading="loading.author" :show-header="false" captioned />
+    </section>
+
+    <section v-if="showSimilar" data-test="discover-similar" aria-labelledby="discover-similar-heading">
+      <div class="mb-2 flex min-h-11 items-center justify-between gap-3">
+        <h2 id="discover-similar-heading" class="min-w-0 truncate text-[15px] font-semibold">{{ t('book.detail.discover.similar') }}</h2>
+        <ShelfScrollButtons @back="handleSimilarScrollBack" @forward="handleSimilarScrollForward" />
+      </div>
+      <BookCarousel ref="similarCarouselRef" :size="size" :books="similarCards" :loading="loading.similar" :show-header="false" captioned />
+    </section>
   </div>
 </template>
-
-<style scoped>
-.discover-fade-enter-active,
-.discover-fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-.discover-fade-enter-from,
-.discover-fade-leave-to {
-  opacity: 0;
-}
-</style>

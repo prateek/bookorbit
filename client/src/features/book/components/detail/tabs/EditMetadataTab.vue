@@ -841,7 +841,7 @@ function handleCoverChanged(medium: CoverMedium | null) {
       <div
         ref="metadataToolbar"
         tabindex="-1"
-        class="sticky top-0 z-30 -mx-4 flex flex-none items-center gap-2 bg-card/95 px-4 py-0.5 backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:mx-0 sm:px-0"
+        class="sticky -top-4 z-30 -mx-4 -mt-4 flex flex-none items-center gap-2 bg-card/95 px-4 pt-4 pb-0.5 backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:mx-0 sm:px-0"
       >
         <div class="no-scrollbar flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
           <div

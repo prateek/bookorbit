@@ -453,7 +453,7 @@ describe('DetailsTab cover surface', () => {
     expect(activityCard.classes().some((className) => className.includes('min-h-0'))).toBe(false)
   })
 
-  it('lists the three most recent reading sessions', () => {
+  it('lists the four most recent reading sessions', () => {
     const sessions = Array.from({ length: 5 }, (_, index) => ({
       id: index + 1,
       bookFileId: 101,
@@ -488,7 +488,7 @@ describe('DetailsTab cover surface', () => {
       },
     })
 
-    expect(wrapper.findAll('li')).toHaveLength(3)
+    expect(wrapper.findAll('li')).toHaveLength(4)
   })
 
   it('summarizes pending Kobo sync state for each affected device', async () => {
@@ -767,6 +767,50 @@ describe('DetailsTab cover surface', () => {
     await flushPromises()
 
     expect(wrapper.findComponent({ name: 'KoreaderResetHoldNotice' }).exists()).toBe(false)
+  })
+
+  it('labels the read button with how far the reader has got', async () => {
+    mocks.api.mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.endsWith('/books/12/progress')) {
+        return response([{ fileId: 101, percentage: 93.26, cfi: null, pageNumber: null, positionSeconds: null, updatedAt: null }])
+      }
+      if (url.includes('/collections/membership')) return response([])
+      if (url.includes('/kobo-state')) return response({ eligibleForKoboSync: false, syncCollections: [], readingState: null, snapshots: [] })
+      if (url.includes('/koreader/books/')) return response(null)
+      if (url.includes('/progress')) return response([])
+      return response({})
+    })
+    const wrapper = mountDetails(makeBook())
+    await flushPromises()
+
+    const actions = wrapper.get('[data-test="cover-actions"]')
+    expect(actions.text()).toContain('Resume · 93%')
+    expect(actions.get('[data-test="read-progress-bar"]').attributes('aria-valuenow')).toBe('93')
+  })
+
+  it('offers to read a finished book again', async () => {
+    const wrapper = mountDetails(
+      makeBook({ readStatus: { status: 'read', source: 'manual', startedAt: null, finishedAt: null, updatedAt: '2026-01-01T00:00:00.000Z' } }),
+    )
+    await flushPromises()
+
+    const actions = wrapper.get('[data-test="cover-actions"]')
+    expect(actions.text()).toContain('Read again')
+    expect(actions.find('[data-test="read-progress-bar"]').exists()).toBe(false)
+  })
+
+  it('names every secondary action and keeps delete apart from the rest', async () => {
+    const wrapper = mountDetails(makeBook())
+    await flushPromises()
+
+    const row = wrapper.get('[data-test="book-actions"]')
+    expect(row.text()).toContain('Shelf')
+    expect(row.text()).toContain('More')
+    expect(row.find('[aria-label="Add to collection"]').exists()).toBe(true)
+    expect(row.findAll('[aria-label="More actions"]').length).toBeGreaterThan(0)
+    const menuLabels = row.findAll('button').map((button) => button.text())
+    expect(menuLabels.at(-1)).toBe('Delete book')
   })
 
   it('hides reset reading state when the user cannot edit metadata', async () => {
