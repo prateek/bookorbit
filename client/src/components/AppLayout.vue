@@ -19,6 +19,7 @@ import {
 } from '@/features/book/composables/useScrollRestoreOnActivate'
 import { useCommandPalette } from '@/features/command-palette/composables/useCommandPalette'
 import { useThemeStore } from '@/stores/theme'
+import { installScrollClickGuard } from '@/lib/scroll-click-guard'
 
 const route = useRoute()
 const themeStore = useThemeStore()
@@ -126,7 +127,13 @@ function handlePageAfterEnter() {
 // transition, so after-enter never fires for it.
 onMounted(handlePageAfterEnter)
 
+let removeScrollClickGuard: (() => void) | null = null
+onMounted(() => {
+  removeScrollClickGuard = installScrollClickGuard()
+})
+
 onBeforeUnmount(() => {
+  removeScrollClickGuard?.()
   stopShellRestore()
   if (shellFrame) cancelAnimationFrame(shellFrame)
 })
