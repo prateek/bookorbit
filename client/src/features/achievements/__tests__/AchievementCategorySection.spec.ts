@@ -67,8 +67,8 @@ describe('AchievementCategorySection', () => {
     expect(ring.props('percent')).toBe(50)
   })
 
-  it('uses gap-6 spacing for the grid', () => {
+  it('packs cards tighter on phones than on wider screens', () => {
     const wrapper = mountComponent()
-    expect(wrapper.find('.grid').classes()).toContain('gap-6')
+    expect(wrapper.find('.grid').classes()).toEqual(expect.arrayContaining(['gap-3', 'sm:gap-6']))
   })
 })

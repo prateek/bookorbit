@@ -29,7 +29,7 @@ const stubs = {
     template: '<div data-testid="sheet" :data-open="String(open)"><i data-testid="open-sheet" @click="$emit(\'update:open\', true)" /><slot /></div>',
   },
   SheetTrigger: { template: '<div><slot /></div>' },
-  SheetContent: { template: '<div><slot /></div>' },
+  SheetContent: { props: ['side'], template: '<div data-testid="sheet-content" :data-side="side"><slot /></div>' },
   SheetDescription: { template: '<div><slot /></div>' },
   SheetHeader: { template: '<div><slot /></div>' },
   SheetTitle: { template: '<div><slot /></div>' },
@@ -50,6 +50,30 @@ function mountSheet() {
     global: { stubs },
   })
 }
+
+function stubViewport(phone: boolean) {
+  window.matchMedia = vi.fn<(query: string) => MediaQueryList>().mockImplementation(
+    (query: string) =>
+      ({
+        matches: phone,
+        media: query,
+        addEventListener: vi.fn<() => void>(),
+        removeEventListener: vi.fn<() => void>(),
+      }) as unknown as MediaQueryList,
+  )
+}
+
+describe('NotificationSheet container', () => {
+  it('opens as a bottom sheet on phones so it can be swiped away', () => {
+    stubViewport(true)
+    expect(mountSheet().get('[data-testid="sheet-content"]').attributes('data-side')).toBe('bottom')
+  })
+
+  it('stays a side drawer on wider screens', () => {
+    stubViewport(false)
+    expect(mountSheet().get('[data-testid="sheet-content"]').attributes('data-side')).toBe('right')
+  })
+})
 
 describe('NotificationSheet trigger', () => {
   it('provides an accessible name and matching tooltip', () => {

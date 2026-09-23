@@ -45,6 +45,28 @@ const LEGACY_USER_CHART_ORDER_WITH_SOURCE_SECOND: StatisticsChartId[] = [
   'session-archetypes',
 ]
 
+const LEGACY_LIBRARY_CHART_ORDER_HEALTH_FIRST: StatisticsChartId[] = [
+  'library-integrity-gauge',
+  'format-distribution',
+  'metadata-score-distribution',
+  'metadata-freshness-gauge',
+  'largest-books',
+  'genre-distribution',
+  'format-share-over-time',
+  'top-authors',
+  'metadata-completeness',
+  'acquisition-lag-scatter',
+  'library-metadata-completeness',
+  'storage-by-format',
+  'language-distribution',
+  'page-count-distribution',
+  'publication-decade',
+  'genre-cooccurrence',
+  'top-series',
+  'books-added-over-time',
+  'publication-year-timeline',
+]
+
 function matchesOrder(actual: StatisticsChartId[], expected: StatisticsChartId[]): boolean {
   return actual.length === expected.length && actual.every((id, index) => id === expected[index])
 }
@@ -56,7 +78,7 @@ function chartIdsByOrder(entries: ChartConfigEntry[], ids: Set<StatisticsChartId
     .map((entry) => entry.id)
 }
 
-function withUserChartOrder(entries: ChartConfigEntry[], order: StatisticsChartId[]): ChartConfigEntry[] {
+function withChartOrder(entries: ChartConfigEntry[], order: StatisticsChartId[]): ChartConfigEntry[] {
   const orderById = new Map(order.map((id, index) => [id, index]))
   return entries.map((entry) => {
     const order = orderById.get(entry.id)
@@ -67,7 +89,13 @@ function withUserChartOrder(entries: ChartConfigEntry[], order: StatisticsChartI
 function migrateLegacyUserChartOrder(entries: ChartConfigEntry[]): ChartConfigEntry[] {
   const userOrder = chartIdsByOrder(entries, userChartIdSet)
   if (!matchesOrder(userOrder, LEGACY_USER_CHART_ORDER_WITH_SOURCE_SECOND)) return entries
-  return withUserChartOrder(entries, USER_CHART_IDS)
+  return withChartOrder(entries, USER_CHART_IDS)
+}
+
+function migrateLegacyLibraryChartOrder(entries: ChartConfigEntry[]): ChartConfigEntry[] {
+  const libraryOrder = chartIdsByOrder(entries, libraryChartIdSet)
+  if (!matchesOrder(libraryOrder, LEGACY_LIBRARY_CHART_ORDER_HEALTH_FIRST)) return entries
+  return withChartOrder(entries, LIBRARY_CHART_IDS)
 }
 
 function normalizeCharts(saved: ChartConfigEntry[] | undefined): ChartConfigEntry[] {
@@ -79,7 +107,7 @@ function normalizeCharts(saved: ChartConfigEntry[] | undefined): ChartConfigEntr
     visible: true,
     order: filtered.length + i,
   }))
-  return migrateLegacyUserChartOrder([...filtered, ...newEntries])
+  return migrateLegacyLibraryChartOrder(migrateLegacyUserChartOrder([...filtered, ...newEntries]))
 }
 
 function normalizeFilters(saved: StatisticsFilterConfig | undefined): StatisticsFilterConfig {

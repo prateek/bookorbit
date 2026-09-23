@@ -5,6 +5,7 @@ import VChart from 'vue-echarts'
 import { CalendarRange } from '@lucide/vue'
 
 import { useUserCompletionTimeline } from '../../composables/useUserCompletionTimeline'
+import { fromFirstCompletion } from '../../lib/completion-timeline'
 import ChartCard from '../ChartCard.vue'
 import ChartEmptyState from '../ChartEmptyState.vue'
 
@@ -24,8 +25,10 @@ watchEffect(() => {
   option.value = {}
   if (isEmpty.value || lowConfidence.value || !data.value.length) return
 
-  const labels = data.value.map((item) => `${MONTH_NAMES[item.month - 1]} ${item.year}`)
-  const values = data.value.map((item) => item.count)
+  const points = fromFirstCompletion(data.value)
+  const labels = points.map((item) => `${MONTH_NAMES[item.month - 1]} ${item.year}`)
+  const values = points.map((item) => item.count)
+  const fewPoints = points.length <= 12
 
   option.value = {
     tooltip: {
@@ -44,7 +47,8 @@ watchEffect(() => {
       axisTick: { show: false },
       axisLabel: {
         fontSize: 11,
-        rotate: 40,
+        rotate: fewPoints ? 0 : 40,
+        hideOverlap: true,
         interval: Math.max(0, Math.floor(labels.length / 10) - 1),
       },
     },
@@ -59,7 +63,7 @@ watchEffect(() => {
         type: 'line',
         data: values,
         smooth: 0.2,
-        showSymbol: false,
+        showSymbol: fewPoints,
         areaStyle: { opacity: 0.2 },
         lineStyle: { width: 2 },
       },

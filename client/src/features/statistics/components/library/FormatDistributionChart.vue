@@ -46,6 +46,7 @@ watchEffect(() => {
     :loading
     :error
     :empty="!data.items.length"
+    :not-applicable="data.items.length === 1"
     :unknown-count="data.unknownCount"
   >
     <VChart :option autoresize style="height: 100%" />
