@@ -104,6 +104,20 @@ jobs:
       packages: write
     env:
       PUBLISH: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: bookorbit
+          POSTGRES_PASSWORD: bookorbit
+          POSTGRES_DB: bookorbit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bookorbit -d bookorbit"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -136,14 +150,57 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
 
-      - name: Build and push
-        id: build
+      - name: Build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          push: ${{ env.PUBLISH == 'true' }}
+          load: true
+          tags: ${{ steps.image.outputs.name }}:${{ steps.image.outputs.version }}
+          build-args: APP_VERSION=${{ steps.image.outputs.version }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=fork-image
+          cache-to: type=gha,mode=max,scope=fork-image
+
+      # Starts the image against an empty database so a broken migration or entrypoint fails here, not in production.
+      - name: Smoke test
+        shell: bash
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}:${{ steps.image.outputs.version }}
+        run: |
+          set -euo pipefail
+          POSTGRES_HOST=127.0.0.1
+          POSTGRES_PORT=5432
+          data="$(mktemp -d)"; mkdir -p "$data/books" "$data/app"
+          docker run -d --name bookorbit-smoke --network host \
+            -e NODE_ENV=production -e PORT=3000 \
+            -e POSTGRES_HOST="$POSTGRES_HOST" -e POSTGRES_PORT="$POSTGRES_PORT" \
+            -e POSTGRES_USER=bookorbit -e POSTGRES_PASSWORD=bookorbit -e POSTGRES_DB=bookorbit \
+            -e JWT_SECRET=smoke-test-secret-smoke-test-secret -e SETUP_BOOTSTRAP_TOKEN=smoke-test-token \
+            -e APP_URL=http://127.0.0.1:3000 -e CLIENT_URL=http://127.0.0.1:3000 \
+            -v "$data/books:/books" -v "$data/app:/data" "$IMAGE" >/dev/null
+          status=1
+          for _ in $(seq 1 90); do
+            if [ "$(docker inspect -f '{{.State.Running}}' bookorbit-smoke)" != true ]; then break; fi
+            if curl -fs -o /dev/null http://127.0.0.1:3000/api/v1/health; then status=0; break; fi
+            sleep 2
+          done
+          docker logs bookorbit-smoke > "$data/app.log" 2>&1 || true
+          if [ "$status" -eq 0 ] && ! grep -q "Migrations applied successfully" "$data/app.log"; then status=1; fi
+          if [ "$status" -ne 0 ]; then tail -n 80 "$data/app.log"; fi
+          docker rm -f bookorbit-smoke >/dev/null
+          exit "$status"
+
+      - name: Push
+        id: build
+        if: env.PUBLISH == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
           tags: ${{ steps.image.outputs.name }}:${{ steps.image.outputs.version }}
           build-args: APP_VERSION=${{ steps.image.outputs.version }}
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
