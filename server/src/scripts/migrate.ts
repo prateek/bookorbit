@@ -1,12 +1,12 @@
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
 
 import { createPostgresClientConfig } from '../db/postgres-connection-config';
 import { dropUnreleasedMigrationRows, reconcileMigrationLedgerTimestamps } from './migration-ledger-compatibility';
+import { findSkippedMigrations, readJournalMigrations } from './migration-ledger-verification';
 import { installPostgresExtensions } from './postgres-extensions';
 import { prepareLegacySeriesIndexColumns } from './series-index-migration-compatibility';
 
@@ -42,12 +42,19 @@ async function runMigrations() {
   try {
     await installPostgresExtensions(pool);
     const migrationsFolder = resolveMigrationsFolder();
-    const migrationFiles = readMigrationFiles({ migrationsFolder });
-    await dropUnreleasedMigrationRows(pool, migrationFiles);
-    await reconcileMigrationLedgerTimestamps(pool, migrationFiles);
+    const migrations = readJournalMigrations(migrationsFolder);
+    await dropUnreleasedMigrationRows(pool, migrations);
+    await reconcileMigrationLedgerTimestamps(pool, migrations);
     await prepareLegacySeriesIndexColumns(pool);
 
     await migrate(drizzle(pool), { migrationsFolder });
+
+    // Drizzle only applies journal entries newer than the latest applied created_at,
+    // so an entry stamped earlier than an already-applied one is silently skipped.
+    if ((await findSkippedMigrations(pool, migrations)).length > 0) {
+      process.exitCode = 1;
+      return;
+    }
 
     console.log(`Migrations applied successfully from ${migrationsFolder}`);
   } finally {
