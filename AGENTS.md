@@ -1,3 +1,9 @@
+## Downstream fork
+
+This checkout is `prateek/bookorbit`, a downstream fork of `bookorbit/bookorbit`. Commit to topic branches or `downstream`, the default branch and PR target; `main` is a mirror of upstream. Open PRs and issues on `bookorbit/bookorbit` only when Prateek asks. Keep each commit upstreamable (one logical change with its tests) or fork-only (`fork` scope).
+
+Read [FORK.md](FORK.md) before rebasing `downstream`, changing the database schema, sending a change upstream, or editing CI.
+
 ## Project
 
 - Book/library management app with Kobo device support.
