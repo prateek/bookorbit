@@ -1,0 +1,159 @@
+name: Fork
+
+# The only workflow this fork runs. See FORK.md.
+on:
+  push:
+    branches: [downstream]
+    tags: ["v*-prateek.*"]
+  pull_request:
+    branches: [downstream]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  NODE_VERSION: "26"
+  PNPM_VERSION: "11"
+
+jobs:
+  upstream-workflows-off:
+    name: Keep upstream workflows off
+    if: github.event_name == 'push' && github.ref == 'refs/heads/downstream'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      # Upstream's workflows would fail without upstream's secrets or publish upstream builds under this fork.
+      - name: Disable every other workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # GitHub registers workflow files from a push shortly after the push, so wait until all of them are listed.
+          expected="$(gh api "repos/${GH_REPO}/contents/.github/workflows?ref=${SHA}" --jq '.[] | select(.name | test("\\.ya?ml$")) | .path' | sort)"
+          missing="${expected}"
+          for _ in $(seq 1 20); do
+            registered="$(gh api "repos/${GH_REPO}/actions/workflows" --paginate --jq '.workflows[].path' | sort)"
+            missing="$(comm -23 <(echo "${expected}") <(echo "${registered}"))"
+            [[ -z "${missing}" ]] && break
+            sleep 15
+          done
+          if [[ -n "${missing}" ]]; then
+            echo "::warning::Still unregistered after 5 minutes: ${missing//$'\n'/ }"
+          fi
+          gh api "repos/${GH_REPO}/actions/workflows" --paginate \
+            --jq '.workflows[] | select(.state == "active" and (.path | startswith(".github/workflows/")) and .path != ".github/workflows/fork.yml") | "\(.id) \(.path)"' |
+            while read -r id file; do
+              echo "Disabling ${file}"
+              gh api -X PUT "repos/${GH_REPO}/actions/workflows/${id}/disable"
+            done
+
+  checks:
+    name: Checks (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [server, client]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js and pnpm
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          pnpm-version: ${{ env.PNPM_VERSION }}
+
+      - name: Lint
+        run: pnpm --filter ${{ matrix.package }} lint:check
+
+      - name: Format
+        run: pnpm --filter ${{ matrix.package }} format:check
+
+      - name: Build shared types
+        if: matrix.package == 'client'
+        run: pnpm --filter @bookorbit/types build
+
+      - name: Type check
+        run: pnpm --filter ${{ matrix.package }} type-check
+
+      - name: Unit tests
+        run: pnpm --filter ${{ matrix.package }} exec vitest --run
+
+  image:
+    name: Image
+    needs: checks
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PUBLISH: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Name the image
+        id: image
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "${PUBLISH}" == "true" ]]; then
+            version="${REF_NAME#v}"
+          else
+            version="sha-${SHA::7}"
+          fi
+          echo "name=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
+
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ steps.image.outputs.name }}:${{ steps.image.outputs.version }}
+          build-args: APP_VERSION=${{ steps.image.outputs.version }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=fork-image
+          cache-to: type=gha,mode=max,scope=fork-image
+
+      - name: Record the digest
+        if: env.PUBLISH == 'true'
+        shell: bash
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}:${{ steps.image.outputs.version }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: echo "Published \`${IMAGE}@${DIGEST}\`" >> "$GITHUB_STEP_SUMMARY"
