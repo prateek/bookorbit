@@ -7,6 +7,7 @@ import { Pool } from 'pg';
 import { createPostgresClientConfig } from '../db/postgres-connection-config';
 import { reconcileMigrationLedgerTimestamps } from './migration-ledger-compatibility';
 import { findSkippedMigrations, readJournalMigrations } from './migration-ledger-verification';
+import { applyOutOfOrderMigrations } from './migration-out-of-order';
 import { installPostgresExtensions } from './postgres-extensions';
 import { prepareLegacySeriesIndexColumns } from './series-index-migration-compatibility';
 
@@ -45,11 +46,10 @@ async function runMigrations() {
     const migrations = readJournalMigrations(migrationsFolder);
     await reconcileMigrationLedgerTimestamps(pool, migrations);
     await prepareLegacySeriesIndexColumns(pool);
+    await applyOutOfOrderMigrations(pool, migrations);
 
     await migrate(drizzle(pool), { migrationsFolder });
 
-    // Drizzle only applies journal entries newer than the latest applied created_at,
-    // so an entry stamped earlier than an already-applied one is silently skipped.
     if ((await findSkippedMigrations(pool, migrations)).length > 0) {
       process.exitCode = 1;
       return;

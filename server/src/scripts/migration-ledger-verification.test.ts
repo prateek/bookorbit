@@ -63,7 +63,7 @@ describe('readJournalMigrations', () => {
     rmSync(migrationsFolder, { recursive: true, force: true });
   });
 
-  it('pairs each journal tag with the hash and timestamp Drizzle records', () => {
+  it('pairs each journal tag with the hash, timestamp and statements Drizzle records', () => {
     const entries = [
       { idx: 0, version: '7', when: 200, tag: '0000_first', breakpoints: true },
       { idx: 1, version: '7', when: 100, tag: '0001_second', breakpoints: true },
@@ -74,8 +74,8 @@ describe('readJournalMigrations', () => {
 
     const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
     expect(readJournalMigrations(migrationsFolder)).toEqual([
-      { tag: '0000_first', hash: sha256('CREATE TABLE a (id int);'), folderMillis: 200 },
-      { tag: '0001_second', hash: sha256('CREATE TABLE b (id int);'), folderMillis: 100 },
+      { tag: '0000_first', hash: sha256('CREATE TABLE a (id int);'), folderMillis: 200, sql: ['CREATE TABLE a (id int);'] },
+      { tag: '0001_second', hash: sha256('CREATE TABLE b (id int);'), folderMillis: 100, sql: ['CREATE TABLE b (id int);'] },
     ]);
   });
 });
