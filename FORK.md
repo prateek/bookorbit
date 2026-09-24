@@ -61,7 +61,7 @@ Cherry-pick the upstreamable commit onto upstream `main` in a branch named `BO-<
 
 ## GitHub Actions
 
-`.github/workflows/fork.yml` is the fork's only active workflow. It checks pushes and PRs to `downstream`, publishes images from `v*-prateek.*` tags, and builds an unpublished image on a manual run. Each push to `downstream` also disables every other workflow, since upstream's fail without upstream's secrets or publish upstream builds under this fork. Fork CI changes go in `fork.yml`.
+`.github/workflows/fork.yml` is the fork's only active workflow. It checks pushes and PRs to `downstream`, publishes images from `v*-prateek.*` tags, and builds an unpublished image on a manual run. Before any push, the image job starts the built image against an empty PostgreSQL and fails unless every migration applies and `/api/v1/health` answers. Each push to `downstream` also disables every other workflow, since upstream's fail without upstream's secrets or publish upstream builds under this fork. Fork CI changes go in `fork.yml`.
 
 ## Recovery
 
