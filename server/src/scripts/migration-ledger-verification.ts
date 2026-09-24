@@ -3,7 +3,7 @@ import { join } from 'path';
 import { type MigrationMeta, readMigrationFiles } from 'drizzle-orm/migrator';
 import type { Pool } from 'pg';
 
-export type JournalMigration = Pick<MigrationMeta, 'folderMillis' | 'hash'> & {
+export type JournalMigration = Pick<MigrationMeta, 'folderMillis' | 'hash' | 'sql'> & {
   tag: string;
 };
 
@@ -18,6 +18,7 @@ export function readJournalMigrations(migrationsFolder: string): JournalMigratio
     tag: journal.entries[index].tag,
     hash: migration.hash,
     folderMillis: migration.folderMillis,
+    sql: migration.sql,
   }));
 }
 
