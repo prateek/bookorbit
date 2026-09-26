@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n'
-import { buildRunningText, buildToolbarTitle, nextFooterRight, type RunningTextPosition, type RunningTextSlots } from '../running-text'
+import { buildRunningText, buildToolbarTitle, joinFoot, nextFooterRight, type RunningTextPosition, type RunningTextSlots } from '../running-text'
 
 const t = (key: string, named?: Record<string, unknown>) => (named ? i18n.global.t(key, named) : i18n.global.t(key))
 
@@ -78,5 +78,12 @@ describe('nextFooterRight', () => {
     expect(nextFooterRight('time-left')).toBe('percent')
     expect(nextFooterRight('percent')).toBe('time-left')
     expect(nextFooterRight('off')).toBe('time-left')
+  })
+})
+
+describe('joinFoot', () => {
+  it('joins the filled slots', () => {
+    expect(joinFoot({ head: '', left: '3 of 12', right: '27%' })).toBe('3 of 12 · 27%')
+    expect(joinFoot({ head: '', left: '', right: '27%' })).toBe('27%')
   })
 })
