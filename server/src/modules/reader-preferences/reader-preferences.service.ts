@@ -6,10 +6,13 @@ import {
   CSS_FONT_WEIGHT_MIN,
   EPUB_FONT_SIZE_MAX,
   EPUB_FONT_SIZE_MIN,
+  EPUB_FOOTER_LEFT_ITEMS,
+  EPUB_FOOTER_RIGHT_ITEMS,
   EPUB_LETTER_SPACING_MAX,
   EPUB_LETTER_SPACING_MIN,
   EPUB_PARAGRAPH_SPACING_MAX,
   EPUB_PARAGRAPH_SPACING_MIN,
+  EPUB_RUNNING_HEAD_MODES,
   EPUB_TEXT_INDENT_MAX,
   EPUB_TEXT_INDENT_MIN,
   EPUB_WORD_SPACING_MAX,
@@ -49,6 +52,10 @@ const EPUB_SETTINGS_SCHEMA = z
     flow: z.enum(['paginated', 'scrolled']),
     overrideBookFormatting: z.boolean(),
     footerDisplayMode: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+    // Optional so a client that only knows footerDisplayMode can still save full settings.
+    runningHead: z.enum(EPUB_RUNNING_HEAD_MODES).optional(),
+    footerLeft: z.enum(EPUB_FOOTER_LEFT_ITEMS).optional(),
+    footerRight: z.enum(EPUB_FOOTER_RIGHT_ITEMS).optional(),
     fixedLayoutSpread: z.enum(['auto', 'none']),
   })
   .strict();

@@ -9913,7 +9913,10 @@
       "footerMode": {
         "pageProgress": "Footer info: page + progress",
         "sessionTimeLeft": "Footer info: reading session + time left",
-        "chapterTimeLeft": "Footer info: chapter + chapter time left"
+        "chapterTimeLeft": "Footer info: chapter + chapter time left",
+        "time-left": "Footer: time left in chapter",
+        "percent": "Footer: percent of book",
+        "off": "Footer: hidden"
       }
     },
     "footer": {
@@ -9924,6 +9927,18 @@
       "jumpTooltip": "Jump to % of the book or a page in this chapter (e.g. 45 or p12)",
       "go": "Go",
       "progress": "Reading progress"
+    },
+    "runningText": {
+      "pageOf": "{page} of {pages}",
+      "pagesLeft": "{count, plural, one {# page left in chapter} other {# pages left in chapter}}",
+      "lastPage": "Last page in chapter",
+      "chapterPercent": "{pct}% of chapter",
+      "percent": "{pct}%",
+      "timeLeftInChapter": "{time} left in chapter",
+      "underAMinute": "< 1 min",
+      "minutes": "{n} min",
+      "hours": "{h} hr",
+      "hoursMinutes": "{h} hr {m} min"
     },
     "settings": {
       "title": "Settings",
@@ -9963,6 +9978,18 @@
       "pageWidthWide": "Wide",
       "pageWidthFull": "Full",
       "readingFlow": "Reading flow",
+      "headerFooter": {
+        "title": "Header and footer",
+        "head": "Top line",
+        "footLeft": "Bottom left",
+        "footRight": "Bottom right",
+        "headChapter": "Chapter",
+        "footPage": "Page",
+        "footPagesLeft": "Pages left",
+        "footTimeLeft": "Time left",
+        "footPercent": "Percent",
+        "off": "Off"
+      },
       "flow": {
         "paginated": "Pages",
         "scrolled": "Scroll"
