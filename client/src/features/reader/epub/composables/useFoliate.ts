@@ -4,6 +4,7 @@ import { useFoliateAnnotations } from './useFoliateAnnotations'
 import { useFoliateSelection } from './useFoliateSelection'
 import { useFoliateInput } from './useFoliateInput'
 import { ensureMediaOverlayActiveClass } from '../../media-overlay/lib/media-overlay-highlight'
+import { openDownloadedFile } from '@/features/offline/offline-session'
 import type { EpubBookInfo, EpubReaderSettings } from '@bookorbit/types'
 
 export interface RelocateDetail {
@@ -283,8 +284,23 @@ export function useFoliate(
       }, 30_000)
 
       let shouldRestoreByFraction = false
+      const downloaded = await openDownloadedFile(fileId)
 
-      if (format === 'epub') {
+      if (format === 'epub' && downloaded) {
+        // A downloaded EPUB is parsed from the local file by the same EPUB class the streaming
+        // loader builds, so positions and highlights resolve exactly as they do online.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const makeBook = (window as any).makeBook as ((file: File) => Promise<{ metadata?: { language?: unknown } }>) | undefined
+        if (!makeBook) throw new Error('makeBook not available')
+        const book = await makeBook(new File([downloaded], `book-file-${fileId}.epub`, { type: 'application/epub+zip' }))
+        const rawLang = Array.isArray(book.metadata?.language) ? book.metadata.language[0] : book.metadata?.language
+        bookLanguage.value = typeof rawLang === 'string' && rawLang ? (rawLang.split('-')[0] ?? 'en').toLowerCase() : 'en'
+        ensureMediaOverlayActiveClass(book)
+        applyEpubOpenOptions(book, options)
+        shouldRestoreByFraction = isFixedLayoutBook(book)
+        isFixedLayout.value = shouldRestoreByFraction
+        await view.open(book as never)
+      } else if (format === 'epub') {
         const infoRes = await api(`/api/v1/epub/${bookId}/info?fileId=${fileId}`)
         if (!infoRes.ok) throw new Error(`Failed to fetch EPUB info: ${infoRes.status}`)
         const bookInfo = await infoRes.json()
@@ -311,9 +327,12 @@ export function useFoliate(
       } else {
         const mimeType = format === 'pdf' ? 'application/pdf' : 'application/zip'
         const ext = format === 'pdf' ? 'pdf' : format === 'cbz' ? 'cbz' : format
-        const res = await api(`/api/v1/books/files/${fileId}/serve`)
-        if (!res.ok) throw new Error(`Failed to fetch book file: ${res.status}`)
-        const blob = await res.blob()
+        let blob = downloaded
+        if (!blob) {
+          const res = await api(`/api/v1/books/files/${fileId}/serve`)
+          if (!res.ok) throw new Error(`Failed to fetch book file: ${res.status}`)
+          blob = await res.blob()
+        }
         const file = new File([blob], `book-file-${fileId}.${ext}`, { type: mimeType })
         await view.open(file)
       }

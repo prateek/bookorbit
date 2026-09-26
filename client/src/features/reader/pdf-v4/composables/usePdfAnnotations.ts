@@ -1,6 +1,8 @@
-import { computed, ref } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, ref } from 'vue'
 import type { AnnotationItem, AnnotationListResponse, AnnotationPdfPosition } from '@bookorbit/types'
 import { api, getValidToken } from '@/lib/api'
+import { attachBookReplica } from '@/features/offline/composables/useBookReplica'
+import type { OfflineSession } from '@/features/offline/offline-session'
 
 export interface PdfAnnotationPatch {
   note?: string | null
@@ -33,6 +35,17 @@ export function usePdfAnnotations(bookId: number, bookFileId: number) {
   const nextPage = ref(1)
   const hasMore = computed(() => annotations.value.length < total.value)
   let mutationRevision = 0
+  // Set once load() finds an offline session: the whole file's highlights then come from the local
+  // replica, which holds them all, so there is nothing to page through.
+  let session: OfflineSession | null = null
+  let detachReplica: (() => void) | null = null
+  if (getCurrentScope()) onScopeDispose(() => detachReplica?.())
+
+  async function loadLocal(current: OfflineSession) {
+    const rows = await current.replica.listAnnotations(bookId)
+    annotations.value = rows.filter((row) => row.pdf && (row.bookFileId ?? row.jumpFileId) === bookFileId)
+    total.value = annotations.value.length
+  }
 
   async function fetchAnnotationPage(page: number): Promise<Response> {
     const token = await getValidToken()
@@ -59,6 +72,14 @@ export function usePdfAnnotations(bookId: number, bookFileId: number) {
     total.value = 0
     nextPage.value = 1
     try {
+      detachReplica?.()
+      const attached = await attachBookReplica(bookId, 'annotations', loadLocal)
+      session = attached?.session ?? null
+      detachReplica = attached?.detach ?? null
+      if (session) {
+        await loadLocal(session)
+        return true
+      }
       const page = await fetchStableAnnotationPage(1)
       if (!page) {
         loadError.value = true
@@ -111,6 +132,11 @@ export function usePdfAnnotations(bookId: number, bookFileId: number) {
   }
 
   async function create(input: CreatePdfAnnotationInput): Promise<AnnotationItem | null> {
+    if (session) {
+      const created = await session.replica.createAnnotation(bookId, input).catch(() => null)
+      if (created) await loadLocal(session)
+      return created
+    }
     try {
       const res = await api(`/api/v1/books/${bookId}/annotations`, {
         method: 'POST',
@@ -129,6 +155,11 @@ export function usePdfAnnotations(bookId: number, bookFileId: number) {
   }
 
   async function update(id: number, patch: PdfAnnotationPatch): Promise<AnnotationItem | null> {
+    if (session) {
+      const updated = await session.replica.updateAnnotation(bookId, id, patch).catch(() => null)
+      if (updated) await loadLocal(session)
+      return updated
+    }
     try {
       const res = await api(`/api/v1/books/${bookId}/annotations/${id}`, {
         method: 'PATCH',
@@ -146,6 +177,11 @@ export function usePdfAnnotations(bookId: number, bookFileId: number) {
   }
 
   async function remove(id: number): Promise<boolean> {
+    if (session) {
+      const removed = await session.replica.deleteAnnotation(bookId, id).catch(() => false)
+      if (removed) await loadLocal(session)
+      return removed
+    }
     try {
       const res = await api(`/api/v1/books/${bookId}/annotations/${id}`, {
         method: 'DELETE',

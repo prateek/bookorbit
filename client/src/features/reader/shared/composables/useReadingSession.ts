@@ -1,5 +1,6 @@
 import { onUnmounted, ref, unref, type MaybeRef } from 'vue'
 import { api } from '@/lib/api'
+import { currentOfflineSession } from '@/features/offline/offline-session'
 
 export interface ProgressSnapshot {
   percentage: number
@@ -16,6 +17,8 @@ export type ReadingSessionType = 'read' | 'tts' | 'listen'
 export interface ReadingSessionOptions {
   trackingEnabled?: MaybeRef<boolean>
   sessionType?: ReadingSessionType
+  /** Labels the queued session in sync diagnostics. */
+  bookId?: number
 }
 
 function generateSessionId(): string {
@@ -147,7 +150,7 @@ export function useReadingSession(bookFileId: number, getProgress: () => Progres
     const progressDelta = startProgress !== null ? Number((snap.percentage - startProgress).toFixed(4)) : null
     const endProgress = snap.percentage
 
-    const payload = JSON.stringify({
+    const body = {
       sessionId,
       startedAt: startedAt.toISOString(),
       endedAt: endedAt.toISOString(),
@@ -155,12 +158,29 @@ export function useReadingSession(bookFileId: number, getProgress: () => Progres
       progressDelta,
       endProgress,
       ...(options.sessionType ? { sessionType: options.sessionType } : {}),
-    })
+    }
 
     const url = `/api/v1/books/files/${bookFileId}/sessions`
+    const post = (withKeepalive: boolean) =>
+      api(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        ...(withKeepalive ? { keepalive: true } : {}),
+      }).catch(() => {})
 
-    api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, ...(keepalive ? { keepalive: true } : {}) }).catch(
-      () => {},
+    // Queued so a session read offline still counts; the server keeps one row per sessionId, so the
+    // keepalive copy a closing page also sends cannot double it.
+    const offline = currentOfflineSession()
+    if (!offline) {
+      void post(keepalive)
+      return
+    }
+    offline.replica.recordSession(bookFileId, options.bookId ?? 0, body).then(
+      () => {
+        if (keepalive && navigator.onLine !== false) void post(true)
+      },
+      () => void post(keepalive),
     )
   }
 
