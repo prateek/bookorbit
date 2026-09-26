@@ -11,6 +11,19 @@
   - A fork-only commit, such as this file or the fork workflow, uses the `fork` scope (`docs(fork):`, `ci(fork):`) and stays here.
 - Fold a fix into the commit it fixes with `git commit --fixup=<sha>` and `git rebase --autosquash <base>`, then push the rewritten branch with `git push --force-with-lease`.
 - A schema change and its generated migration share one commit; see [Migrations](#migrations).
+- Work happens on topic branches off `downstream` (`prateek/<short-description>`), and PRs open against `downstream` on this fork. Nothing goes to `bookorbit/bookorbit` unless Prateek asks for that change to be sent; see [Send a change upstream](#send-a-change-upstream).
+
+## Write changes that rebase
+
+Every line we change in an upstream file is a conflict at the next release, and every conflict is resolved by hand or by rerere replaying an old resolution that may no longer fit. The fork grows features anyway, so the aim is to add rather than alter:
+
+- Prefer new files over edits. A feature lives in its own directory (`client/src/features/<name>/`, `server/src/modules/<name>/`) and reaches upstream code through the smallest seam that works, usually one import and one call. When a seam grows past a few lines, move the logic into the feature and leave the call behind.
+- Reuse upstream's endpoints, services and types before adding any. A client-only change rebases for free; a new endpoint is a server file we own forever; a schema change is permanent once production has run it (see [Migrations](#migrations)) and needs Prateek's go-ahead first.
+- Match upstream's style exactly and never reformat, reorder or tidy an upstream file in passing. Cleanup outside the task is a conflict with no payoff.
+- Extend upstream types with optional fields, so upstream's own callers keep compiling. Put new tests in new files next to the feature; when an upstream test must change, change only the assertion the feature invalidated.
+- Before starting, check that upstream is not already shipping the same thing (`git fetch upstream`, then search `upstream/main`). If it lands later, take theirs and drop ours.
+- One commit is one logical change with its tests, buildable on its own, in an order where each commit stands on the ones before it: libraries first, then wiring, then the surface that uses them. When several commits touch one file, stage each commit's hunks separately (`git add -p`) so a shared file such as `client/src/main.ts` carries only that commit's seam. Write the body as the paragraph an upstream PR could reuse: what changed, why, and what stays out.
+- A change that only makes sense here (CI, this file, agent guidance, deploy config) uses the `fork` scope; everything else is written as if upstream will review it.
 
 ## Cut a release
 
