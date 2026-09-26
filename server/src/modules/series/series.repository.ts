@@ -602,6 +602,60 @@ export class SeriesRepository {
     return row ?? null;
   }
 
+  /**
+   * How many books after this one in the series the user has not read, among books they can see.
+   * Zero when the book is not in the series or not visible to them.
+   */
+  async countUnreadAfter(params: {
+    seriesId: number;
+    bookId: number;
+    userId: number;
+    libraryIds: number[];
+    contentFilters?: ContentFilterRules;
+  }): Promise<number> {
+    const libraryFilter = this.buildLibraryFilter(params.libraryIds);
+    const [current] = await this.db
+      .select({ seriesIndex: bookSeriesMemberships.seriesIndex, publishedDate: bookMetadata.publishedDate })
+      .from(bookSeriesMemberships)
+      .innerJoin(books, eq(books.id, bookSeriesMemberships.bookId))
+      .innerJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .where(and(eq(bookSeriesMemberships.seriesId, params.seriesId), eq(bookSeriesMemberships.bookId, params.bookId), libraryFilter))
+      .limit(1);
+
+    if (!current) return 0;
+
+    // The same order findNextReadableBook walks: unindexed books come after every indexed one.
+    const tieAfter = followsByPublishedDateThenId(current.publishedDate, params.bookId);
+    const afterCurrent =
+      current.seriesIndex === null
+        ? and(isNull(bookSeriesMemberships.seriesIndex), tieAfter)!
+        : or(
+            compareSeriesIndexSql(bookSeriesMemberships.seriesIndex, '>', current.seriesIndex),
+            and(compareSeriesIndexSql(bookSeriesMemberships.seriesIndex, '>=', current.seriesIndex), tieAfter),
+            isNull(bookSeriesMemberships.seriesIndex),
+          )!;
+
+    const filterClauses = params.contentFilters ? buildContentFilterClauses(params.contentFilters, this.db) : [];
+    const [row] = await this.db
+      .select({ unread: sql<number>`count(distinct ${books.id})::int` })
+      .from(books)
+      .innerJoin(bookSeriesMemberships, eq(bookSeriesMemberships.bookId, books.id))
+      .innerJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .leftJoin(userBookStatus, and(eq(userBookStatus.bookId, books.id), eq(userBookStatus.userId, params.userId)))
+      .where(
+        and(
+          eq(bookSeriesMemberships.seriesId, params.seriesId),
+          eq(books.status, 'present'),
+          libraryFilter,
+          afterCurrent,
+          or(isNull(userBookStatus.status), sql`${userBookStatus.status} <> 'read'`),
+          ...filterClauses,
+        ),
+      );
+
+    return row?.unread ?? 0;
+  }
+
   private async fetchAuthorsForSeries(
     seriesIds: number[],
     libraryIds: number[],

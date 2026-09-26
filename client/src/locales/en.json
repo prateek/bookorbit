@@ -9874,6 +9874,8 @@
       "region": "End of chapter",
       "eyebrow": "Next chapter",
       "endOfBook": "End of book",
+      "caughtUp": "You're caught up",
+      "caughtUpSince": "Latest chapter, added {date}",
       "numbered": "#{index} {title}",
       "untitled": "Untitled",
       "next": "Next chapter",
@@ -9916,7 +9918,8 @@
         "chapterTimeLeft": "Footer info: chapter + chapter time left",
         "time-left": "Footer: time left in chapter",
         "percent": "Footer: percent of book",
-        "off": "Footer: hidden"
+        "off": "Footer: hidden",
+        "unread": "Footer: unread after this"
       }
     },
     "footer": {
@@ -9938,7 +9941,9 @@
       "underAMinute": "< 1 min",
       "minutes": "{n} min",
       "hours": "{h} hr",
-      "hoursMinutes": "{h} hr {m} min"
+      "hoursMinutes": "{h} hr {m} min",
+      "unreadAfter": "{count} more unread",
+      "caughtUp": "Caught up"
     },
     "settings": {
       "title": "Settings",
@@ -9989,6 +9994,7 @@
         "footPagesLeft": "Pages left",
         "footTimeLeft": "Time left",
         "footPercent": "Percent",
+        "footUnread": "Unread",
         "off": "Off"
       },
       "flow": {

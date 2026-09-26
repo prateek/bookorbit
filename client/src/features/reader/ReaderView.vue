@@ -262,6 +262,7 @@ function handleTranslate() {
 }
 
 const bookMeta = ref<BookDetail | null>(null)
+const { nextBook, unreadAfter, load: loadNextBook } = useSeriesNextBook('epub')
 if (!isAudioFormat && !isPdfFormat && !isComicFormat) useReaderThemeColor(() => (shouldApplyStyles.value ? activeMode.value.bg : null))
 
 const runningText = useRunningText({
@@ -274,6 +275,7 @@ const runningText = useRunningText({
   chapterFraction: sectionFraction,
   bookFraction: fraction,
   minutesLeftInChapter: computed(() => (sectionFraction.value !== null ? pace.minutesAtPace(timeSection.value) : null)),
+  unreadAfter,
   onFootTap: cycleFooterRight,
 })
 
@@ -285,7 +287,6 @@ function cycleFooterRight() {
   void applyUpdate({ footerRight: nextFooterRight(state.value.footerRight) })
 }
 const { goBack } = useReaderBack(bookId, () => bookMeta.value)
-const { nextBook, load: loadNextBook } = useSeriesNextBook('epub')
 const { setStatus } = useBookStatus()
 
 const {
@@ -1115,6 +1116,8 @@ watch(trackingEnabled, (enabled) => {
   if (enabled && bookMeta.value && !nextBook.value) void loadNextBook(primarySeriesId(bookMeta.value), bookId)
 })
 
+const caughtUpSince = computed(() => (unreadAfter.value === 0 ? (bookMeta.value?.addedAt ?? null) : null))
+
 function dismissEndCard() {
   endCardDismissed.value = true
 }
@@ -1843,6 +1846,7 @@ onUnmounted(() => {
       <NextChapterCard
         class="pointer-events-auto"
         :next-book="nextBook"
+        :caught-up-since="caughtUpSince"
         :marked-read="markedRead"
         :marking-read="markingRead"
         :opening-next="openingNext"

@@ -22,7 +22,7 @@ export const EPUB_FOOTER_LEFT_ITEMS = ["page", "pages-left", "off"] as const;
 export type EpubFooterLeftItem = (typeof EPUB_FOOTER_LEFT_ITEMS)[number];
 
 /** How much is left, on the right of the line below the text. Tapping the line cycles it. */
-export const EPUB_FOOTER_RIGHT_ITEMS = ["time-left", "percent", "off"] as const;
+export const EPUB_FOOTER_RIGHT_ITEMS = ["time-left", "percent", "unread", "off"] as const;
 export type EpubFooterRightItem = (typeof EPUB_FOOTER_RIGHT_ITEMS)[number];
 
 export const CBX_SPREAD_GAP_MIN = 0;

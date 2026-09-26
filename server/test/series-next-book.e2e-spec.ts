@@ -142,7 +142,7 @@ describe('Series next readable book (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, ()
     const response = await requestNext(issue1.bookId, { formatGroup: 'cbx' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       next: {
         bookId: issue9.bookId,
         fileId: issue9.fileIdsByFormat.get('cbz'),
@@ -157,7 +157,7 @@ describe('Series next readable book (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, ()
     const response = await requestNext(issue9.bookId, { formatGroup: 'cbx' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       next: {
         bookId: issue10.bookId,
         fileId: issue10.fileIdsByFormat.get('cbr'),
@@ -171,7 +171,7 @@ describe('Series next readable book (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, ()
   it('places unnumbered books after every numbered one', async () => {
     const response = await requestNext(issue10.bookId, { formatGroup: 'cbx' });
 
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       next: expect.objectContaining({ bookId: unnumbered.bookId, seriesIndex: null }),
     });
   });
@@ -180,13 +180,13 @@ describe('Series next readable book (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, ()
     const response = await requestNext(unnumbered.bookId, { formatGroup: 'cbx' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ next: null });
+    expect(response.json()).toEqual({ next: null, unreadAfter: 0 });
   });
 
   it('follows the requested reader format group rather than the current book format', async () => {
     const response = await requestNext(issue1.bookId, { formatGroup: 'epub' });
 
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       next: expect.objectContaining({ bookId: issue2Epub.bookId, fileId: issue2Epub.fileIdsByFormat.get('epub'), format: 'epub' }),
     });
   });
@@ -195,7 +195,7 @@ describe('Series next readable book (e2e)', { timeout: SCENARIO_TIMEOUT_MS }, ()
     const response = await requestNext(issue1.bookId, { formatGroup: 'cbx', series: otherSeriesId });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ next: null });
+    expect(response.json()).toEqual({ next: null, unreadAfter: 0 });
   });
 
   it('rejects an unknown format group', async () => {

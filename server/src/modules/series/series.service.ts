@@ -227,15 +227,19 @@ export class SeriesService {
     const libraryIds = await this.resolveLibraryIds(user);
     if (libraryIds.length === 0) return { next: null };
 
-    const row = await this.seriesRepo.findNextReadableBook({
-      seriesId,
-      bookId,
-      libraryIds,
-      formats: dto.formatGroup ? getOpenableFormatsForGroup(dto.formatGroup) : [...READER_OPENABLE_FORMATS],
-      contentFilters: user.isSuperuser ? undefined : user.contentFilters,
-    });
+    const contentFilters = user.isSuperuser ? undefined : user.contentFilters;
+    const [row, unreadAfter] = await Promise.all([
+      this.seriesRepo.findNextReadableBook({
+        seriesId,
+        bookId,
+        libraryIds,
+        formats: dto.formatGroup ? getOpenableFormatsForGroup(dto.formatGroup) : [...READER_OPENABLE_FORMATS],
+        contentFilters,
+      }),
+      this.seriesRepo.countUnreadAfter({ seriesId, bookId, userId: user.id, libraryIds, contentFilters }),
+    ]);
 
-    if (!row?.format) return { next: null };
+    if (!row?.format) return { next: null, unreadAfter };
 
     return {
       next: {
@@ -245,6 +249,7 @@ export class SeriesService {
         title: row.title,
         seriesIndex: row.seriesIndex,
       },
+      unreadAfter,
     };
   }
 
