@@ -16,3 +16,8 @@ declare module 'vue-router' {
     titleRow?: boolean
   }
 }
+
+declare global {
+  /** Every file of the foliate reader engine under `/assets/foliate/`, listed at build time. */
+  const __FOLIATE_ASSETS__: string[]
+}
