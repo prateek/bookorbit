@@ -45,4 +45,16 @@ describe('ReaderSettingsPanel header and footer', () => {
 
     expect(wrapper.emitted('update')).toEqual([[{ runningHead: 'off' }], [{ footerLeft: 'pages-left' }], [{ footerRight: 'time-left' }]])
   })
+
+  it('offers the series before the chapter in the top line', async () => {
+    const wrapper = mount(ReaderSettingsPanel, { props: { state } })
+    const withSeries = wrapper
+      .get('[aria-label="Top line"]')
+      .findAll('button')
+      .find((button) => button.text() === 'With series')
+
+    await withSeries?.trigger('click')
+
+    expect(wrapper.emitted('update')).toEqual([[{ runningHead: 'series-chapter' }]])
+  })
 })

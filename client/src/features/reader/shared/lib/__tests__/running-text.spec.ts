@@ -1,13 +1,15 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n'
-import { buildRunningText, nextFooterRight, type RunningTextPosition, type RunningTextSlots } from '../running-text'
+import { buildRunningText, buildToolbarTitle, nextFooterRight, type RunningTextPosition, type RunningTextSlots } from '../running-text'
 
 const t = (key: string, named?: Record<string, unknown>) => (named ? i18n.global.t(key, named) : i18n.global.t(key))
 
 function position(overrides: Partial<RunningTextPosition> = {}): RunningTextPosition {
   return {
     chapterLabel: 'Chapter 430',
+    bookTitle: 'Chapter 430',
+    seriesName: 'Rise of the Living Forge',
     page: 3,
     pages: 12,
     chapterFraction: 0.2,
@@ -22,6 +24,16 @@ const slots: RunningTextSlots = { runningHead: 'chapter', footerLeft: 'page', fo
 describe('buildRunningText', () => {
   it('shows the chapter, the page within it and the time left in it', () => {
     expect(buildRunningText(position(), slots, t)).toEqual({ head: 'Chapter 430', left: '3 of 12', right: '9 min left in chapter' })
+  })
+
+  it('prefixes the series when asked and the book has one', () => {
+    expect(buildRunningText(position(), { ...slots, runningHead: 'series-chapter' }, t).head).toBe('Rise of the Living Forge · Chapter 430')
+    expect(buildRunningText(position({ seriesName: null }), { ...slots, runningHead: 'series-chapter' }, t).head).toBe('Chapter 430')
+  })
+
+  it('falls back to the book title when the contents do not name the chapter', () => {
+    expect(buildRunningText(position({ chapterLabel: '  ' }), slots, t).head).toBe('Chapter 430')
+    expect(buildRunningText(position({ chapterLabel: '', bookTitle: null }), slots, t).head).toBe('')
   })
 
   it('counts the pages left in the chapter, and says when this is the last', () => {
@@ -51,6 +63,13 @@ describe('buildRunningText', () => {
 
   it('leaves a slot empty when it is off', () => {
     expect(buildRunningText(position(), { runningHead: 'off', footerLeft: 'off', footerRight: 'off' }, t)).toEqual({ head: '', left: '', right: '' })
+  })
+})
+
+describe('buildToolbarTitle', () => {
+  it('puts the series above the chapter', () => {
+    expect(buildToolbarTitle(position())).toEqual({ series: 'Rise of the Living Forge', chapter: 'Chapter 430' })
+    expect(buildToolbarTitle(position({ seriesName: ' ' }))).toEqual({ series: null, chapter: 'Chapter 430' })
   })
 })
 
