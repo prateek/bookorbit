@@ -73,13 +73,13 @@ describe('sidebar nav registry', () => {
   })
 
   it('shows only ungated destinations to a user with no permissions', () => {
-    expect(allowedIds(makeContext())).toEqual(['dashboard', 'statistics', 'achievements', 'authors', 'series', 'annotations'])
+    expect(allowedIds(makeContext())).toEqual(['dashboard', 'statistics', 'achievements', 'downloads', 'authors', 'series', 'annotations'])
   })
 
-  it('places Dashboard, Book Dock, Requests, Tools and the podcast Queue in the primary zone, above the entity sections', () => {
+  it('places Dashboard, Book Dock, Requests, Tools, Downloads and the podcast Queue in the primary zone, above the entity sections', () => {
     const primary = SIDEBAR_NAV_REGISTRY.filter((candidate) => candidate.zone === 'primary').map((candidate) => candidate.id)
 
-    expect(primary).toEqual(['dashboard', 'book-dock', 'book-requests', 'tools', 'podcast-queue'])
+    expect(primary).toEqual(['dashboard', 'book-dock', 'book-requests', 'tools', 'downloads', 'podcast-queue'])
   })
 
   it('groups Statistics, Achievements and Annotations in the Reading zone', () => {
@@ -253,7 +253,7 @@ describe('sidebar nav registry', () => {
       'book-dock',
       'book-requests',
       'tools',
-      'authors',
+      'downloads', 'authors',
       'series',
       'annotations',
     ])

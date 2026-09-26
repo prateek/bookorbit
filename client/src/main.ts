@@ -1,16 +1,19 @@
 import './assets/main.css'
 import './lib/echarts'
 
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import router from './router'
 import { i18n } from './i18n'
 import { useLocaleStore } from './stores/locale'
+import { useAuth } from './features/auth/composables/useAuth'
 import { bootstrapSession } from './features/auth/composables/useSessionBootstrap'
 import { installAppBadgeClearing } from './features/push/lib/app-badge'
 import { reconcilePushSubscription } from './features/push/composables/usePushNotifications'
+import { offlineMode, registerOfflineGuard, watchForReconnect } from './features/offline/offline-mode'
+import { startOfflineSession, stopOfflineSession } from './features/offline/offline-session'
 import { installServiceWorkerUpdateChecks } from './features/pwa/lib/service-worker-updates'
 
 // Chrome 124+ blocks aria-hidden from being applied to an element that contains
@@ -96,12 +99,20 @@ try {
 // Resolve setup status/auth before installing router.
 // app.use(router) triggers initial navigation and guard execution.
 await bootstrapSession()
+const { user, init } = useAuth()
 
+registerOfflineGuard(router)
 app.use(router)
 app.mount('#app')
 installAppBadgeClearing()
 installServiceWorkerUpdateChecks()
-void reconcilePushSubscription()
+watchForReconnect(router, init, () => !!user.value)
+watch(
+  () => user.value?.id ?? null,
+  (userId) => void (userId === null ? stopOfflineSession() : startOfflineSession(userId)),
+  { immediate: true },
+)
+if (!offlineMode.value) void reconcilePushSubscription()
 
 function prefetchPdfReader() {
   void Promise.all([import('./features/reader/pdf-v4/PdfV4ReaderView.vue'), import('@embedpdf/pdfium/pdfium.wasm?url')])

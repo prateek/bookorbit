@@ -14,6 +14,8 @@ declare module 'vue-router' {
     title?: string | ((to: RouteLocationNormalizedLoaded) => string)
     /** The view opens with a PageTitleRow, which carries the phone menu and search buttons itself. */
     titleRow?: boolean
+    /** Renders from local data, so it stays reachable when the app launched without the server. */
+    offlineCapable?: boolean
   }
 }
 

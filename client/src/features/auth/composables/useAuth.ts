@@ -26,6 +26,8 @@ import { resetBrowseCounts } from '@/composables/useBrowseCounts'
 import { resetBookRequestSummary } from '@/features/book-requests/composables/useBookRequestSummary'
 import { clearReleaseSearchCache } from '@/features/book-requests/composables/useReleasePicker'
 import { detachDevicePushSubscription } from '@/features/push/composables/usePushNotifications'
+import { forgetOfflineUser, offlineMode, readOfflineUser, rememberOfflineUser } from '@/features/offline/offline-mode'
+import { signOutOfflineSession } from '@/features/offline/offline-session'
 
 const SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
@@ -79,6 +81,7 @@ function clearAuth() {
   resetBrowseCounts()
   resetBookRequestSummary()
   clearReleaseSearchCache()
+  offlineMode.value = false
   user.value = null
   setAccessToken(null)
   disconnectAuthorEnrichmentSocket()
@@ -101,6 +104,7 @@ async function me(): Promise<void> {
   if (isServerUnavailableStatus(res.status)) throw new ServerUnavailableError(res.status)
   if (!res.ok) throw new Error('Failed to load user')
   user.value = await res.json()
+  rememberOfflineUser(user.value!)
 }
 
 async function hydratePreferences(options: { refreshUser?: boolean } = {}): Promise<void> {
@@ -148,10 +152,24 @@ export function useAuth() {
       await me()
       await hydratePreferences()
       startSessionRefresh()
+      offlineMode.value = false
     } catch (reason) {
-      if (!user.value) outcome = isServerUnreachable(reason) ? 'unreachable' : 'anonymous'
-      if (isServerUnreachable(reason) && !user.value) {
-        sessionUnavailable.value = true
+      if (!user.value || offlineMode.value) outcome = isServerUnreachable(reason) ? 'unreachable' : 'anonymous'
+      if (isServerUnreachable(reason)) {
+        // With a stored profile the installed app can still open downloaded books.
+        const stored = user.value ? null : readOfflineUser()
+        if (stored) {
+          outcome = 'authenticated'
+          user.value = stored
+          offlineMode.value = true
+        } else if (!user.value) {
+          sessionUnavailable.value = true
+        }
+      } else if (offlineMode.value) {
+        // The server answered and the stored session is no longer valid, so the profile that let
+        // this device start offline goes with it.
+        forgetOfflineUser()
+        clearAuth()
       }
     } finally {
       // An unreachable server is asked again, so the syncs start once, with whichever answer comes back.
@@ -239,6 +257,8 @@ export function useAuth() {
 
   async function logout(): Promise<void> {
     try {
+      forgetOfflineUser()
+      await signOutOfflineSession().catch(() => undefined)
       await detachDevicePushSubscription()
       await fetchWithAuthProxyRecovery('/api/v1/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined)
     } finally {
@@ -268,5 +288,5 @@ export function useAuth() {
     router.push('/')
   }
 
-  return { user, isLoading, sessionUnavailable, init, login, loginWithMagicLink, logout, me, register, setup }
+  return { user, isLoading, sessionUnavailable, offlineMode, init, login, loginWithMagicLink, logout, me, register, setup }
 }

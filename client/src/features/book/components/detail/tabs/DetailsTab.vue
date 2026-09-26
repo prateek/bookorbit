@@ -73,6 +73,7 @@ import { useMetadataScoreWeights } from '@/features/metadata-score/composables/u
 import { useSafeHtml } from '@/features/book/composables/useSafeHtml'
 import { useKoreaderBookProgress } from '@/features/koreader/composables/useKoreaderBookProgress'
 import KoreaderResetHoldNotice from '@/features/koreader/components/KoreaderResetHoldNotice.vue'
+import OfflineDownloadButton from '@/features/offline/components/OfflineDownloadButton.vue'
 import { RATING_STARS, getRatingStarClass } from '@/features/book/lib/rating-stars'
 import { formatCommunityRatingValue } from '@/features/book/lib/community-rating'
 import BookCoverSurface from '@/features/book/components/BookCoverSurface.vue'
@@ -1550,6 +1551,7 @@ watch(
               </TooltipTrigger>
               <TooltipContent>{{ t('book.detail.details.peek') }}</TooltipContent>
             </Tooltip>
+            <OfflineDownloadButton v-if="primaryFile" :book="book" :file-id="primaryFile.id" :format="primaryFile.format" />
           </div>
 
           <div
