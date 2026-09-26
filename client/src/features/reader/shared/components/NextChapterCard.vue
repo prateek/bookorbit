@@ -4,11 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { BookCheck, Check, ChevronRight, X } from '@lucide/vue'
 import type { SeriesNextBook } from '@bookorbit/types'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const props = defineProps<{
   /** The next book in the series; the card offers only "Mark as read" without one. */
   nextBook: SeriesNextBook | null
+  /** When this book was added, if it is the newest the reader has not read past: the series is caught up. */
+  caughtUpSince?: string | null
   markedRead: boolean
   markingRead?: boolean
   openingNext?: boolean
@@ -25,6 +27,17 @@ const nextLabel = computed(() => {
   if (!next) return ''
   const title = next.title ?? t('reader.endCard.untitled')
   return next.seriesIndex ? t('reader.endCard.numbered', { index: next.seriesIndex, title }) : title
+})
+
+const caughtUpDate = computed(() => {
+  if (props.nextBook || !props.caughtUpSince) return null
+  const date = new Date(props.caughtUpSince)
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString(locale.value, { month: 'short', day: 'numeric' })
+})
+
+const eyebrow = computed(() => {
+  if (props.nextBook) return t('reader.endCard.eyebrow')
+  return props.caughtUpSince ? t('reader.endCard.caughtUp') : t('reader.endCard.endOfBook')
 })
 
 function handleOpenNext() {
@@ -49,10 +62,9 @@ function handleDismiss() {
   >
     <div class="flex items-start gap-2">
       <div class="min-w-0 flex-1 py-1">
-        <p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {{ nextBook ? t('reader.endCard.eyebrow') : t('reader.endCard.endOfBook') }}
-        </p>
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{{ eyebrow }}</p>
         <p v-if="nextBook" class="truncate text-sm font-medium text-foreground">{{ nextLabel }}</p>
+        <p v-else-if="caughtUpDate" class="truncate text-sm text-foreground">{{ t('reader.endCard.caughtUpSince', { date: caughtUpDate }) }}</p>
       </div>
       <button
         type="button"

@@ -53,6 +53,7 @@ describe('SeriesService', () => {
     findDetail: vi.fn(),
     findBookIds: vi.fn(),
     findNextReadableBook: vi.fn(),
+    countUnreadAfter: vi.fn(),
     findContinueTarget: vi.fn(),
     findUnreadBookIds: vi.fn(),
     countSeries: vi.fn(),

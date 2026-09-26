@@ -11,6 +11,7 @@ import {
   Columns3,
   EyeOff,
   Headphones,
+  ListChecks,
   Maximize,
   Minimize,
   Percent,
@@ -90,6 +91,7 @@ function toggleSettings() {
 const footerModeIcon = computed(() => {
   if (props.footerRight === 'time-left') return Clock3
   if (props.footerRight === 'percent') return Percent
+  if (props.footerRight === 'unread') return ListChecks
   return EyeOff
 })
 

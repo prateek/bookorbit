@@ -15,6 +15,7 @@ interface RunningTextSources {
   chapterFraction: Ref<number | null>
   bookFraction: Ref<number>
   minutesLeftInChapter: ComputedRef<number | null>
+  unreadAfter: Ref<number | null>
   onFootTap: () => void
 }
 
@@ -29,7 +30,10 @@ function span(text: string, align: 'left' | 'right'): HTMLSpanElement {
   return el
 }
 
-/** What the lines above and below the page say, built once for the paginated head and foot and the toolbar title. */
+/**
+ * What the lines above and below the page say, built once for the paginated head and foot, the
+ * toolbar title and the scroll-mode strip so they never disagree.
+ */
 export function useRunningText(sources: RunningTextSources) {
   const { t } = useI18n()
 
@@ -42,6 +46,7 @@ export function useRunningText(sources: RunningTextSources) {
     chapterFraction: sources.chapterFraction.value,
     bookFraction: sources.bookFraction.value,
     minutesLeftInChapter: sources.minutesLeftInChapter.value,
+    unreadAfter: sources.unreadAfter.value,
   }))
 
   const text = computed<RunningText>(() => buildRunningText(position.value, sources.state.value, t))

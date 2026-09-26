@@ -15,6 +15,7 @@ function position(overrides: Partial<RunningTextPosition> = {}): RunningTextPosi
     chapterFraction: 0.2,
     bookFraction: 0.27,
     minutesLeftInChapter: 9.4,
+    unreadAfter: 4,
     ...overrides,
   }
 }
@@ -66,6 +67,19 @@ describe('buildRunningText', () => {
   })
 })
 
+describe('unread after this', () => {
+  const unread = { ...slots, footerRight: 'unread' as const }
+
+  it('counts the unread books after this one, and says when the series is caught up', () => {
+    expect(buildRunningText(position(), unread, t).right).toBe('4 more unread')
+    expect(buildRunningText(position({ unreadAfter: 0 }), unread, t).right).toBe('Caught up')
+  })
+
+  it('shows the book percentage outside a series or before the count arrives', () => {
+    expect(buildRunningText(position({ unreadAfter: null }), unread, t).right).toBe('27%')
+  })
+})
+
 describe('buildToolbarTitle', () => {
   it('puts the series above the chapter', () => {
     expect(buildToolbarTitle(position())).toEqual({ series: 'Rise of the Living Forge', chapter: 'Chapter 430' })
@@ -74,9 +88,10 @@ describe('buildToolbarTitle', () => {
 })
 
 describe('nextFooterRight', () => {
-  it('cycles between time left and percent, and a tap brings back a hidden slot', () => {
+  it('cycles through time left, percent and unread, and a tap brings back a hidden slot', () => {
     expect(nextFooterRight('time-left')).toBe('percent')
-    expect(nextFooterRight('percent')).toBe('time-left')
+    expect(nextFooterRight('percent')).toBe('unread')
+    expect(nextFooterRight('unread')).toBe('time-left')
     expect(nextFooterRight('off')).toBe('time-left')
   })
 })
