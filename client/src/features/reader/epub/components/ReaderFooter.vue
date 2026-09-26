@@ -16,7 +16,7 @@ const props = defineProps<{
   chapterEndFraction: number
   /** Screen pages in the current section; null in scrolled flow. */
   sectionPages: number | null
-  /** Where the reader is, for the scroll-mode strip. */
+  /** Where the reader is, shown above the bar and in the scroll-mode strip. */
   summary?: string
   navigationLocked?: boolean
   /** False when the renderer paginates despite a scrolled setting, as fixed-layout books do. */
@@ -114,6 +114,12 @@ watch(
     class="reader-bar fixed bottom-0 left-0 right-0 z-50 flex h-[calc(2.75rem+env(safe-area-inset-bottom))] items-center gap-1 border-t border-border bg-background/95 px-1 pb-[env(safe-area-inset-bottom)] text-foreground backdrop-blur-md sm:gap-3 sm:px-4"
     :style="chromeStyle"
   >
+    <p
+      class="pointer-events-none absolute inset-x-0 bottom-full flex h-6 items-center justify-center truncate border-t border-border bg-background/95 px-3 text-xs tabular-nums text-muted-foreground backdrop-blur-md"
+      data-testid="footer-summary"
+    >
+      {{ summary }}
+    </p>
     <!-- Scrolled flow has no running foot, so this strip says the same thing above the home indicator. -->
     <Teleport to="body">
       <div
@@ -217,7 +223,6 @@ watch(
             class="h-11 px-2 sm:h-8 rounded-md border border-transparent hover:border-border text-xs tabular-nums shrink-0 min-w-18 text-center text-muted-foreground hover:text-foreground transition-colors inline-flex items-center justify-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:border-transparent disabled:hover:text-muted-foreground"
             @click="handlePercentageClick"
           >
-            <span class="text-[11px] uppercase tracking-wide">{{ t('reader.footer.go') }}</span>
             <span>{{ Math.round(fraction * 100) }}%</span>
             <ChevronsUpDown :size="12" />
           </button>

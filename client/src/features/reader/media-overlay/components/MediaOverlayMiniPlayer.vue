@@ -14,7 +14,7 @@ const { isReaderFooterVisible } = useTtsMiniPlayerUi()
 
 const showPanel = ref(false)
 
-const containerPositionClass = computed(() => (isReaderFooterVisible.value ? 'bottom-[calc(1rem+2.75rem+env(safe-area-inset-bottom))]' : 'bottom-4'))
+const containerPositionClass = computed(() => (isReaderFooterVisible.value ? 'bottom-[calc(1rem+4.25rem+env(safe-area-inset-bottom))]' : 'bottom-4'))
 
 function handleSetRate(value: number) {
   setRate(value)
