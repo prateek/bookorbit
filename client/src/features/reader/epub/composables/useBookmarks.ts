@@ -1,5 +1,7 @@
-import { computed, ref } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, ref } from 'vue'
 import { api } from '@/lib/api'
+import { attachBookReplica } from '@/features/offline/composables/useBookReplica'
+import type { OfflineSession } from '@/features/offline/offline-session'
 
 export interface Bookmark {
   id: number
@@ -13,6 +15,10 @@ export function useBookmarks() {
   const bookmarks = ref<Bookmark[]>([])
   const currentCfi = ref<string | null>(null)
   const loadError = ref<string | null>(null)
+  // Set once load() finds an offline session: reads and writes then go through the local replica.
+  let session: OfflineSession | null = null
+  let detachReplica: (() => void) | null = null
+  if (getCurrentScope()) onScopeDispose(() => detachReplica?.())
 
   const isCurrentCfiBookmarked = computed(() => {
     if (!currentCfi.value) return false
@@ -25,6 +31,16 @@ export function useBookmarks() {
 
   async function load(bookId: number) {
     loadError.value = null
+    detachReplica?.()
+    const attached = await attachBookReplica(bookId, 'bookmarks', async (current) => {
+      bookmarks.value = await current.replica.listBookmarks(bookId)
+    })
+    session = attached?.session ?? null
+    detachReplica = attached?.detach ?? null
+    if (session) {
+      bookmarks.value = await session.replica.listBookmarks(bookId)
+      return
+    }
     const res = await api(`/api/v1/books/${bookId}/bookmarks`)
     if (!res.ok) {
       loadError.value = 'Failed to load'
@@ -37,6 +53,9 @@ export function useBookmarks() {
     const existing = bookmarks.value.find((b) => b.cfi === cfi)
     if (existing) {
       await remove(bookId, existing.id)
+    } else if (session) {
+      const created = await session.replica.createBookmark(bookId, cfi, title).catch(() => null)
+      if (created) bookmarks.value = [...bookmarks.value, created]
     } else {
       const res = await api(`/api/v1/books/${bookId}/bookmarks`, {
         method: 'POST',
@@ -51,6 +70,11 @@ export function useBookmarks() {
   }
 
   async function remove(bookId: number, bookmarkId: number) {
+    if (session) {
+      if (await session.replica.deleteBookmark(bookId, bookmarkId).catch(() => false))
+        bookmarks.value = bookmarks.value.filter((b) => b.id !== bookmarkId)
+      return
+    }
     const res = await api(`/api/v1/books/${bookId}/bookmarks/${bookmarkId}`, {
       method: 'DELETE',
     })

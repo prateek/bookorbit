@@ -927,3 +927,5 @@ customElements.define('foliate-view', View)
 
 // Export makeStreamingBook to window for use from Angular
 window.makeStreamingBook = makeStreamingBook
+// Exported so a downloaded book can be opened from its local file
+window.makeBook = makeBook

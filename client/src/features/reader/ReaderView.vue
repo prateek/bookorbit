@@ -58,7 +58,8 @@ import type { BookDetail, EpubMediaOverlayPlaylist, EpubReaderSettings } from '@
 import { findMatchingCfiRange } from './epub/utils'
 import { getFormatGroup } from '@bookorbit/types'
 import { resolveReaderResumeTarget } from '@/lib/reading-checkpoint'
-import { api } from '@/lib/api'
+import { api, isServerUnreachable } from '@/lib/api'
+import { getBookSnapshot, trackOpenedBook } from '@/features/offline/offline-session'
 
 const PdfV4ReaderView = defineAsyncComponent(() => import('./pdf-v4/PdfV4ReaderView.vue'))
 
@@ -135,7 +136,7 @@ const { onActivity, elapsedMinutes } = useReadingSession(
     cfi: progress.cfi.value,
     pageNumber: progress.pageNumber.value,
   }),
-  { trackingEnabled },
+  { trackingEnabled, bookId },
 )
 
 const progress = useReaderProgress(bookId, fileId, elapsedMinutes, 0, {
@@ -893,9 +894,25 @@ const setupError = ref<string | null>(null)
 const readerLoading = computed(() => setupPending.value || loading.value)
 const readerError = computed(() => (readerLoading.value ? null : (setupError.value ?? error.value)))
 
+/** The server's copy, or the one saved with a download when the server cannot be reached. */
+async function fetchBookMeta(): Promise<BookDetail> {
+  try {
+    const response = await api(`/api/v1/books/${bookId}`)
+    return (await response.json()) as BookDetail
+  } catch (reason) {
+    const snapshot = isServerUnreachable(reason) ? await getBookSnapshot(bookId) : null
+    if (!snapshot) throw reason
+    return snapshot.detail as BookDetail
+  }
+}
+
+/** Offline, custom fonts and synced settings fall back to what this device already has. */
+function tolerateUnreachable(reason: unknown) {
+  if (!isServerUnreachable(reason)) throw reason
+}
+
 function loadBookMeta() {
-  void api(`/api/v1/books/${bookId}`)
-    .then((r) => r.json() as Promise<BookDetail>)
+  void fetchBookMeta()
     .then((b) => {
       bookMeta.value = b
       markedRead.value = b.readStatus?.status === 'read'
@@ -940,13 +957,29 @@ function handleBack() {
   goBack()
 }
 
+const BOOK_REFRESH_WAIT_MS = 4_000
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+const drawnAnnotationCfis = new Set<string>()
+
+function drawNewAnnotations() {
+  const drawable = annotations.annotations.value.filter((a): a is typeof a & { cfi: string } => a.cfi != null && !drawnAnnotationCfis.has(a.cfi))
+  if (drawable.length === 0) return
+  for (const a of drawable) drawnAnnotationCfis.add(a.cfi)
+  addAnnotations(drawable.map((a) => ({ cfi: a.cfi, color: a.color, style: a.style })))
+}
+
 async function openReader() {
-  await customFonts.fetchAllFonts()
+  drawnAnnotationCfis.clear()
+  await customFonts.fetchAllFonts().catch(tolerateUnreachable)
   await refreshFontFaces()
 
   await progress.load()
 
-  await bookSettings.load()
+  await bookSettings.load().catch(tolerateUnreachable)
   const effective = bookSettings.effective.value as EpubReaderSettings
   if (effective.footerDisplayMode !== undefined) {
     footerMode.value = effective.footerDisplayMode
@@ -984,17 +1017,20 @@ async function openReader() {
   setupPending.value = false
   setChapters(getChapters())
   sectionFractions.value = getSectionFractions()
+  // Brings this book's highlights and bookmarks up to date from the server before drawing them,
+  // but only for a moment: a server that is slow to fail must not hold back a readable book, and
+  // whatever arrives later is drawn then.
+  const refreshed = trackingEnabled.value ? trackOpenedBook(bookId, fileId) : Promise.resolve()
+  const refreshedInTime = await Promise.race([refreshed.then(() => true), delay(BOOK_REFRESH_WAIT_MS).then(() => false)])
   await bookmarks.load(bookId)
   await annotations.load(bookId)
-  const drawableAnnotations = annotations.annotations.value.filter((a): a is typeof a & { cfi: string } => a.cfi != null)
-  if (drawableAnnotations.length > 0) {
-    addAnnotations(
-      drawableAnnotations.map((a) => ({
-        cfi: a.cfi,
-        color: a.color,
-        style: a.style,
-      })),
-    )
+  drawNewAnnotations()
+  if (!refreshedInTime) {
+    void refreshed.then(async () => {
+      if (!initialOpenCompleted) return
+      await annotations.load(bookId)
+      drawNewAnnotations()
+    })
   }
   void hydrateSidebarLocationMeta()
 
