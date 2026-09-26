@@ -8,11 +8,14 @@ import {
   CBX_READER_DEFAULTS,
   EPUB_FONT_SIZE_MAX,
   EPUB_FONT_SIZE_MIN,
+  EPUB_FOOTER_LEFT_ITEMS,
+  EPUB_FOOTER_RIGHT_ITEMS,
   EPUB_LETTER_SPACING_MAX,
   EPUB_LETTER_SPACING_MIN,
   EPUB_PARAGRAPH_SPACING_MAX,
   EPUB_PARAGRAPH_SPACING_MIN,
   EPUB_READER_DEFAULTS,
+  EPUB_RUNNING_HEAD_MODES,
   EPUB_TEXT_INDENT_MAX,
   EPUB_TEXT_INDENT_MIN,
   EPUB_WORD_SPACING_MAX,
@@ -57,6 +60,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function jsonEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
+}
+
+function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value is T {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
+}
+
+// Account defaults saved before the footer had slots carry only the mode that was cycled; slots saved
+// alongside it replace this. A book's own old mode is dropped rather than mapped, so it cannot pin
+// that book against the account's footer choice.
+const LEGACY_FOOTER_SLOTS: Record<0 | 1 | 2, Pick<EpubReaderSettings, 'footerLeft' | 'footerRight'>> = {
+  0: { footerLeft: 'page', footerRight: 'percent' },
+  1: { footerLeft: 'page', footerRight: 'time-left' },
+  2: { footerLeft: 'pages-left', footerRight: 'time-left' },
 }
 
 function isNumberInRange(value: unknown, min: number, max: number): value is number {
@@ -135,6 +151,15 @@ function sanitizeEpubPartialSettings(settings: unknown): Partial<EpubReaderSetti
   }
   if (settings.footerDisplayMode === 0 || settings.footerDisplayMode === 1 || settings.footerDisplayMode === 2) {
     out.footerDisplayMode = settings.footerDisplayMode
+  }
+  if (isOneOf(settings.runningHead, EPUB_RUNNING_HEAD_MODES)) {
+    out.runningHead = settings.runningHead
+  }
+  if (isOneOf(settings.footerLeft, EPUB_FOOTER_LEFT_ITEMS)) {
+    out.footerLeft = settings.footerLeft
+  }
+  if (isOneOf(settings.footerRight, EPUB_FOOTER_RIGHT_ITEMS)) {
+    out.footerRight = settings.footerRight
   }
   if (settings.fixedLayoutSpread === 'auto' || settings.fixedLayoutSpread === 'none') {
     out.fixedLayoutSpread = settings.fixedLayoutSpread
@@ -220,8 +245,10 @@ function sanitizeDefaultSettings(group: ReaderFormatGroup, raw: unknown): Reader
   if (group === 'epub') {
     const sanitized = sanitizeEpubPartialSettings(raw)
     if (!sanitized) return null
+    const legacyFooter = sanitized.footerDisplayMode === undefined ? {} : LEGACY_FOOTER_SLOTS[sanitized.footerDisplayMode]
     return {
       ...EPUB_READER_DEFAULTS,
+      ...legacyFooter,
       ...sanitized,
     } as ReaderSettings
   }

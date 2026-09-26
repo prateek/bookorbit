@@ -90,6 +90,23 @@ const flowOptions = computed(() => [
   },
 ])
 
+const runningHeadOptions = computed(() => [
+  { value: 'chapter', label: t('reader.settings.headerFooter.headChapter') },
+  { value: 'off', label: t('reader.settings.headerFooter.off') },
+])
+
+const footerLeftOptions = computed(() => [
+  { value: 'page', label: t('reader.settings.headerFooter.footPage') },
+  { value: 'pages-left', label: t('reader.settings.headerFooter.footPagesLeft') },
+  { value: 'off', label: t('reader.settings.headerFooter.off') },
+])
+
+const footerRightOptions = computed(() => [
+  { value: 'time-left', label: t('reader.settings.headerFooter.footTimeLeft') },
+  { value: 'percent', label: t('reader.settings.headerFooter.footPercent') },
+  { value: 'off', label: t('reader.settings.headerFooter.off') },
+])
+
 const spreadOptions = computed(() => [
   {
     value: 'auto',
@@ -233,6 +250,18 @@ function setPageWidth(value: number) {
 
 function setFlow(value: string) {
   emit('update', { flow: value as ReaderState['flow'] })
+}
+
+function setRunningHead(value: string) {
+  emit('update', { runningHead: value as ReaderState['runningHead'] })
+}
+
+function setFooterLeft(value: string) {
+  emit('update', { footerLeft: value as ReaderState['footerLeft'] })
+}
+
+function setFooterRight(value: string) {
+  emit('update', { footerRight: value as ReaderState['footerRight'] })
 }
 
 function setFixedLayoutSpread(value: string) {
@@ -627,6 +656,37 @@ const cardBaseClass =
             :aria-label="t('reader.settings.readingFlow')"
             @update:model-value="setFlow"
           />
+        </div>
+
+        <div class="space-y-2.5 border-b border-border px-4 py-3.5" data-testid="header-footer-setting">
+          <p :class="groupLabelClass">{{ t('reader.settings.headerFooter.title') }}</p>
+          <div>
+            <p class="mb-1.5 text-[13px] font-medium text-foreground">{{ t('reader.settings.headerFooter.head') }}</p>
+            <ReaderSegmentedControl
+              :options="runningHeadOptions"
+              :model-value="state.runningHead"
+              :aria-label="t('reader.settings.headerFooter.head')"
+              @update:model-value="setRunningHead"
+            />
+          </div>
+          <div>
+            <p class="mb-1.5 text-[13px] font-medium text-foreground">{{ t('reader.settings.headerFooter.footLeft') }}</p>
+            <ReaderSegmentedControl
+              :options="footerLeftOptions"
+              :model-value="state.footerLeft"
+              :aria-label="t('reader.settings.headerFooter.footLeft')"
+              @update:model-value="setFooterLeft"
+            />
+          </div>
+          <div>
+            <p class="mb-1.5 text-[13px] font-medium text-foreground">{{ t('reader.settings.headerFooter.footRight') }}</p>
+            <ReaderSegmentedControl
+              :options="footerRightOptions"
+              :model-value="state.footerRight"
+              :aria-label="t('reader.settings.headerFooter.footRight')"
+              @update:model-value="setFooterRight"
+            />
+          </div>
         </div>
 
         <details class="group/adv">

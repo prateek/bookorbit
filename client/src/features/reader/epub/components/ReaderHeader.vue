@@ -4,22 +4,23 @@ import { useI18n } from 'vue-i18n'
 import {
   ArrowLeft,
   BookOpen,
-  BookText,
   Bookmark,
   BookmarkCheck,
   CircleHelp,
   Clock3,
   Columns3,
-  FileText,
+  EyeOff,
   Headphones,
   Maximize,
   Minimize,
+  Percent,
   Pin,
   PinOff,
   Search,
   Settings,
 } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
+import type { EpubFooterRightItem } from '@bookorbit/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import ReaderSettingsSheet from '@/features/reader/shared/components/ReaderSettingsSheet.vue'
@@ -32,7 +33,7 @@ const props = defineProps<{
   chapterTitle: string
   isBookmarked: boolean
   settingsOpen: boolean
-  footerMode: 0 | 1 | 2
+  footerRight: EpubFooterRightItem
   peekMode?: boolean
   isTtsActive?: boolean
   isTtsAvailable?: boolean
@@ -81,17 +82,13 @@ function toggleSettings() {
   emit('update:settingsOpen', !props.settingsOpen)
 }
 
-function getFooterModeIcon(mode: 0 | 1 | 2) {
-  if (mode === 0) return FileText
-  if (mode === 1) return Clock3
-  return BookText
-}
+const footerModeIcon = computed(() => {
+  if (props.footerRight === 'time-left') return Clock3
+  if (props.footerRight === 'percent') return Percent
+  return EyeOff
+})
 
-function getFooterModeTooltip(mode: 0 | 1 | 2): string {
-  if (mode === 0) return t('reader.header.footerMode.pageProgress')
-  if (mode === 1) return t('reader.header.footerMode.sessionTimeLeft')
-  return t('reader.header.footerMode.chapterTimeLeft')
-}
+const footerModeTooltip = computed(() => t(`reader.header.footerMode.${props.footerRight}`))
 </script>
 
 <template>
@@ -181,10 +178,10 @@ function getFooterModeTooltip(mode: 0 | 1 | 2): string {
       <Tooltip>
         <TooltipTrigger as-child>
           <button class="viewer-btn hidden sm:flex" :aria-label="t('reader.header.cycleFooterMode')" @click="emit('cycleFooterMode')">
-            <component :is="getFooterModeIcon(props.footerMode)" :size="16" />
+            <component :is="footerModeIcon" :size="16" />
           </button>
         </TooltipTrigger>
-        <TooltipContent>{{ getFooterModeTooltip(props.footerMode) }}</TooltipContent>
+        <TooltipContent>{{ footerModeTooltip }}</TooltipContent>
       </Tooltip>
 
       <Tooltip>

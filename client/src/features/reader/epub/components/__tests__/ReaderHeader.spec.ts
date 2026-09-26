@@ -52,7 +52,7 @@ function mountHeader(props: Record<string, unknown> = {}) {
       chapterTitle: 'Chapter 4',
       isBookmarked: false,
       settingsOpen: false,
-      footerMode: 0,
+      footerRight: 'time-left' as const,
       ...props,
     },
     slots: { settingsPanel: '<p data-testid="settings-panel">Panel body</p>' },
@@ -162,7 +162,7 @@ describe('ReaderHeader', () => {
         chapterTitle: 'Chapter 4',
         isBookmarked: true,
         settingsOpen: false,
-        footerMode: 0,
+        footerRight: 'time-left' as const,
         isTtsAvailable: false,
       },
       global,
@@ -193,7 +193,7 @@ describe('ReaderHeader', () => {
   it('takes its colors from the page theme when the reader provides one', () => {
     const mode = ref({ fg: '#5b4636', bg: '#f1e8d0', link: '#008b8b' })
     const wrapper = mount(ReaderHeader, {
-      props: { chapterTitle: 'Chapter 4', isBookmarked: false, settingsOpen: false, footerMode: 0 },
+      props: { chapterTitle: 'Chapter 4', isBookmarked: false, settingsOpen: false, footerRight: 'time-left' as const },
       slots: { settingsPanel: '<p />' },
       global: {
         ...global,

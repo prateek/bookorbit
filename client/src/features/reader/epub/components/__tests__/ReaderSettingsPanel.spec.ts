@@ -28,6 +28,9 @@ function makeState(overrides: Partial<ReaderState> = {}): ReaderState {
     themeName: 'default',
     flow: 'paginated',
     fixedLayoutSpread: 'auto',
+    runningHead: 'chapter',
+    footerLeft: 'page',
+    footerRight: 'percent',
     ...overrides,
   }
 }
