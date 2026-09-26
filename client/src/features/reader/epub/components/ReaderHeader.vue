@@ -63,14 +63,18 @@ const { isFullscreen, isFullscreenSupported } = useFullscreen()
 const pageContext = useReaderPageContext()
 const chromeStyle = computed(() => readerChromeThemeStyle(pageContext?.mode.value))
 
-// The settings surface is one panel in two containers: an anchored popover where there
-// is room beside the text, a bottom sheet where the thumb is and the page must stay visible.
-const isCompact = useMediaQuery('(max-width: 639px)')
+// A phone gets the compact bar in either orientation: turned sideways it is wide enough for the
+// desktop controls but still has a phone's height and no keyboard to use them with. The settings
+// surface follows suit: a bottom sheet where the thumb is, an anchored popover elsewhere.
+const isCompact = useMediaQuery('(max-width: 639px), (pointer: coarse) and (max-height: 499px)')
 
 const ttsTooltip = computed(() => {
   if (props.isTtsActive) return props.isMediaOverlay ? t('reader.header.narrationPlaying') : t('reader.header.ttsPlaying')
   return props.isMediaOverlay ? t('reader.header.listenWithNarrationShort') : t('reader.header.listen')
 })
+
+// One width class at a time: Tailwind emits max-w-full after max-w-[40vw], so both would lose the cap.
+const titleWidthClass = computed(() => (isCompact.value ? 'max-w-full' : 'max-w-[40vw]'))
 
 const pinMenuLabel = computed(() => (props.isPinned ? t('reader.header.unpinMenu') : t('reader.header.pinMenu')))
 
@@ -109,7 +113,7 @@ const footerModeTooltip = computed(() => t(`reader.header.footerMode.${props.foo
         <TooltipContent>{{ t('reader.header.goBack') }}</TooltipContent>
       </Tooltip>
 
-      <div class="viewer-sep max-sm:hidden" />
+      <div v-if="!isCompact" class="viewer-sep" />
 
       <Tooltip>
         <TooltipTrigger as-child>
@@ -138,10 +142,13 @@ const footerModeTooltip = computed(() => t(`reader.header.footerMode.${props.foo
 
     <!-- Title: fills the gap between the button groups on phones, centered over the bar on wider screens -->
     <div
-      class="flex min-w-0 flex-1 flex-col items-center justify-center px-1 leading-tight sm:pointer-events-none sm:absolute sm:inset-x-0 sm:bottom-0 sm:h-11 sm:px-0"
+      class="flex min-w-0 flex-1 flex-col items-center justify-center px-1 leading-tight"
+      :class="isCompact ? '' : 'pointer-events-none absolute inset-x-0 bottom-0 h-11 px-0'"
     >
-      <p v-if="seriesTitle" class="max-w-full truncate text-center text-[11px] text-muted-foreground sm:max-w-[40vw]">{{ seriesTitle }}</p>
-      <p class="max-w-full truncate text-center text-sm font-medium text-foreground sm:max-w-[40vw]">{{ chapterTitle }}</p>
+      <p v-if="seriesTitle" class="truncate text-center text-[11px] text-muted-foreground" :class="titleWidthClass">
+        {{ seriesTitle }}
+      </p>
+      <p class="truncate text-center text-sm font-medium text-foreground" :class="titleWidthClass">{{ chapterTitle }}</p>
     </div>
 
     <!-- Right button group -->
@@ -179,18 +186,18 @@ const footerModeTooltip = computed(() => t(`reader.header.footerMode.${props.foo
         <TooltipContent>{{ t('common.search') }}</TooltipContent>
       </Tooltip>
 
-      <Tooltip>
+      <Tooltip v-if="!isCompact">
         <TooltipTrigger as-child>
-          <button class="viewer-btn hidden sm:flex" :aria-label="t('reader.header.cycleFooterMode')" @click="emit('cycleFooterMode')">
+          <button class="viewer-btn" :aria-label="t('reader.header.cycleFooterMode')" @click="emit('cycleFooterMode')">
             <component :is="footerModeIcon" :size="16" />
           </button>
         </TooltipTrigger>
         <TooltipContent>{{ footerModeTooltip }}</TooltipContent>
       </Tooltip>
 
-      <Tooltip>
+      <Tooltip v-if="!isCompact">
         <TooltipTrigger as-child>
-          <button class="viewer-btn hidden sm:flex" :aria-label="t('reader.shortcuts.title')" @click="emit('toggleHelp')">
+          <button class="viewer-btn" :aria-label="t('reader.shortcuts.title')" @click="emit('toggleHelp')">
             <CircleHelp :size="18" />
           </button>
         </TooltipTrigger>
@@ -211,10 +218,10 @@ const footerModeTooltip = computed(() => t(`reader.header.footerMode.${props.foo
         <TooltipContent>{{ isFullscreen ? t('reader.header.exitFullscreen') : t('reader.header.enterFullscreen') }}</TooltipContent>
       </Tooltip>
 
-      <Tooltip>
+      <Tooltip v-if="!isCompact">
         <TooltipTrigger as-child>
           <button
-            class="viewer-btn hidden sm:flex"
+            class="viewer-btn"
             :class="props.showTapZones ? '!bg-muted !text-primary' : ''"
             :aria-label="t('reader.header.toggleTapZones')"
             @click="emit('toggleTapZones')"
@@ -225,14 +232,9 @@ const footerModeTooltip = computed(() => t(`reader.header.footerMode.${props.foo
         <TooltipContent>{{ t('reader.header.showTapZones') }}</TooltipContent>
       </Tooltip>
 
-      <Tooltip>
+      <Tooltip v-if="!isCompact">
         <TooltipTrigger as-child>
-          <button
-            class="viewer-btn hidden sm:flex"
-            :class="props.isPinned ? '!bg-muted !text-primary' : ''"
-            :aria-label="pinMenuLabel"
-            @click="emit('togglePin')"
-          >
+          <button class="viewer-btn" :class="props.isPinned ? '!bg-muted !text-primary' : ''" :aria-label="pinMenuLabel" @click="emit('togglePin')">
             <PinOff v-if="props.isPinned" :size="18" />
             <Pin v-else :size="18" />
           </button>
