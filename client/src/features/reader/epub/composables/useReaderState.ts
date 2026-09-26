@@ -11,7 +11,10 @@ import {
   EPUB_TEXT_INDENT_MIN,
   EPUB_WORD_SPACING_MAX,
   EPUB_WORD_SPACING_MIN,
+  type EpubFooterLeftItem,
+  type EpubFooterRightItem,
   type EpubReaderSettings,
+  type EpubRunningHeadMode,
   type FontStyle,
 } from '@bookorbit/types'
 import { themes } from '../constants/themes'
@@ -41,7 +44,13 @@ export interface ReaderState {
   themeName: string
   flow: 'paginated' | 'scrolled'
   fixedLayoutSpread: EpubReaderSettings['fixedLayoutSpread']
+  runningHead: EpubRunningHeadMode
+  footerLeft: EpubFooterLeftItem
+  footerRight: EpubFooterRightItem
 }
+
+/** Settings for the lines around the page, which change what they say but never the book's styles. */
+export const RUNNING_TEXT_SETTING_KEYS: ReadonlySet<keyof ReaderState> = new Set(['runningHead', 'footerLeft', 'footerRight'])
 
 export interface ApplyReaderStateOptions {
   flow?: ReaderState['flow']
@@ -83,6 +92,9 @@ const defaults: ReaderState = {
   themeName: 'default',
   flow: 'paginated',
   fixedLayoutSpread: 'auto',
+  runningHead: 'chapter',
+  footerLeft: 'page',
+  footerRight: 'percent',
 }
 
 export function useReaderState() {
@@ -105,6 +117,9 @@ export function useReaderState() {
   const themeName = ref(defaults.themeName)
   const flow = ref<'paginated' | 'scrolled'>(defaults.flow)
   const fixedLayoutSpread = ref<EpubReaderSettings['fixedLayoutSpread']>(defaults.fixedLayoutSpread)
+  const runningHead = ref<EpubRunningHeadMode>(defaults.runningHead)
+  const footerLeft = ref<EpubFooterLeftItem>(defaults.footerLeft)
+  const footerRight = ref<EpubFooterRightItem>(defaults.footerRight)
 
   const fontFaceCSS = ref('')
 
@@ -128,6 +143,9 @@ export function useReaderState() {
     themeName: themeName.value,
     flow: flow.value,
     fixedLayoutSpread: fixedLayoutSpread.value,
+    runningHead: runningHead.value,
+    footerLeft: footerLeft.value,
+    footerRight: footerRight.value,
   }))
 
   const currentTheme = computed<Theme>(() => themes.find((t) => t.name === themeName.value) ?? themes[0]!)
@@ -393,6 +411,16 @@ export function useReaderState() {
     fixedLayoutSpread.value = v
   }
 
+  function setRunningHead(v: EpubRunningHeadMode) {
+    runningHead.value = v
+  }
+  function setFooterLeft(v: EpubFooterLeftItem) {
+    footerLeft.value = v
+  }
+  function setFooterRight(v: EpubFooterRightItem) {
+    footerRight.value = v
+  }
+
   function setFontFaceCSS(css: string) {
     fontFaceCSS.value = css
   }
@@ -418,6 +446,9 @@ export function useReaderState() {
     themeName,
     flow,
     fixedLayoutSpread,
+    runningHead,
+    footerLeft,
+    footerRight,
     currentTheme,
     activeMode,
     themes,
@@ -442,6 +473,9 @@ export function useReaderState() {
     setThemeName,
     setFlow,
     setFixedLayoutSpread,
+    setRunningHead,
+    setFooterLeft,
+    setFooterRight,
     setFontFaceCSS,
   }
 }
