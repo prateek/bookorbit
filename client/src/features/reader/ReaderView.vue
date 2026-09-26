@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { ArrowLeft, RotateCw } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { useFoliate, type RelocateDetail } from './epub/composables/useFoliate'
+import { sectionPagesOf, useFoliate, type RelocateDetail } from './epub/composables/useFoliate'
 import type { SelectionDetail } from './epub/composables/useFoliateSelection'
 import { useReaderProgress, type NewerPosition } from './shared/composables/useReaderProgress'
 import { useReadingSession } from './shared/composables/useReadingSession'
@@ -152,7 +152,7 @@ const progress = useReaderProgress(bookId, fileId, elapsedMinutes, 0, {
   narrationSeconds: narrationSecondsAt,
   onNarrationMovedBack: handleNarrationMovedBack,
 })
-const { cfi, chapterTitle, sectionIndex, totalSections, fraction, locationTotal, footerMode, cycleFooterMode, updateHeadsFeet } = progress
+const { cfi, chapterTitle, sectionIndex, totalSections, fraction, sectionPages, footerMode, cycleFooterMode, updateHeadsFeet } = progress
 
 const visibility = useVisibility()
 const { headerVisible, footerVisible, isPinned, handleMiddleTap, togglePinned, hideOverlays, setVisibilityLock } = visibility
@@ -761,7 +761,7 @@ async function handlePlayFromCurrentPage() {
 }
 
 function onRelocateHandler(detail: RelocateDetail) {
-  progress.onRelocate(detail, relocationSource)
+  progress.onRelocate(detail, relocationSource, sectionPagesOf(getRenderer()))
   onActivity()
   wakeLock.notifyActivity()
   updateAtBookEnd()
@@ -1874,7 +1874,7 @@ onUnmounted(() => {
       :sectionFractions="sectionFractions"
       :chapterStartFraction="chapterStartFraction"
       :chapterEndFraction="chapterEndFraction"
-      :locationTotal="locationTotal"
+      :sectionPages="sectionPages"
       :navigationLocked="isNavigationLocked"
       class="transition-all duration-300"
       :class="footerVisible && !showTapZones ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-full pointer-events-none'"
