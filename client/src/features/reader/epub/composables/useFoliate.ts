@@ -6,6 +6,7 @@ import { useFoliateInput } from './useFoliateInput'
 import { ensureMediaOverlayActiveClass } from '../../media-overlay/lib/media-overlay-highlight'
 import { openDownloadedFile } from '@/features/offline/offline-session'
 import type { EpubBookInfo, EpubReaderSettings } from '@bookorbit/types'
+import type { SectionPages } from '../../shared/composables/useReaderProgress'
 
 export interface RelocateDetail {
   cfi?: string | null
@@ -24,12 +25,24 @@ export interface RelocateDetail {
 }
 
 export interface FoliateRenderer {
-  heads?: HTMLElement[]
-  feet?: HTMLElement[]
+  heads?: HTMLElement[] | null
+  feet?: HTMLElement[] | null
+  /** Paginated flow only: the current screen page, counting the blank page foliate puts before the text. */
+  page?: number
+  /** Paginated flow only: screen pages in the current section, including the blank one at each end. */
+  pages?: number
+  scrolled?: boolean
   setStyles?: (css: string) => void
   setAttribute: (name: string, value: string) => void
   removeAttribute: (name: string) => void
   getContents?: () => { index: number }[]
+}
+
+/** The screen page within the current section, or null in scrolled flow and before layout. */
+export function sectionPagesOf(renderer: FoliateRenderer | null): SectionPages | null {
+  if (!renderer || renderer.scrolled || !renderer.pages || renderer.pages < 3) return null
+  const pages = renderer.pages - 2
+  return { page: Math.min(Math.max(renderer.page ?? 1, 1), pages), pages }
 }
 
 export interface FoliateLocationContext {

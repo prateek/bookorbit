@@ -71,6 +71,12 @@ export function formatTimeRemaining(minutes: number): string {
   return `${hours} hr ${remainder} min`
 }
 
+/** Screen pages of the current section, as a paginated renderer lays it out. */
+export interface SectionPages {
+  page: number
+  pages: number
+}
+
 export function useReaderProgress(
   bookId: number,
   fileId: number,
@@ -103,6 +109,9 @@ export function useReaderProgress(
   const sectionTotal = ref(0)
   const timeSection = ref(0)
   const timeTotal = ref(0)
+  const sectionPage = ref<number | null>(null)
+  const sectionPages = ref<number | null>(null)
+  const sectionFraction = ref<number | null>(null)
 
   const footerMode = ref<FooterDisplayMode>(initialFooterMode)
   const trackingEnabled = options.trackingEnabled ?? true
@@ -194,7 +203,7 @@ export function useReaderProgress(
     }, 2000)
   }
 
-  function onRelocate(detail: RelocateDetail) {
+  function onRelocate(detail: RelocateDetail, pages: SectionPages | null = null) {
     cfi.value = normalizeString(detail?.cfi)
     const relocatedFraction = normalizeFraction(detail?.fraction)
     if (relocatedFraction !== null) {
@@ -218,6 +227,10 @@ export function useReaderProgress(
     sectionTotal.value = detail?.section?.total ?? 0
     timeSection.value = detail?.time?.section ?? 0
     timeTotal.value = detail?.time?.total ?? 0
+    sectionPage.value = pages?.page ?? null
+    sectionPages.value = pages?.pages ?? null
+    const percentInSection = normalizePercentage(detail?.contentSourceProgressPercent)
+    sectionFraction.value = percentInSection === null ? null : percentInSection / 100
 
     if (!hasSaveableLocation) {
       cancelScheduledSave()
@@ -327,7 +340,7 @@ export function useReaderProgress(
 
     switch (mode) {
       case 0: {
-        const left = locationTotal.value > 0 ? `Page ${locationCurrent.value + 1} of ${locationTotal.value}` : ''
+        const left = sectionPages.value ? `Page ${sectionPage.value} of ${sectionPages.value}` : ''
         return { left, right: `${pct}%` }
       }
       case 1: {
@@ -456,6 +469,9 @@ export function useReaderProgress(
     sectionTotal,
     timeSection,
     timeTotal,
+    sectionPage,
+    sectionPages,
+    sectionFraction,
     footerMode,
     load,
     onRelocate,
