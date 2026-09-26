@@ -9919,9 +9919,9 @@
     "footer": {
       "previousSection": "Previous section",
       "nextSection": "Next section",
-      "goToPlaceholder": "45 or p123",
+      "goToPlaceholder": "45 or p12",
       "jumpToLocation": "Jump to location",
-      "jumpTooltip": "Jump to % or page (e.g. 45 or p123)",
+      "jumpTooltip": "Jump to % of the book or a page in this chapter (e.g. 45 or p12)",
       "go": "Go",
       "progress": "Reading progress"
     },
