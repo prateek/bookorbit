@@ -36,6 +36,7 @@ export default defineConfig({
         'maskable-icon-512x512.png',
       ],
       manifest: {
+        id: '/',
         name: 'BookOrbit',
         short_name: 'BookOrbit',
         description: 'Your personal book library and reading space',
