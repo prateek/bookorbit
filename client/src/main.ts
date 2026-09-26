@@ -13,6 +13,8 @@ import { useSetupStatus } from './features/auth/composables/useSetupStatus'
 import { useLoginOptions } from './features/auth/composables/useLoginOptions'
 import { waitForReachableSession } from './features/auth/lib/session-unavailable'
 import { installAppBadgeClearing } from './features/push/lib/app-badge'
+import { reconcilePushSubscription } from './features/push/composables/usePushNotifications'
+import { installServiceWorkerUpdateChecks } from './features/pwa/lib/service-worker-updates'
 
 // Chrome 124+ blocks aria-hidden from being applied to an element that contains
 // a focused descendant. Reka UI's dialog uses the aria-hidden package which sets
@@ -126,6 +128,8 @@ if (!(await resolveSession())) {
 app.use(router)
 app.mount('#app')
 installAppBadgeClearing()
+installServiceWorkerUpdateChecks()
+void reconcilePushSubscription()
 
 function prefetchPdfReader() {
   void Promise.all([import('./features/reader/pdf-v4/PdfV4ReaderView.vue'), import('@embedpdf/pdfium/pdfium.wasm?url')])

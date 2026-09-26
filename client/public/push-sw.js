@@ -67,6 +67,30 @@ self.addEventListener('notificationclick', (event) => {
   )
 })
 
+/**
+ * The push service rotated this device's subscription. Subscribe again with the same server key and
+ * register the new endpoint; the request rides on the session cookie. If that session has expired
+ * the app registers the endpoint itself at its next launch.
+ */
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      const applicationServerKey = event.oldSubscription && event.oldSubscription.options && event.oldSubscription.options.applicationServerKey
+      const subscription =
+        event.newSubscription ||
+        (applicationServerKey ? await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey }) : null)
+      if (!subscription) return
+      const json = subscription.toJSON()
+      await fetch('/api/v1/push/subscriptions', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: json.endpoint, keys: { p256dh: json.keys && json.keys.p256dh, auth: json.keys && json.keys.auth } }),
+      })
+    })().catch(() => {}),
+  )
+})
+
 self.addEventListener('notificationclose', (event) => {
   event.waitUntil(syncAppBadge())
 })
