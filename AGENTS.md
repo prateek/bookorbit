@@ -1,6 +1,12 @@
 ## Downstream fork
 
-This checkout is `prateek/bookorbit`, a downstream fork of `bookorbit/bookorbit`. Commit to topic branches or `downstream`, the default branch and PR target; `main` is a mirror of upstream. Open PRs and issues on `bookorbit/bookorbit` only when Prateek asks. Keep each commit upstreamable (one logical change with its tests) or fork-only (`fork` scope).
+This checkout is `prateek/bookorbit`, a downstream fork of `bookorbit/bookorbit`. `downstream` is the default branch and the base for every branch and PR; `main` is a mirror of upstream and nothing of ours lands on it. Work on a topic branch off `downstream` and open PRs against `downstream` on `prateek/bookorbit`. Touch `bookorbit/bookorbit` (PRs, issues, comments) only when Prateek explicitly asks; a request to make something upstreamable is not a request to send it.
+
+`downstream` is rebased onto every upstream release, so write changes that rebase (details and rationale in [FORK.md](FORK.md#write-changes-that-rebase)):
+
+- Put a feature in its own directory and connect it through the smallest seam, usually one import and one call. Reuse upstream's endpoints, services and types before adding any; a schema change needs Prateek's go-ahead.
+- Never reformat, reorder or tidy an upstream file in passing. Extend upstream types with optional fields and put new tests in new files.
+- One commit is one logical change with its tests, buildable on its own; stage a shared file's hunks per commit with `git add -p`. Fork-only changes use the `fork` scope.
 
 Read [FORK.md](FORK.md) before rebasing `downstream`, changing the database schema, sending a change upstream, or editing CI.
 
@@ -112,7 +118,7 @@ Examples:
 ## Git
 
 - Commit guidelines: [COMMIT_GUIDELINES.md](docs/COMMIT_GUIDELINES.md)
-- Branch naming: `BO-<issue-number>-<short-description>` (e.g. `BO-19-fix-mergerfs-inode-overflow`). Always include the issue number when a branch is linked to a GitHub issue.
+- Branch naming: `BO-<issue-number>-<short-description>` (e.g. `BO-19-fix-mergerfs-inode-overflow`) for a branch that goes to upstream, which enforces the name. Fork topic branches are `prateek/<short-description>` and base on `downstream`.
 - **NEVER add a `Co-authored-by` trailer to any commit message.** No `Co-authored-by: Copilot` or any other co-author line. Ever. This is a hard requirement - no exceptions.
 
 ## Multi-User Scope
