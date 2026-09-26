@@ -13,8 +13,8 @@ export const EPUB_WORD_SPACING_MAX = 0.5;
 export const EPUB_TEXT_INDENT_MIN = 0;
 export const EPUB_TEXT_INDENT_MAX = 4;
 
-/** What the line above the text shows: the chapter, or nothing. */
-export const EPUB_RUNNING_HEAD_MODES = ["chapter", "off"] as const;
+/** What the line above the text shows: the chapter, the series and the chapter, or nothing. */
+export const EPUB_RUNNING_HEAD_MODES = ["chapter", "series-chapter", "off"] as const;
 export type EpubRunningHeadMode = (typeof EPUB_RUNNING_HEAD_MODES)[number];
 
 /** Where the reader is inside the current chapter, on the left of the line below the text. */

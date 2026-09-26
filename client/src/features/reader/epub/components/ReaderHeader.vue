@@ -31,6 +31,7 @@ const { t } = useI18n()
 
 const props = defineProps<{
   chapterTitle: string
+  seriesTitle?: string | null
   isBookmarked: boolean
   settingsOpen: boolean
   footerRight: EpubFooterRightItem
@@ -136,8 +137,11 @@ const footerModeTooltip = computed(() => t(`reader.header.footerMode.${props.foo
     </div>
 
     <!-- Title: fills the gap between the button groups on phones, centered over the bar on wider screens -->
-    <div class="flex min-w-0 flex-1 items-center justify-center px-1 sm:pointer-events-none sm:absolute sm:inset-x-0 sm:bottom-0 sm:h-11 sm:px-0">
-      <p class="truncate text-center font-serif text-sm font-medium text-muted-foreground sm:max-w-[40vw]">{{ chapterTitle }}</p>
+    <div
+      class="flex min-w-0 flex-1 flex-col items-center justify-center px-1 leading-tight sm:pointer-events-none sm:absolute sm:inset-x-0 sm:bottom-0 sm:h-11 sm:px-0"
+    >
+      <p v-if="seriesTitle" class="max-w-full truncate text-center text-[11px] text-muted-foreground sm:max-w-[40vw]">{{ seriesTitle }}</p>
+      <p class="max-w-full truncate text-center text-sm font-medium text-foreground sm:max-w-[40vw]">{{ chapterTitle }}</p>
     </div>
 
     <!-- Right button group -->

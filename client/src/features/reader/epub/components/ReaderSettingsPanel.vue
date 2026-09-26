@@ -92,6 +92,7 @@ const flowOptions = computed(() => [
 
 const runningHeadOptions = computed(() => [
   { value: 'chapter', label: t('reader.settings.headerFooter.headChapter') },
+  { value: 'series-chapter', label: t('reader.settings.headerFooter.headSeriesChapter') },
   { value: 'off', label: t('reader.settings.headerFooter.off') },
 ])
 
