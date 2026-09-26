@@ -10,6 +10,7 @@ import { useReaderProgress } from './shared/composables/useReaderProgress'
 import { useReadingSession } from './shared/composables/useReadingSession'
 import { useReaderPageTitle } from './shared/composables/useReaderPageTitle'
 import { useReaderState } from './epub/composables/useReaderState'
+import { useReaderThemeColor } from './shared/composables/useReaderThemeColor'
 import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
 import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
 import { primarySeriesId, useReaderBack } from './shared/composables/useReaderBack'
@@ -253,6 +254,7 @@ function handleTranslate() {
 }
 
 const bookMeta = ref<BookDetail | null>(null)
+if (!isAudioFormat && !isPdfFormat && !isComicFormat) useReaderThemeColor(() => (shouldApplyStyles.value ? activeMode.value.bg : null))
 const { goBack } = useReaderBack(bookId, () => bookMeta.value)
 const { nextBook, load: loadNextBook } = useSeriesNextBook('epub')
 const { setStatus } = useBookStatus()
@@ -1463,7 +1465,11 @@ onUnmounted(() => {
     </ReaderHeader>
 
     <Transition name="bookmark-fade">
-      <div v-if="bookmarks.isCurrentCfiBookmarked.value" class="absolute left-8 z-30 pointer-events-none" aria-hidden="true">
+      <div
+        v-if="bookmarks.isCurrentCfiBookmarked.value"
+        class="absolute left-8 top-[env(safe-area-inset-top)] z-30 pointer-events-none"
+        aria-hidden="true"
+      >
         <div class="w-7 h-14 bg-primary" style="clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%)" />
       </div>
     </Transition>
@@ -1507,7 +1513,11 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div ref="containerRef" class="absolute inset-0" />
+      <!-- Inset so foliate's own top and bottom lines clear the notch and the home indicator. -->
+      <div
+        ref="containerRef"
+        class="absolute inset-0 pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
+      />
       <div
         v-if="isNavigationLocked"
         class="absolute inset-0 z-[40] touch-none"
