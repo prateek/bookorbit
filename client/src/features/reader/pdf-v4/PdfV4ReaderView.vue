@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, shallowRef } from 'vue'
+import { openDownloadedFile, trackOpenedBook } from '@/features/offline/offline-session'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { EmbedPDF } from '@embedpdf/core/vue'
@@ -48,7 +49,7 @@ const { onActivity, elapsedMinutes } = useReadingSession(
     percentage: progress.percentage.value,
     pageNumber: progress.pageNumber.value,
   }),
-  { trackingEnabled },
+  { trackingEnabled, bookId: props.bookId },
 )
 const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes, 0, { trackingEnabled })
 const absolutePdfiumWasmUrl = new URL(pdfiumWasmUrl, window.location.href).href
@@ -180,6 +181,12 @@ function handleBack() {
   goBack()
 }
 
+async function fetchDocument(signal: AbortSignal): Promise<ArrayBuffer> {
+  const response = await api(`/api/v1/books/files/${props.fileId}/serve`, { signal })
+  if (!response.ok) throw new Error(t('reader.pdf.requestFailed', { status: response.status }))
+  return response.arrayBuffer()
+}
+
 async function loadReader() {
   const sequence = ++loadSequence
   documentAbortController?.abort()
@@ -189,13 +196,14 @@ async function loadReader() {
   documentBuffer.value = null
   readerReady.value = false
   try {
-    const [, , response] = await Promise.all([
-      bookSettings.load(),
+    // A downloaded copy opens without the network; settings then come from this device's last copy.
+    const downloaded = await openDownloadedFile(props.fileId)
+    void trackOpenedBook(props.bookId, props.fileId)
+    const [, , buffer] = await Promise.all([
+      downloaded ? bookSettings.load().catch(() => undefined) : bookSettings.load(),
       progress.load(),
-      api(`/api/v1/books/files/${props.fileId}/serve`, { signal: abortController.signal }),
+      downloaded ? downloaded.arrayBuffer() : fetchDocument(abortController.signal),
     ])
-    if (!response.ok) throw new Error(t('reader.pdf.requestFailed', { status: response.status }))
-    const buffer = await response.arrayBuffer()
     if (buffer.byteLength === 0) throw new Error(t('reader.pdf.emptyDocument'))
     if (sequence !== loadSequence || abortController.signal.aborted) return
     const settings = bookSettings.effective.value as PdfReaderSettings
