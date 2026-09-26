@@ -12,6 +12,19 @@ export const EPUB_WORD_SPACING_MIN = 0;
 export const EPUB_WORD_SPACING_MAX = 0.5;
 export const EPUB_TEXT_INDENT_MIN = 0;
 export const EPUB_TEXT_INDENT_MAX = 4;
+
+/** What the line above the text shows: the chapter, or nothing. */
+export const EPUB_RUNNING_HEAD_MODES = ["chapter", "off"] as const;
+export type EpubRunningHeadMode = (typeof EPUB_RUNNING_HEAD_MODES)[number];
+
+/** Where the reader is inside the current chapter, on the left of the line below the text. */
+export const EPUB_FOOTER_LEFT_ITEMS = ["page", "pages-left", "off"] as const;
+export type EpubFooterLeftItem = (typeof EPUB_FOOTER_LEFT_ITEMS)[number];
+
+/** How much is left, on the right of the line below the text. Tapping the line cycles it. */
+export const EPUB_FOOTER_RIGHT_ITEMS = ["time-left", "percent", "off"] as const;
+export type EpubFooterRightItem = (typeof EPUB_FOOTER_RIGHT_ITEMS)[number];
+
 export const CBX_SPREAD_GAP_MIN = 0;
 export const CBX_SPREAD_GAP_MAX = 64;
 
@@ -98,6 +111,10 @@ export interface EpubReaderSettings {
   overrideBookFormatting: boolean;
   // In-page footer display mode: 0 = pages, 1 = time remaining + session, 2 = chapter info
   footerDisplayMode: 0 | 1 | 2;
+  // Supersede footerDisplayMode, which is read only from account defaults saved without them.
+  runningHead?: EpubRunningHeadMode;
+  footerLeft?: EpubFooterLeftItem;
+  footerRight?: EpubFooterRightItem;
   // Fixed-layout EPUB spread handling. auto = respect book metadata; none = force one spine item per page.
   fixedLayoutSpread: "auto" | "none";
 }
@@ -165,6 +182,9 @@ export const EPUB_READER_DEFAULTS: EpubReaderSettings = {
   flow: "paginated",
   overrideBookFormatting: true,
   footerDisplayMode: 0,
+  runningHead: "chapter",
+  footerLeft: "page",
+  footerRight: "percent",
   fixedLayoutSpread: "auto",
 };
 

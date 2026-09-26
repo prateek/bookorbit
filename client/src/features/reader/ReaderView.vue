@@ -9,7 +9,9 @@ import type { SelectionDetail } from './epub/composables/useFoliateSelection'
 import { useReaderProgress } from './shared/composables/useReaderProgress'
 import { useReadingSession } from './shared/composables/useReadingSession'
 import { useReaderPageTitle } from './shared/composables/useReaderPageTitle'
-import { useReaderState } from './epub/composables/useReaderState'
+import { RUNNING_TEXT_SETTING_KEYS, useReaderState } from './epub/composables/useReaderState'
+import { useRunningText } from './epub/composables/useRunningText'
+import { nextFooterRight } from './shared/lib/running-text'
 import { useReaderThemeColor } from './shared/composables/useReaderThemeColor'
 import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
 import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
@@ -125,6 +127,9 @@ const {
   setThemeName,
   setFlow,
   setFixedLayoutSpread,
+  setRunningHead,
+  setFooterLeft,
+  setFooterRight,
   setFontFaceCSS,
 } = readerState
 
@@ -143,7 +148,7 @@ const { onActivity, elapsedMinutes } = useReadingSession(
 const progress = useReaderProgress(bookId, fileId, elapsedMinutes, 0, {
   trackingEnabled,
 })
-const { cfi, chapterTitle, sectionIndex, totalSections, fraction, sectionPages, footerMode, cycleFooterMode, updateHeadsFeet } = progress
+const { cfi, chapterTitle, sectionIndex, totalSections, fraction, sectionPage, sectionPages, sectionFraction, timeSection } = progress
 
 const visibility = useVisibility()
 const { headerVisible, footerVisible, isPinned, handleMiddleTap, togglePinned, hideOverlays, setVisibilityLock } = visibility
@@ -188,7 +193,7 @@ const { showHelpModal } = useReaderKeyboardShortcuts({
     bookmarks.toggle(bookId, cfi.value ?? '', chapterTitle.value)
   },
   toggleFullscreen,
-  cycleFooterMode,
+  cycleFooterMode: cycleFooterRight,
   closePanel: closeAnyPanel,
   goToStart: () => navigateToFraction(0),
   goToEnd: () => navigateToFraction(1),
@@ -252,6 +257,22 @@ function handleTranslate() {
 
 const bookMeta = ref<BookDetail | null>(null)
 if (!isAudioFormat && !isPdfFormat && !isComicFormat) useReaderThemeColor(() => (shouldApplyStyles.value ? activeMode.value.bg : null))
+
+const runningText = useRunningText({
+  state,
+  mode: activeMode,
+  chapterLabel: chapterTitle,
+  page: sectionPage,
+  pages: sectionPages,
+  chapterFraction: sectionFraction,
+  bookFraction: fraction,
+  minutesLeftInChapter: computed(() => (sectionFraction.value !== null ? timeSection.value : null)),
+  onFootTap: cycleFooterRight,
+})
+
+function cycleFooterRight() {
+  void applyUpdate({ footerRight: nextFooterRight(state.value.footerRight) })
+}
 const { goBack } = useReaderBack(bookId, () => bookMeta.value)
 const { nextBook, load: loadNextBook } = useSeriesNextBook('epub')
 const { setStatus } = useBookStatus()
@@ -787,10 +808,7 @@ function onRelocateHandler(detail: RelocateDetail) {
   updateAtBookEnd()
   bookmarks.setCfi(detail?.cfi ?? null)
   toc.setActiveHref(detail?.tocItem?.href ?? '')
-  const renderer = getRenderer()
-  if (renderer) {
-    updateHeadsFeet(renderer, activeMode.value)
-  }
+  runningText.render(getRenderer())
 }
 
 function onApplyStylesHandler(renderer: FoliateRenderer) {
@@ -983,9 +1001,11 @@ async function openReader() {
 
   await bookSettings.load().catch(tolerateUnreachable)
   const effective = bookSettings.effective.value as EpubReaderSettings
-  if (effective.footerDisplayMode !== undefined) {
-    footerMode.value = effective.footerDisplayMode
-  }
+  // These only change what the lines around the page say, so they apply whether or not the
+  // reader's styles override the book's.
+  if (effective.runningHead) setRunningHead(effective.runningHead)
+  if (effective.footerLeft) setFooterLeft(effective.footerLeft)
+  if (effective.footerRight) setFooterRight(effective.footerRight)
   if (effective.overrideBookFormatting) {
     shouldApplyStyles.value = true
     seedState(effective)
@@ -1150,14 +1170,21 @@ const epubSetters: Record<string, (v: unknown) => void> = {
   themeName: (v) => setThemeName(v as string),
   flow: (v) => setFlow(v as 'paginated' | 'scrolled'),
   fixedLayoutSpread: (v) => setFixedLayoutSpread(v as EpubReaderSettings['fixedLayoutSpread']),
+  runningHead: (v) => setRunningHead(v as ReaderState['runningHead']),
+  footerLeft: (v) => setFooterLeft(v as ReaderState['footerLeft']),
+  footerRight: (v) => setFooterRight(v as ReaderState['footerRight']),
+}
+
+function setStateFields(partial: Partial<ReaderState>) {
+  for (const [key, value] of Object.entries(partial)) {
+    epubSetters[key]?.(value)
+  }
 }
 
 // Applies settings to reactive refs (and renderer if open) without touching the delta.
 // Used for initial seeding on mount.
 function seedState(partial: Partial<ReaderState>) {
-  for (const [key, value] of Object.entries(partial)) {
-    epubSetters[key]?.(value)
-  }
+  setStateFields(partial)
   const renderer = getRenderer()
   if (renderer) applyToRenderer(renderer, isFixedLayout.value ? { flow: 'paginated' } : undefined)
 }
@@ -1172,11 +1199,16 @@ async function reopenEpubAtCurrentLocation() {
 }
 
 // Applies a user-initiated change: updates reactive refs AND saves the changed field to delta.
-// Also enables style injection from this point forward (user has opted in by changing something).
+// A change to the book's look also enables style injection from this point forward (the user has
+// opted in); a change to the lines around the page does not touch the book, so it leaves that alone.
 async function applyUpdate(partial: Partial<ReaderState>) {
   const shouldReopenForSpread = partial.fixedLayoutSpread !== undefined && partial.fixedLayoutSpread !== state.value.fixedLayoutSpread
-  shouldApplyStyles.value = true
-  seedState(partial)
+  if (Object.keys(partial).some((key) => !RUNNING_TEXT_SETTING_KEYS.has(key as keyof ReaderState))) {
+    shouldApplyStyles.value = true
+    seedState(partial)
+  } else {
+    setStateFields(partial)
+  }
   bookSettings.updateSettings(partial, settingsScope.value)
   if (shouldReopenForSpread) {
     await reopenEpubAtCurrentLocation()
@@ -1195,18 +1227,7 @@ async function resetSettings() {
   }
 }
 
-watch(
-  () => footerMode.value,
-  (mode) => {
-    if ((bookSettings.effective.value as EpubReaderSettings).footerDisplayMode !== mode) {
-      bookSettings.updateSettings({ footerDisplayMode: mode }, settingsScope.value)
-    }
-    const renderer = getRenderer()
-    if (renderer) {
-      updateHeadsFeet(renderer, activeMode.value)
-    }
-  },
-)
+watch([runningText.text, activeMode, () => state.value.fontSize], () => runningText.render(getRenderer()))
 
 function setSettingsScope(scope: ReaderSettingsScope) {
   settingsScope.value = scope
@@ -1441,7 +1462,7 @@ onUnmounted(() => {
       :chapterTitle="chapterTitle"
       :isBookmarked="bookmarks.isCurrentCfiBookmarked.value"
       :settings-open="showSettings"
-      :footerMode="footerMode"
+      :footerRight="state.footerRight"
       :peek-mode="isPeekMode"
       :isTtsActive="isTtsActive || (mediaOverlay.isActive.value && mediaOverlay.isPlaying.value)"
       :isTtsAvailable="isTtsAvailable"
@@ -1457,7 +1478,7 @@ onUnmounted(() => {
       @update:settings-open="setSettingsOpen"
       @toggleFullscreen="toggleFullscreen"
       @toggleHelp="toggleHelpModal"
-      @cycleFooterMode="cycleFooterMode"
+      @cycleFooterMode="cycleFooterRight"
       @startReading="startTrackedReading"
       @startTts="handleStartListen"
       @togglePin="togglePinned"
