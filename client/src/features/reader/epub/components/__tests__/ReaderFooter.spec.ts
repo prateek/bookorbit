@@ -19,7 +19,7 @@ const defaultProps = {
   sectionFractions: [0, 0.2, 0.4, 0.6, 0.8, 1],
   chapterStartFraction: 0.2,
   chapterEndFraction: 0.4,
-  locationTotal: 100,
+  sectionPages: 10,
 }
 
 describe('ReaderFooter', () => {
@@ -122,7 +122,7 @@ describe('ReaderFooter', () => {
 
     const input = wrapper.find('input[type="text"]')
     expect(input.exists()).toBe(true)
-    expect(input.attributes('placeholder')).toBe('45 or p123')
+    expect(input.attributes('placeholder')).toBe('45 or p12')
   })
 
   it('emits seek with correct fraction when percentage is entered', async () => {
@@ -143,7 +143,7 @@ describe('ReaderFooter', () => {
 
   it('emits seek with correct fraction for page input', async () => {
     const wrapper = mount(ReaderFooter, {
-      props: { ...defaultProps, locationTotal: 200 },
+      props: defaultProps,
       global: globalStubs,
     })
 
@@ -151,10 +151,10 @@ describe('ReaderFooter', () => {
     await pctDisplay.trigger('click')
 
     const input = wrapper.find('input[type="text"]')
-    await input.setValue('p101')
+    await input.setValue('p6')
     await input.trigger('keydown.enter')
 
-    expect(wrapper.emitted('seek')?.[0]).toEqual([100 / 200])
+    expect(wrapper.emitted('seek')?.[0]?.[0]).toBeCloseTo(0.2 + 0.2 * (5 / 9))
   })
 
   it('blocks navigation controls when navigation is locked', async () => {

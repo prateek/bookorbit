@@ -14,7 +14,8 @@ const props = defineProps<{
   sectionFractions: number[]
   chapterStartFraction: number
   chapterEndFraction: number
-  locationTotal: number
+  /** Screen pages in the current section; null in scrolled flow. */
+  sectionPages: number | null
   navigationLocked?: boolean
 }>()
 
@@ -62,10 +63,12 @@ function handleGoToSubmit() {
     return
   }
 
-  if (raw.toLowerCase().startsWith('p') && props.locationTotal > 0) {
+  if (raw.toLowerCase().startsWith('p') && props.sectionPages) {
     const page = parseInt(raw.slice(1), 10)
-    if (!isNaN(page) && page >= 1 && page <= props.locationTotal) {
-      emit('seek', (page - 1) / props.locationTotal)
+    if (!isNaN(page) && page >= 1 && page <= props.sectionPages) {
+      // foliate shows page round(anchor * (pages - 1)) + 1 for an anchor within the section.
+      const span = props.chapterEndFraction - props.chapterStartFraction
+      emit('seek', props.chapterStartFraction + (span * (page - 1)) / Math.max(1, props.sectionPages - 1))
     }
   } else {
     const pct = parseFloat(raw)
