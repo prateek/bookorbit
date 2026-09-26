@@ -94,3 +94,8 @@ export function buildRunningText(position: RunningTextPosition, slots: RunningTe
     right: buildRight(position, slots.footerRight, t),
   }
 }
+
+/** The foot and scroll strip in one line, for places with room for a single label. */
+export function joinFoot(text: RunningText): string {
+  return [text.left, text.right].filter(Boolean).join(' · ')
+}

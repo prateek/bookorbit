@@ -12,7 +12,7 @@ import { useReaderPageTitle } from './shared/composables/useReaderPageTitle'
 import { RUNNING_TEXT_SETTING_KEYS, useReaderState } from './epub/composables/useReaderState'
 import { useRunningText } from './epub/composables/useRunningText'
 import { useReadingPace } from './shared/composables/useReadingPace'
-import { nextFooterRight } from './shared/lib/running-text'
+import { joinFoot, nextFooterRight } from './shared/lib/running-text'
 import { useReaderThemeColor } from './shared/composables/useReaderThemeColor'
 import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
 import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
@@ -275,6 +275,9 @@ const runningText = useRunningText({
   minutesLeftInChapter: computed(() => (sectionFraction.value !== null ? pace.minutesAtPace(timeSection.value) : null)),
   onFootTap: cycleFooterRight,
 })
+
+const footSummary = computed(() => joinFoot(runningText.text.value))
+const isScrolledText = computed(() => state.value.flow === 'scrolled' && !isFixedLayout.value)
 
 function cycleFooterRight() {
   void applyUpdate({ footerRight: nextFooterRight(state.value.footerRight) })
@@ -1540,10 +1543,12 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Inset so foliate's own top and bottom lines clear the notch and the home indicator. -->
+      <!-- Inset so foliate's own top and bottom lines clear the notch and the home indicator; scrolled
+           text also stops above the strip that stands in for the bottom line. -->
       <div
         ref="containerRef"
-        class="absolute inset-0 pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
+        class="absolute inset-0 pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]"
+        :class="isScrolledText ? 'pb-[calc(env(safe-area-inset-bottom)+1.75rem)]' : 'pb-[env(safe-area-inset-bottom)]'"
       />
       <div
         v-if="isNavigationLocked"
@@ -1817,6 +1822,8 @@ onUnmounted(() => {
       :chapterStartFraction="chapterStartFraction"
       :chapterEndFraction="chapterEndFraction"
       :sectionPages="sectionPages"
+      :summary="footSummary"
+      :scrolledText="isScrolledText"
       :navigationLocked="isNavigationLocked"
       class="transition-all duration-300"
       :class="footerVisible && !showTapZones ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-full pointer-events-none'"

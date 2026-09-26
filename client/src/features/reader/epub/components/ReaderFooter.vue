@@ -16,7 +16,11 @@ const props = defineProps<{
   chapterEndFraction: number
   /** Screen pages in the current section; null in scrolled flow. */
   sectionPages: number | null
+  /** Where the reader is, for the scroll-mode strip. */
+  summary?: string
   navigationLocked?: boolean
+  /** False when the renderer paginates despite a scrolled setting, as fixed-layout books do. */
+  scrolledText?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -28,10 +32,15 @@ const emit = defineEmits<{
 const pageContext = useReaderPageContext()
 const chromeStyle = computed(() => readerChromeThemeStyle(pageContext?.mode.value))
 const showScrollProgress = computed(() => pageContext?.flow.value === 'scrolled')
+const showScrollStrip = computed(() => showScrollProgress.value && props.scrolledText !== false)
 const progressPercent = computed(() => Math.round(Math.min(Math.max(props.fraction, 0), 1) * 1000) / 10)
 const scrollProgressStyle = computed(() => ({
   width: `${progressPercent.value}%`,
   background: pageContext ? `color-mix(in srgb, ${pageContext.mode.value.fg} 45%, transparent)` : 'var(--primary)',
+}))
+const scrollStripStyle = computed(() => ({
+  ...chromeStyle.value,
+  background: pageContext?.mode.value.bg,
 }))
 
 const showGoToInput = ref(false)
@@ -105,18 +114,33 @@ watch(
     class="reader-bar fixed bottom-0 left-0 right-0 z-50 flex h-[calc(2.75rem+env(safe-area-inset-bottom))] items-center gap-1 border-t border-border bg-background/95 px-1 pb-[env(safe-area-inset-bottom)] text-foreground backdrop-blur-md sm:gap-3 sm:px-4"
     :style="chromeStyle"
   >
+    <!-- Scrolled flow has no running foot, so this strip says the same thing above the home indicator. -->
     <Teleport to="body">
       <div
         v-if="showScrollProgress"
-        class="pointer-events-none fixed inset-x-0 bottom-0 z-40 h-0.5"
-        data-testid="scroll-progress"
-        role="progressbar"
-        :aria-valuenow="progressPercent"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        :aria-label="t('reader.footer.progress')"
+        class="pointer-events-none fixed inset-x-0 bottom-0 z-40"
+        :class="showScrollStrip ? 'pb-[env(safe-area-inset-bottom)]' : ''"
+        :style="showScrollStrip ? scrollStripStyle : undefined"
+        data-testid="scroll-strip"
       >
-        <div class="h-full" :style="scrollProgressStyle" />
+        <div
+          class="h-0.5"
+          data-testid="scroll-progress"
+          role="progressbar"
+          :aria-valuenow="progressPercent"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-label="t('reader.footer.progress')"
+        >
+          <div class="h-full" :style="scrollProgressStyle" />
+        </div>
+        <p
+          v-if="showScrollStrip"
+          class="flex h-6.5 items-center justify-center truncate px-4 text-xs tabular-nums text-muted-foreground"
+          data-testid="scroll-summary"
+        >
+          {{ summary }}
+        </p>
       </div>
     </Teleport>
 
