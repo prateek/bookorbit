@@ -105,6 +105,7 @@ const footerLeftOptions = computed(() => [
 const footerRightOptions = computed(() => [
   { value: 'time-left', label: t('reader.settings.headerFooter.footTimeLeft') },
   { value: 'percent', label: t('reader.settings.headerFooter.footPercent') },
+  { value: 'unread', label: t('reader.settings.headerFooter.footUnread') },
   { value: 'off', label: t('reader.settings.headerFooter.off') },
 ])
 

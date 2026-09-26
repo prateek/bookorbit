@@ -14,6 +14,8 @@ export interface RunningTextPosition {
   /** 0-1 within the whole book. */
   bookFraction: number
   minutesLeftInChapter: number | null
+  /** Unread books after this one in its series; null outside a series or until known. */
+  unreadAfter: number | null
 }
 
 export interface RunningTextSlots {
@@ -30,7 +32,7 @@ export interface RunningText {
 
 type Translate = (key: string, named?: Record<string, unknown>) => string
 
-const RIGHT_CYCLE: EpubFooterRightItem[] = ['time-left', 'percent']
+const RIGHT_CYCLE: EpubFooterRightItem[] = ['time-left', 'percent', 'unread']
 
 /** The foot's right slot after a tap; "off" is left to the settings, so a tap never hides the line. */
 export function nextFooterRight(current: EpubFooterRightItem): EpubFooterRightItem {
@@ -83,6 +85,10 @@ function buildRight(position: RunningTextPosition, item: EpubFooterRightItem, t:
   if (item === 'off') return ''
   const percent = t('reader.runningText.percent', { pct: Math.round(position.bookFraction * 100) })
   if (item === 'percent') return percent
+  if (item === 'unread') {
+    if (position.unreadAfter === null) return percent
+    return position.unreadAfter === 0 ? t('reader.runningText.caughtUp') : t('reader.runningText.unreadAfter', { count: position.unreadAfter })
+  }
   if (position.minutesLeftInChapter === null) return percent
   return t('reader.runningText.timeLeftInChapter', { time: formatMinutes(position.minutesLeftInChapter, t) })
 }

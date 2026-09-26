@@ -118,6 +118,8 @@ export type SeriesNextBook = {
 
 export type SeriesNextBookResponse = {
   next: SeriesNextBook | null;
+  /** Books after this one in the series that the user has not read, whether or not they can be opened here. */
+  unreadAfter?: number;
 };
 
 /** Result of marking a series, or its books up to a number, as read. */
