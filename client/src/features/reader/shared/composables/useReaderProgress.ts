@@ -1,5 +1,7 @@
 import { computed, onUnmounted, ref, unref, type MaybeRef, type Ref } from 'vue'
 import { api } from '@/lib/api'
+import type { LocalProgress } from '@/features/offline/lib/offline-db'
+import { currentOfflineSession, whenOfflineSession } from '@/features/offline/offline-session'
 import type { FoliateRenderer, RelocateDetail } from '../../epub/composables/useFoliate'
 
 export type FooterDisplayMode = 0 | 1 | 2
@@ -67,6 +69,26 @@ function positionStamp(data: Record<string, unknown>): number {
   return Math.max(text ?? 0, narration ?? 0)
 }
 
+function serverProgressToLocal(bookId: number, fileId: number, data: Record<string, unknown>): LocalProgress {
+  return {
+    fileId,
+    bookId,
+    percentage: normalizePercentage(data.percentage) ?? 0,
+    cfi: normalizeString(data.cfi),
+    pageNumber: normalizePageNumber(data.pageNumber),
+    positionSeconds: finiteNumber(data.positionSeconds),
+    mediaOverlayFragment: normalizeString(data.mediaOverlayFragment),
+    mediaOverlaySectionIndex: finiteNumber(data.mediaOverlaySectionIndex),
+    koboLocationSource: normalizeString(data.koboLocationSource),
+    koboLocationType: normalizeString(data.koboLocationType),
+    koboLocationValue: normalizeString(data.koboLocationValue),
+    koboContentSourceProgressPercent: normalizeNullablePercentage(data.koboContentSourceProgressPercent),
+    koreaderProgress: normalizeString(data.koreaderProgress),
+    source: 'text',
+    readAt: new Date(data.lastReadAt as string).toISOString(),
+  }
+}
+
 export function formatTimeRemaining(minutes: number): string {
   if (!Number.isFinite(minutes) || minutes < 0) return ''
   if (minutes < 1) return '< 1 min'
@@ -131,7 +153,9 @@ export function useReaderProgress(
   function onVisibilityChange() {
     if (document.visibilityState === 'hidden') void flush()
   }
-  function onPageHide() { void flush() }
+  function onPageHide() {
+    void flush()
+  }
   document.addEventListener('visibilitychange', onVisibilityChange)
   window.addEventListener('pagehide', onPageHide)
   onUnmounted(() => {
@@ -151,18 +175,35 @@ export function useReaderProgress(
     () => (!!mediaOverlayFragment.value && mediaOverlaySectionIndex.value !== null) || (positionSeconds.value != null && positionSeconds.value > 0),
   )
 
+  /**
+   * The position this device last read wins over the server's until it has been delivered, and a
+   * position another device read later wins over it after. Offline, the local one is all there is.
+   */
   async function load() {
     if (!unref(trackingEnabled)) return
-    const res = await api(`/api/v1/books/files/${fileId}/progress`)
-    if (!res.ok) return
-    const data = await res.json()
+    const session = await whenOfflineSession()
+    let server: Record<string, unknown> | null = null
+    try {
+      const res = await api(`/api/v1/books/files/${fileId}/progress`)
+      if (res.ok) server = await res.json()
+    } catch {
+      if (!session) return
+    }
+    let data: Record<string, unknown> | null = server
+    if (session) {
+      if (server && typeof server.lastReadAt === 'string') {
+        await session.replica.applyServerProgress(serverProgressToLocal(bookId, fileId, server)).catch(() => false)
+      }
+      data = ((await session.replica.getProgress(fileId).catch(() => null)) as Record<string, unknown> | null) ?? server
+    }
+    if (!data) return
     hadSavedPosition =
       normalizeString(data.cfi) !== null ||
       normalizeString(data.koboLocationValue) !== null ||
       normalizeString(data.koreaderProgress) !== null ||
       (typeof data.percentage === 'number' && data.percentage > 0)
     applyServerProgress(data)
-    knownServerStamp = positionStamp(data)
+    knownServerStamp = server ? positionStamp(server) : 0
     knownNarrationFragment = normalizeString(data.mediaOverlayFragment)
   }
 
@@ -272,6 +313,36 @@ export function useReaderProgress(
       }
       const safePercentage = updatePercentage(percentage.value)
       const savedFragment = pendingSource.value === 'narration' ? mediaOverlayFragment.value : null
+      const body = {
+        cfi: cfi.value,
+        pageNumber: normalizePageNumber(pageNumber.value),
+        percentage: safePercentage,
+        koboLocationSource: koboLocationSource.value,
+        koboLocationType: koboLocationType.value,
+        koboLocationValue: koboLocationValue.value,
+        koboContentSourceProgressPercent: normalizeNullablePercentage(koboContentSourceProgressPercent.value),
+        koreaderProgress: koreaderProgress.value,
+        positionSeconds: positionSeconds.value,
+        mediaOverlayFragment: mediaOverlayFragment.value,
+        mediaOverlaySectionIndex: mediaOverlaySectionIndex.value,
+        source: pendingSource.value,
+      }
+      const session = currentOfflineSession()
+      if (session) {
+        try {
+          await session.replica.recordProgress({ fileId, bookId, ...body, readAt: new Date().toISOString() })
+          if (saveOptions.keepalive && navigator.onLine !== false) {
+            void postProgress(safePercentage, true)
+              .then((res) => {
+                if (res.ok) noteOwnWrite(res, savedFragment)
+              })
+              .catch(() => undefined)
+          }
+          return true
+        } catch {
+          // Local storage refused the write; fall back to sending it directly.
+        }
+      }
       const res = await postProgress(safePercentage, saveOptions.keepalive)
       if (res.ok) noteOwnWrite(res, savedFragment)
       else dirty = true

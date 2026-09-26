@@ -9,6 +9,7 @@ describe('BookmarkResponseDto', () => {
       clientId: '0d2a4c8e-7b1f-4f55-9c3a-6e1b2d9f0a47',
       userId: 22,
       bookId: 33,
+      bookFileId: 34,
       cfi: null,
       title: '00:01:23',
       note: null,
@@ -25,6 +26,7 @@ describe('BookmarkResponseDto', () => {
     expect(dto).toEqual({
       id: 11,
       bookId: 33,
+      bookFileId: 34,
       cfi: null,
       title: '00:01:23',
       positionSeconds: null,

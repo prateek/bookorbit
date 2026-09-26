@@ -122,9 +122,19 @@ export class SyncEngine {
         return this.replica.completeEntry(entry, { removeAnnotation: entry.clientId })
       }
       case 'bookmark.create': {
-        const response = await this.send(`/api/v1/books/${entry.bookId}/bookmarks`, 'POST', { cfi: entry.cfi, title: entry.title })
+        const response = await this.send(`/api/v1/books/${entry.bookId}/bookmarks`, 'POST', {
+          cfi: entry.cfi,
+          title: entry.title,
+          ...(entry.bookFileId != null ? { bookFileId: entry.bookFileId } : {}),
+        })
         const created = (await response!.json()) as { id: number }
         return this.replica.completeEntry(entry, { bookmark: { clientId: entry.clientId, id: created.id, serverId: created.id } })
+      }
+      case 'bookmark.update': {
+        const bookmarks = await this.replica.listBookmarksIncludingDeleted(entry.bookId)
+        const serverId = bookmarks.find((row) => row.clientId === entry.clientId)?.serverId ?? null
+        if (serverId !== null) await this.send(`/api/v1/books/${entry.bookId}/bookmarks/${serverId}`, 'PATCH', entry.patch, { goneOn404: true })
+        return this.replica.completeEntry(entry)
       }
       case 'bookmark.delete': {
         const bookmarks = await this.replica.listBookmarksIncludingDeleted(entry.bookId)
@@ -154,7 +164,9 @@ export class SyncEngine {
         return this.replica.completeEntry(entry, adopted ? { progress: adopted } : {})
       }
     }
-    await this.send(`/api/v1/books/files/${entry.fileId}/progress`, 'POST', entry.body)
+    const { positionSeconds, mediaOverlayFragment, mediaOverlaySectionIndex, ...textBody } = entry.body
+    const body = entry.body.source === 'narration' ? { ...textBody, positionSeconds, mediaOverlayFragment, mediaOverlaySectionIndex } : textBody
+    await this.send(`/api/v1/books/files/${entry.fileId}/progress`, 'POST', body)
     return this.replica.completeEntry(entry)
   }
 

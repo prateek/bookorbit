@@ -3,6 +3,7 @@ import type { BookmarkRow } from '../../../db/schema';
 export class BookmarkResponseDto {
   id!: number;
   bookId!: number;
+  bookFileId?: number | null;
   cfi!: string | null;
   title!: string;
   positionSeconds!: number | null;
@@ -17,6 +18,7 @@ export class BookmarkResponseDto {
     const dto = new BookmarkResponseDto();
     dto.id = row.id;
     dto.bookId = row.bookId;
+    dto.bookFileId = row.bookFileId ?? null;
     dto.cfi = row.cfi ?? null;
     dto.title = row.title;
     dto.positionSeconds = row.positionSeconds ?? null;

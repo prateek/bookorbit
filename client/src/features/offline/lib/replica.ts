@@ -230,7 +230,7 @@ export class ReaderReplica {
     return rows.filter((row) => !row.deleted).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   }
 
-  async createBookmark(bookId: number, cfi: string, title: string): Promise<LocalBookmark> {
+  async createBookmark(bookId: number, cfi: string, title: string, bookFileId?: number): Promise<LocalBookmark> {
     const at = nowIso()
     const bookmark: LocalBookmark = {
       clientId: newClientId(),
@@ -239,15 +239,31 @@ export class ReaderReplica {
       bookId,
       cfi,
       title,
+      bookFileId,
       createdAt: at,
       deleted: false,
     }
     await inTransaction(this.db, [STORES.bookmarks, STORES.outbox], 'readwrite', (tx) => {
       tx.objectStore(STORES.bookmarks).put(bookmark)
-      append(tx.objectStore(STORES.outbox), { kind: 'bookmark.create', bookId, clientId: bookmark.clientId, capturedAt: at, cfi, title })
+      append(tx.objectStore(STORES.outbox), { kind: 'bookmark.create', bookId, clientId: bookmark.clientId, capturedAt: at, cfi, title, bookFileId })
     })
     this.notify({ scope: 'bookmarks', bookId }, { scope: 'outbox' })
     return bookmark
+  }
+
+  async updateBookmark(bookId: number, id: number, patch: { title: string; note: string | null }): Promise<LocalBookmark | null> {
+    const updated = await inTransaction(this.db, [STORES.bookmarks, STORES.outbox], 'readwrite', async (tx) => {
+      const store = tx.objectStore(STORES.bookmarks)
+      const rows = (await requestResult(store.index('bookId').getAll(bookId))) as LocalBookmark[]
+      const current = rows.find((row) => row.id === id && !row.deleted)
+      if (!current) return null
+      const next = { ...current, ...patch }
+      store.put(next)
+      append(tx.objectStore(STORES.outbox), { kind: 'bookmark.update', bookId, clientId: current.clientId, capturedAt: nowIso(), patch })
+      return next
+    })
+    if (updated) this.notify({ scope: 'bookmarks', bookId }, { scope: 'outbox' })
+    return updated
   }
 
   async deleteBookmark(bookId: number, id: number): Promise<boolean> {
@@ -397,7 +413,15 @@ export class ReaderReplica {
 
   async applyServerBookmarks(
     bookId: number,
-    items: Array<{ id: number; bookId: number; cfi: string | null; title: string; createdAt: string }>,
+    items: Array<{
+      id: number
+      bookId: number
+      cfi: string | null
+      title: string
+      createdAt: string
+      bookFileId?: number | null
+      note?: string | null
+    }>,
   ): Promise<void> {
     await inTransaction(this.db, [STORES.bookmarks, STORES.outbox], 'readwrite', async (tx) => {
       const store = tx.objectStore(STORES.bookmarks)
@@ -417,6 +441,8 @@ export class ReaderReplica {
           bookId,
           cfi: item.cfi,
           title: item.title,
+          bookFileId: item.bookFileId,
+          note: item.note,
           createdAt: item.createdAt,
           deleted: false,
         } satisfies LocalBookmark)

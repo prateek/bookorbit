@@ -52,6 +52,8 @@ export type LocalAnnotation = AnnotationItem & {
 }
 
 export interface LocalBookmark {
+  bookFileId?: number | null
+  note?: string | null
   clientId: string
   id: number
   serverId: number | null
@@ -102,7 +104,8 @@ export type OutboxEntry = { seq?: number; capturedAt: string; attempts: number; 
   | { kind: 'annotation.create'; bookId: number; clientId: string; body: CreateAnnotationBody }
   | { kind: 'annotation.update'; bookId: number; clientId: string; patch: AnnotationPatch }
   | { kind: 'annotation.delete'; bookId: number; clientId: string }
-  | { kind: 'bookmark.create'; bookId: number; clientId: string; cfi: string; title: string }
+  | { kind: 'bookmark.create'; bookId: number; clientId: string; cfi: string; title: string; bookFileId?: number }
+  | { kind: 'bookmark.update'; bookId: number; clientId: string; patch: { title: string; note: string | null } }
   | { kind: 'bookmark.delete'; bookId: number; clientId: string }
 )
 
