@@ -81,6 +81,17 @@ export async function detachDevicePushSubscription(): Promise<void> {
   }
 }
 
+/**
+ * Re-registers this device's subscription with the server at launch. The push service can replace
+ * a subscription at any time, and the service worker cannot always report the new one itself.
+ */
+export async function reconcilePushSubscription(): Promise<void> {
+  if (detectPushSupport() !== 'supported' || Notification.permission !== 'granted') return
+  const registration = await navigator.serviceWorker.getRegistration().catch(() => undefined)
+  const subscription = await registration?.pushManager.getSubscription().catch(() => null)
+  if (subscription) await saveSubscription(subscription).catch(() => {})
+}
+
 export function usePushNotifications() {
   const support = ref<PushSupport>(detectPushSupport())
   const isAppleMobile = isAppleMobileDevice()
