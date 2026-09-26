@@ -11,6 +11,7 @@ import { useReadingSession } from './shared/composables/useReadingSession'
 import { useReaderPageTitle } from './shared/composables/useReaderPageTitle'
 import { RUNNING_TEXT_SETTING_KEYS, useReaderState } from './epub/composables/useReaderState'
 import { useRunningText } from './epub/composables/useRunningText'
+import { useReadingPace } from './shared/composables/useReadingPace'
 import { nextFooterRight } from './shared/lib/running-text'
 import { useReaderThemeColor } from './shared/composables/useReaderThemeColor'
 import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
@@ -158,6 +159,7 @@ const progress = useReaderProgress(bookId, fileId, elapsedMinutes, 0, {
   onNarrationMovedBack: handleNarrationMovedBack,
 })
 const { cfi, chapterTitle, sectionIndex, totalSections, fraction, sectionPage, sectionPages, sectionFraction, timeSection } = progress
+const pace = useReadingPace()
 
 const visibility = useVisibility()
 const { headerVisible, footerVisible, isPinned, handleMiddleTap, togglePinned, hideOverlays, setVisibilityLock } = visibility
@@ -285,7 +287,7 @@ const runningText = useRunningText({
   pages: sectionPages,
   chapterFraction: sectionFraction,
   bookFraction: fraction,
-  minutesLeftInChapter: computed(() => (sectionFraction.value !== null ? timeSection.value : null)),
+  minutesLeftInChapter: computed(() => (sectionFraction.value !== null ? pace.minutesAtPace(timeSection.value) : null)),
   onFootTap: cycleFooterRight,
 })
 
@@ -784,6 +786,8 @@ async function handlePlayFromCurrentPage() {
 
 function onRelocateHandler(detail: RelocateDetail) {
   progress.onRelocate(detail, relocationSource, sectionPagesOf(getRenderer()))
+  // Pages turned by read-aloud move at the voice's pace, not the reader's.
+  if (trackingEnabled.value && !isTtsActive.value && !mediaOverlay.isActive.value) pace.record(progress.timeTotal.value)
   onActivity()
   wakeLock.notifyActivity()
   updateAtBookEnd()
