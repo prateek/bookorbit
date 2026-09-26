@@ -8,11 +8,14 @@ import { api } from '@/lib/api'
  */
 export function useSeriesNextBook(formatGroup: ReaderFormatGroup) {
   const nextBook = ref<SeriesNextBook | null>(null)
+  /** Unread books after this one; null until known, and for a book outside any series. */
+  const unreadAfter = ref<number | null>(null)
 
   // Nothing here is worth interrupting the reader for: without an answer the reader simply ends
   // at the last page, the way it did before there was a handoff.
   async function load(seriesId: number | null, bookId: number): Promise<void> {
     nextBook.value = null
+    unreadAfter.value = null
     if (seriesId === null) return
 
     try {
@@ -21,10 +24,11 @@ export function useSeriesNextBook(formatGroup: ReaderFormatGroup) {
 
       const data = (await res.json()) as SeriesNextBookResponse
       nextBook.value = data.next ?? null
+      unreadAfter.value = typeof data.unreadAfter === 'number' ? data.unreadAfter : null
     } catch {
       nextBook.value = null
     }
   }
 
-  return { nextBook, load }
+  return { nextBook, unreadAfter, load }
 }
