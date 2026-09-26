@@ -1,5 +1,7 @@
 import { fileURLToPath, URL } from 'node:url'
 import { Agent } from 'node:http'
+import { readdirSync } from 'node:fs'
+import { join, relative, sep } from 'node:path'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -11,12 +13,20 @@ const apiAgent = new Agent({ keepAlive: true })
 /** Lets a second dev client point at a throwaway API instance, so restart testing leaves the main stack alone. */
 const apiTarget = process.env.BOOKORBIT_API_TARGET ?? 'http://localhost:3000'
 
+/** The engine files a downloaded EPUB needs offline, so the app can cache them when a download finishes. */
+const publicDir = fileURLToPath(new URL('./public', import.meta.url))
+const foliateAssets = readdirSync(join(publicDir, 'assets/foliate'), { recursive: true, withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name.endsWith('.js'))
+  .map((entry) => `/${relative(publicDir, join(entry.parentPath, entry.name)).split(sep).join('/')}`)
+  .sort()
+
 // https://vite.dev/config/
 export default defineConfig({
   define: {
     __INTLIFY_PROD_DEVTOOLS__: false,
     __VUE_I18N_FULL_INSTALL__: true,
     __VUE_I18N_LEGACY_API__: false,
+    __FOLIATE_ASSETS__: JSON.stringify(foliateAssets),
   },
   plugins: [
     vue(),
@@ -109,6 +119,17 @@ export default defineConfig({
               cacheableResponse: {
                 statuses: [200],
               },
+            },
+          },
+          {
+            // The PDF engine's WebAssembly is too large to precache and has a hashed name, so the
+            // first copy fetched stays valid until a new build names a new one.
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.endsWith('.wasm'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'reader-wasm',
+              expiration: { maxEntries: 4 },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {
