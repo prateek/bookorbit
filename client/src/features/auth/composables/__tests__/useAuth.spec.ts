@@ -240,6 +240,64 @@ describe('useAuth', () => {
     expect(auth.sessionUnavailable.value).toBe(true)
   })
 
+  describe('offline launch', () => {
+    const storedUser = { id: 7, username: 'reader', permissions: [], settings: {} }
+
+    beforeEach(() => {
+      localStorage.clear()
+    })
+
+    it('remembers the signed-in profile so a later launch can start without the server', async () => {
+      refreshAccessTokenMock.mockResolvedValue('token')
+      apiMock.mockResolvedValue(new Response(JSON.stringify(storedUser), { status: 200 }))
+      const { useAuth } = await import('../useAuth')
+
+      await useAuth().init()
+
+      expect(JSON.parse(localStorage.getItem('bookorbit:offline-user')!)).toMatchObject({ id: 7 })
+    })
+
+    it('starts on the stored profile in offline mode when the server cannot be reached', async () => {
+      localStorage.setItem('bookorbit:offline-user', JSON.stringify(storedUser))
+      const { NetworkError } = await import('@/lib/api')
+      refreshAccessTokenMock.mockRejectedValue(new NetworkError('Load failed'))
+      const { useAuth } = await import('../useAuth')
+      const auth = useAuth()
+
+      await auth.init()
+
+      expect(auth.user.value).toMatchObject({ id: 7 })
+      expect(auth.offlineMode.value).toBe(true)
+      expect(auth.sessionUnavailable.value).toBe(false)
+    })
+
+    it('leaves offline mode signed out once the server rejects the stored session', async () => {
+      localStorage.setItem('bookorbit:offline-user', JSON.stringify(storedUser))
+      const { NetworkError } = await import('@/lib/api')
+      refreshAccessTokenMock.mockRejectedValueOnce(new NetworkError('Load failed'))
+      const { useAuth } = await import('../useAuth')
+      const auth = useAuth()
+      await auth.init()
+
+      refreshAccessTokenMock.mockRejectedValueOnce(new Error('refresh failed'))
+      await auth.init()
+
+      expect(auth.offlineMode.value).toBe(false)
+      expect(auth.user.value).toBeNull()
+      expect(localStorage.getItem('bookorbit:offline-user')).toBeNull()
+      expect(resetLibrariesMock).toHaveBeenCalled()
+    })
+
+    it('forgets the stored profile on sign-out', async () => {
+      localStorage.setItem('bookorbit:offline-user', JSON.stringify(storedUser))
+      const { useAuth } = await import('../useAuth')
+
+      await useAuth().logout()
+
+      expect(localStorage.getItem('bookorbit:offline-user')).toBeNull()
+    })
+  })
+
   it('treats a rejected refresh as signed out', async () => {
     refreshAccessTokenMock.mockRejectedValue(new Error('refresh failed'))
     const { useAuth } = await import('../useAuth')

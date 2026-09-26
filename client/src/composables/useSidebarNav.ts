@@ -1,7 +1,7 @@
 import { computed, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, type RouteLocationNormalizedLoaded, type RouteLocationRaw } from 'vue-router'
-import { BookPlus, Highlighter, LayoutDashboard, Library, ListMusic, PackageOpen, Users, Wrench } from '@lucide/vue'
+import { BookPlus, CloudDownload, Highlighter, LayoutDashboard, Library, ListMusic, PackageOpen, Users, Wrench } from '@lucide/vue'
 import { Permission, type BrowseCounts, type LibraryType, type SidebarSectionId } from '@bookorbit/types'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useBookDockSummary } from '@/features/book-dock/composables/useBookDockSummary'
@@ -127,6 +127,15 @@ export const SIDEBAR_NAV_REGISTRY: readonly SidebarNavEntry[] = [
     to: (context) => ({ name: context.hasPermission('manage_libraries') ? 'tools-entity-manager' : 'tools-duplicate-books' }),
     isActive: (route) => routeNameStartsWith(route, 'tools-'),
     permission: ['manage_libraries', 'library_delete_books'],
+  },
+  {
+    id: 'downloads',
+    labelKey: 'components.sidebar.downloads',
+    icon: CloudDownload,
+    zone: 'primary',
+    modes: ['books'],
+    to: { name: 'downloads' },
+    isActive: (route) => route.name === 'downloads',
   },
   {
     id: 'podcast-queue',

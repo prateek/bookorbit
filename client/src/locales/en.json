@@ -7575,7 +7575,8 @@
       "noPlaylists": "No smart playlists yet",
       "filterPlaylists": "Filter smart playlists",
       "filterPlaylistsPlaceholder": "Filter smart playlists...",
-      "seeAllPlaylists": "See all smart playlists ({count})"
+      "seeAllPlaylists": "See all smart playlists ({count})",
+      "downloads": "Downloads"
     },
     "selectionActionBar": {
       "setReadingStatus": "Set reading status",
@@ -11720,7 +11721,8 @@
     "bookRequests": "Requests",
     "bookRequestDetail": "Request",
     "bookRequestReleases": "Pick a release",
-    "tts": "Text-to-Speech"
+    "tts": "Text-to-Speech",
+    "downloads": "Downloads"
   },
   "tts": {
     "readerControls": {
@@ -11801,6 +11803,74 @@
     },
     "errors": {
       "generic": "TTS error"
+    }
+  },
+  "offline": {
+    "unsupported": "This browser cannot keep books for offline reading.",
+    "mode": {
+      "banner": "You are offline. Downloaded books open as usual, and your progress, highlights and bookmarks sync when the connection returns."
+    },
+    "downloads": {
+      "title": "Downloads",
+      "description": "Books kept on this device for reading without a connection.",
+      "empty": "No downloads yet. Use the download button on a book to keep it on this device.",
+      "bytes": "{done} of {total}",
+      "read": "Read",
+      "pause": "Pause",
+      "resume": "Resume",
+      "retry": "Retry",
+      "update": "Update",
+      "remove": "Remove",
+      "state": {
+        "queued": "Queued",
+        "downloading": "Downloading",
+        "paused": "Paused",
+        "completed": "Downloaded",
+        "failed": "Failed",
+        "waiting": "Waiting for a connection",
+        "stale": "A newer version is on the server"
+      },
+      "failure": {
+        "network": "Connection lost",
+        "quota": "Not enough storage",
+        "storage": "Could not save the file",
+        "server": "Server error",
+        "gone": "No longer on the server",
+        "changed": "The file changed on the server"
+      }
+    },
+    "downloadButton": {
+      "download": "Download for offline reading",
+      "downloaded": "Available offline",
+      "failed": "Download failed",
+      "progress": "Downloading, {percent}%",
+      "queued": "Added to downloads"
+    },
+    "storage": {
+      "title": "Storage",
+      "downloads": "{count, plural, one {# book} other {# books}} on this device, {size}",
+      "browser": "This app uses {used} of {quota} available",
+      "unknown": "The browser did not report how much storage is available",
+      "persisted": "Downloads are protected from automatic cleanup",
+      "notPersisted": "The browser may remove downloads when the device runs low on space.",
+      "persist": "Keep downloads"
+    },
+    "sync": {
+      "title": "Sync",
+      "now": "Sync now",
+      "never": "Never",
+      "lastSync": "Last sync",
+      "pending": "Waiting to sync",
+      "outcome": "Last result",
+      "device": "Device",
+      "failures": "{count, plural, one {# change} other {# changes}} the server refused",
+      "outcomes": {
+        "drained": "Up to date",
+        "offline": "Offline",
+        "unauthenticated": "Signed out",
+        "server-error": "Server error",
+        "budget": "More to send"
+      }
     }
   }
 }

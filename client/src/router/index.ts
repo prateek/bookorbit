@@ -600,6 +600,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: () => t('titles.whatsNew') },
       },
       {
+        path: '/downloads',
+        name: 'downloads',
+        component: () => import('@/features/offline/views/DownloadsView.vue'),
+        meta: { title: () => t('titles.downloads'), offlineCapable: true },
+      },
+      {
         path: '/annotations',
         name: 'annotations',
         component: () => import('@/features/annotations/views/AnnotationsHubView.vue'),
@@ -770,6 +776,7 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/features/reader/ReaderView.vue'),
     meta: {
       remountOnParamChange: true,
+      offlineCapable: true,
       title: (to) => `${t('titles.readPrefix')} · ${fallbackById('titles.book', numericParam(to, 'bookId'))}`,
     },
   },

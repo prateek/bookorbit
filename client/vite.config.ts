@@ -91,6 +91,12 @@ export default defineConfig({
             icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }],
           },
           {
+            name: 'Downloads',
+            short_name: 'Downloads',
+            url: '/downloads',
+            icons: [{ src: 'pwa-192x192.png', sizes: '192x192' }],
+          },
+          {
             name: 'Settings',
             short_name: 'Settings',
             url: '/settings',

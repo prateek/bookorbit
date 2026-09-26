@@ -1,7 +1,7 @@
 import './assets/main.css'
 import './lib/echarts'
 
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
 
 import App from './App.vue'
@@ -14,6 +14,8 @@ import { useLoginOptions } from './features/auth/composables/useLoginOptions'
 import { waitForReachableSession } from './features/auth/lib/session-unavailable'
 import { installAppBadgeClearing } from './features/push/lib/app-badge'
 import { reconcilePushSubscription } from './features/push/composables/usePushNotifications'
+import { offlineMode, registerOfflineGuard, watchForReconnect } from './features/offline/offline-mode'
+import { startOfflineSession, stopOfflineSession } from './features/offline/offline-session'
 import { installServiceWorkerUpdateChecks } from './features/pwa/lib/service-worker-updates'
 
 // Chrome 124+ blocks aria-hidden from being applied to an element that contains
@@ -99,7 +101,7 @@ try {
 // Resolve setup status/auth before installing router.
 // app.use(router) triggers initial navigation and guard execution.
 const { fetchSetupStatus, needsSetup } = useSetupStatus()
-const { init, sessionUnavailable } = useAuth()
+const { init, sessionUnavailable, user } = useAuth()
 
 async function resolveSession(): Promise<boolean> {
   // The session refresh does not depend on setup status, so both requests run together.
@@ -125,11 +127,18 @@ if (!(await resolveSession())) {
   })
 }
 
+registerOfflineGuard(router)
 app.use(router)
 app.mount('#app')
 installAppBadgeClearing()
 installServiceWorkerUpdateChecks()
-void reconcilePushSubscription()
+watchForReconnect(router, init, () => !!user.value)
+watch(
+  () => user.value?.id ?? null,
+  (userId) => void (userId === null ? stopOfflineSession() : startOfflineSession(userId)),
+  { immediate: true },
+)
+if (!offlineMode.value) void reconcilePushSubscription()
 
 function prefetchPdfReader() {
   void Promise.all([import('./features/reader/pdf-v4/PdfV4ReaderView.vue'), import('@embedpdf/pdfium/pdfium.wasm?url')])
