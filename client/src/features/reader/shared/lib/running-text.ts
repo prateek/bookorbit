@@ -4,6 +4,8 @@ import type { EpubFooterLeftItem, EpubFooterRightItem, EpubRunningHeadMode } fro
 export interface RunningTextPosition {
   /** Contents label of the current chapter; empty when the book's contents do not cover it. */
   chapterLabel: string
+  bookTitle: string | null
+  seriesName: string | null
   /** 1-based screen page within the current chapter; null in scrolled flow or before layout. */
   page: number | null
   pages: number | null
@@ -45,8 +47,21 @@ export function formatMinutes(minutes: number, t: Translate): string {
   return remainder === 0 ? t('reader.runningText.hours', { h: hours }) : t('reader.runningText.hoursMinutes', { h: hours, m: remainder })
 }
 
+function chapterName(position: RunningTextPosition): string {
+  return position.chapterLabel.trim() || position.bookTitle?.trim() || ''
+}
+
+/** The two-line title shown in the reader toolbar: series above, chapter below. */
+export function buildToolbarTitle(position: RunningTextPosition): { series: string | null; chapter: string } {
+  return { series: position.seriesName?.trim() || null, chapter: chapterName(position) }
+}
+
 function buildHead(position: RunningTextPosition, mode: EpubRunningHeadMode): string {
-  return mode === 'off' ? '' : position.chapterLabel.trim()
+  if (mode === 'off') return ''
+  const chapter = chapterName(position)
+  const series = position.seriesName?.trim()
+  if (mode === 'series-chapter' && series) return chapter ? `${series} · ${chapter}` : series
+  return chapter
 }
 
 function hasPages(position: RunningTextPosition): position is RunningTextPosition & { page: number; pages: number } {

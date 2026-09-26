@@ -261,6 +261,7 @@ if (!isAudioFormat && !isPdfFormat && !isComicFormat) useReaderThemeColor(() => 
 const runningText = useRunningText({
   state,
   mode: activeMode,
+  book: bookMeta,
   chapterLabel: chapterTitle,
   page: sectionPage,
   pages: sectionPages,
@@ -1459,7 +1460,8 @@ onUnmounted(() => {
     "
   >
     <ReaderHeader
-      :chapterTitle="chapterTitle"
+      :chapterTitle="runningText.toolbarTitle.value.chapter"
+      :seriesTitle="runningText.toolbarTitle.value.series"
       :isBookmarked="bookmarks.isCurrentCfiBookmarked.value"
       :settings-open="showSettings"
       :footerRight="state.footerRight"

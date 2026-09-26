@@ -1,6 +1,6 @@
 import { computed, type ComputedRef, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { buildRunningText, type RunningText, type RunningTextPosition } from '../../shared/lib/running-text'
+import { buildRunningText, buildToolbarTitle, type RunningText, type RunningTextPosition } from '../../shared/lib/running-text'
 import type { ThemeMode } from '../constants/themes'
 import type { FoliateRenderer } from './useFoliate'
 import type { ReaderState } from './useReaderState'
@@ -8,6 +8,7 @@ import type { ReaderState } from './useReaderState'
 interface RunningTextSources {
   state: ComputedRef<ReaderState>
   mode: ComputedRef<ThemeMode>
+  book: Ref<{ title: string | null; seriesName: string | null } | null>
   chapterLabel: Ref<string>
   page: Ref<number | null>
   pages: Ref<number | null>
@@ -28,12 +29,14 @@ function span(text: string, align: 'left' | 'right'): HTMLSpanElement {
   return el
 }
 
-/** What the lines above and below the page say, rendered into the paginator's head and foot. */
+/** What the lines above and below the page say, built once for the paginated head and foot and the toolbar title. */
 export function useRunningText(sources: RunningTextSources) {
   const { t } = useI18n()
 
   const position = computed<RunningTextPosition>(() => ({
     chapterLabel: sources.chapterLabel.value,
+    bookTitle: sources.book.value?.title ?? null,
+    seriesName: sources.book.value?.seriesName ?? null,
     page: sources.page.value,
     pages: sources.pages.value,
     chapterFraction: sources.chapterFraction.value,
@@ -42,6 +45,7 @@ export function useRunningText(sources: RunningTextSources) {
   }))
 
   const text = computed<RunningText>(() => buildRunningText(position.value, sources.state.value, t))
+  const toolbarTitle = computed(() => buildToolbarTitle(position.value))
   const fontSize = computed(
     () => `${Math.min(RUNNING_TEXT_MAX_PX, Math.max(RUNNING_TEXT_MIN_PX, Math.round(sources.state.value.fontSize * RUNNING_TEXT_SCALE)))}px`,
   )
@@ -83,5 +87,5 @@ export function useRunningText(sources: RunningTextSources) {
     })
   }
 
-  return { text, render }
+  return { text, toolbarTitle, render }
 }
