@@ -13,6 +13,7 @@ import { RUNNING_TEXT_SETTING_KEYS, useReaderState } from './epub/composables/us
 import { useRunningText } from './epub/composables/useRunningText'
 import { useReadingPace } from './shared/composables/useReadingPace'
 import { joinFoot, nextFooterRight } from './shared/lib/running-text'
+import { readerChromeThemeStyle } from './epub/composables/readerPageContext'
 import { useReaderThemeColor } from './shared/composables/useReaderThemeColor'
 import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
 import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
@@ -275,6 +276,7 @@ const runningText = useRunningText({
 
 const footSummary = computed(() => joinFoot(runningText.text.value))
 const isScrolledText = computed(() => state.value.flow === 'scrolled' && !isFixedLayout.value)
+const pageChromeStyle = computed(() => readerChromeThemeStyle(activeMode.value))
 
 function cycleFooterRight() {
   void applyUpdate({ footerRight: nextFooterRight(state.value.footerRight) })
@@ -1511,6 +1513,7 @@ onUnmounted(() => {
       <div
         v-if="bookmarks.isCurrentCfiBookmarked.value"
         class="absolute left-8 top-[env(safe-area-inset-top)] z-30 pointer-events-none"
+        :style="pageChromeStyle"
         aria-hidden="true"
       >
         <div class="w-7 h-14 bg-primary" style="clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%)" />
@@ -1847,7 +1850,8 @@ onUnmounted(() => {
 
     <div
       v-if="showEndCard"
-      class="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+3.5rem)] z-[45] flex justify-center px-3"
+      class="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5rem)] z-[45] flex justify-center px-3"
+      :style="pageChromeStyle"
     >
       <NextChapterCard
         class="pointer-events-auto"
