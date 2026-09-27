@@ -36,7 +36,7 @@ A clone needs the `upstream` remote (`git remote add upstream https://github.com
 3. On `downstream`, run `git rebase v3.1.0` and review each resolution rerere replays. If upstream added migrations since the old base, complete [Migrations](#migrations) before moving on. Done when `git log --oneline v3.1.0..downstream` lists exactly our commits.
 4. Push with `git push --force-with-lease origin downstream`. Done when the Fork workflow's checks pass on that commit.
 5. Tag `v3.1.0-prateek.1` on `downstream` and push the tag. Done when the Fork workflow's run summary shows the published `ghcr.io/prateek/bookorbit:3.1.0-prateek.1@sha256:...` reference, which `ghcr.io/prateek/bookorbit:release` now also points to.
-6. Deploy with the infra runbook: `APP_IMAGE` follows the moving `release` tag, which step 5 moves to the new image, and the upgrade is `docker compose pull && docker compose up -d`. Done when the app is healthy and the [skipped-migration check](#skipped-migration-check) prints nothing.
+6. Deploy with the infra runbook's Deploys section (`hosts/prateek-books/README.md` in `prateek/infra`): prateek-books' reconcile timer picks up the newest release once `release` points at it, pins it by digest behind a database dump, and reverts it if it fails its health checks. Done when the reconcile journal shows `deployed reader <version>` and the [skipped-migration check](#skipped-migration-check) prints nothing.
 
 ## Migrations
 
@@ -74,7 +74,7 @@ Cherry-pick the upstreamable commit onto upstream `main` in a branch named `BO-<
 
 ## GitHub Actions
 
-`.github/workflows/fork.yml` is the fork's only active workflow. It checks pushes and PRs to `downstream`, publishes images from `v*-prateek.*` tags, and builds an unpublished image on a manual run. Before any push, the image job starts the built image against an empty PostgreSQL and fails unless every migration applies and `/api/v1/health` answers. Each push to `downstream` also disables every other workflow, since upstream's fail without upstream's secrets or publish upstream builds under this fork. Fork CI changes go in `fork.yml`.
+`.github/workflows/fork.yml` is the fork's only active workflow. It checks pushes and PRs to `downstream`, publishes images from `v*-prateek.*` tags, and builds an unpublished image on a manual run. Before any push, the image job starts the built image against an empty PostgreSQL and fails unless every migration applies and `/api/v1/health` answers. Every image carries `org.opencontainers.image.revision` set to the commit it was built from, the tagged commit for a release, so a host can check that `release` came from the tag it expects. Each push to `downstream` also disables every other workflow, since upstream's fail without upstream's secrets or publish upstream builds under this fork. Fork CI changes go in `fork.yml`.
 
 ## Recovery
 
