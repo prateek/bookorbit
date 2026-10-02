@@ -129,6 +129,18 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'app-shell',
+              plugins: [
+                {
+                  // A gateway answering 502 to 504 for a server that is restarting or down is not a page
+                  // to launch into. Treating it as a failed fetch lets the precached shell take over, so
+                  // an installed app starts offline as it does with no network at all. An auth proxy's
+                  // redirect arrives as an opaque response with status 0 and still reaches the browser.
+                  fetchDidSucceed: async ({ response }) => {
+                    if (response.status >= 500) throw new Error(`upstream answered ${response.status}`)
+                    return response
+                  },
+                },
+              ],
               // No networkTimeoutSeconds: a slow proxy redirect must win over the cached page.
               expiration: {
                 maxEntries: 50,
