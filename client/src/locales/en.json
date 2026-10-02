@@ -9983,6 +9983,16 @@
       "pageWidthWide": "Wide",
       "pageWidthFull": "Full",
       "readingFlow": "Reading flow",
+      "readingLayout": {
+        "information": "Reading information",
+        "hidden": "Hidden",
+        "progress": "Progress only",
+        "full": "Full",
+        "sideMargins": "Side margins",
+        "verticalMargin": "Vertical spacing",
+        "verticalHint": "Page top and bottom spacing; chapter padding in scroll mode. Full information needs at least 28px in page mode.",
+        "pixels": "{value}px"
+      },
       "headerFooter": {
         "title": "Header and footer",
         "head": "Top line",

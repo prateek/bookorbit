@@ -101,6 +101,8 @@ export interface EpubReaderSettings {
   textIndent: number | null; // null preserves publisher first-line indentation
   maxColumnCount: number; // 1-10
   gap: number; // 0-0.5 (column gap as fraction)
+  verticalMargin?: number; // 0-80 px; running text may need a larger page band
+  informationDisplay?: "hidden" | "progress" | "full";
   maxInlineSize: number; // 400-1600 (max content width in px)
   maxBlockSize: number; // 600-2400 (max content height in px)
   justify: boolean;
@@ -175,6 +177,8 @@ export const EPUB_READER_DEFAULTS: EpubReaderSettings = {
   textIndent: null,
   maxColumnCount: 2,
   gap: 0.05,
+  verticalMargin: 24,
+  informationDisplay: "full",
   maxInlineSize: 720,
   maxBlockSize: 1440,
   justify: true,

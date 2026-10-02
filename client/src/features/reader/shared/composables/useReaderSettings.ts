@@ -131,6 +131,12 @@ function sanitizeEpubPartialSettings(settings: unknown): Partial<EpubReaderSetti
   if (isNumberInRange(settings.gap, 0, 0.5)) {
     out.gap = settings.gap
   }
+  if (isIntegerInRange(settings.verticalMargin, 0, 80)) {
+    out.verticalMargin = settings.verticalMargin
+  }
+  if (settings.informationDisplay === 'hidden' || settings.informationDisplay === 'progress' || settings.informationDisplay === 'full') {
+    out.informationDisplay = settings.informationDisplay
+  }
   if (isIntegerInRange(settings.maxInlineSize, 400, 1600)) {
     out.maxInlineSize = settings.maxInlineSize
   }

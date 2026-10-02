@@ -262,7 +262,7 @@ describe('ReaderSettingsPanel', () => {
     await buttonByAriaLabel(wrapper, 'More columns').trigger('click')
     expect(wrapper.emitted('update')?.[0]).toEqual([{ maxColumnCount: 3 }])
 
-    await rangeByLabel(wrapper, 'Column gap')!.setValue('12')
+    await rangeByLabel(wrapper, 'Side margins')!.setValue('12')
     expect(wrapper.emitted('update')?.[1]).toEqual([{ gap: 0.12 }])
 
     await switchByLabel(wrapper, 'Justify text')!.trigger('click')

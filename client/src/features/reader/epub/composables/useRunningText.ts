@@ -49,7 +49,11 @@ export function useRunningText(sources: RunningTextSources) {
     unreadAfter: sources.unreadAfter.value,
   }))
 
-  const text = computed<RunningText>(() => buildRunningText(position.value, sources.state.value, t))
+  const text = computed<RunningText>(() =>
+    (sources.state.value.informationDisplay ?? 'full') === 'full'
+      ? buildRunningText(position.value, sources.state.value, t)
+      : { head: '', left: '', right: '' },
+  )
   const toolbarTitle = computed(() => buildToolbarTitle(position.value))
   const fontSize = computed(
     () => `${Math.min(RUNNING_TEXT_MAX_PX, Math.max(RUNNING_TEXT_MIN_PX, Math.round(sources.state.value.fontSize * RUNNING_TEXT_SCALE)))}px`,
@@ -82,6 +86,10 @@ export function useRunningText(sources: RunningTextSources) {
     const feet = renderer.feet ?? []
     feet.forEach((footEl, index) => {
       if (!footEl) return
+      if (!left && !right) {
+        footEl.replaceChildren()
+        return
+      }
       const row = document.createElement('div')
       row.style.cssText = `${style} display: flex; justify-content: space-between; gap: 1em; width: 100%; cursor: pointer;`
       row.addEventListener('click', onFootClick)
