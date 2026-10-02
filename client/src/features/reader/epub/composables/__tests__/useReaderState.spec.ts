@@ -117,13 +117,13 @@ describe('useReaderState', () => {
     expect(renderer.setAttribute).toHaveBeenCalledWith('gap', '12%')
     expect(renderer.setAttribute).toHaveBeenCalledWith('max-inline-size', `${state.maxInlineSize.value}px`)
     expect(renderer.setAttribute).toHaveBeenCalledWith('max-block-size', `${state.maxBlockSize.value}px`)
-    expect(renderer.setAttribute).toHaveBeenCalledWith('margin', '40px')
+    expect(renderer.setAttribute).toHaveBeenCalledWith('margin', '28px')
     expect(renderer.setAttribute).toHaveBeenCalledWith('flow', 'paginated')
     expect(renderer.removeAttribute).not.toHaveBeenCalledWith('margin')
     expect(renderer.setStyles).toHaveBeenCalledTimes(1)
   })
 
-  it('removes margin in scrolled flow', () => {
+  it('sets chapter-end padding in scrolled flow', () => {
     const state = useReaderState()
     state.setFlow('scrolled')
 
@@ -135,7 +135,7 @@ describe('useReaderState', () => {
 
     state.applyToRenderer(renderer)
 
-    expect(renderer.removeAttribute).toHaveBeenCalledWith('margin')
+    expect(renderer.setAttribute).toHaveBeenCalledWith('margin', '24px')
     expect(renderer.setAttribute).toHaveBeenCalledWith('flow', 'scrolled')
   })
 
@@ -152,7 +152,7 @@ describe('useReaderState', () => {
     state.applyToRenderer(renderer, { flow: 'paginated' })
 
     expect(state.flow.value).toBe('scrolled')
-    expect(renderer.setAttribute).toHaveBeenCalledWith('margin', '40px')
+    expect(renderer.setAttribute).toHaveBeenCalledWith('margin', '28px')
     expect(renderer.setAttribute).toHaveBeenCalledWith('flow', 'paginated')
     expect(renderer.removeAttribute).not.toHaveBeenCalledWith('margin')
   })

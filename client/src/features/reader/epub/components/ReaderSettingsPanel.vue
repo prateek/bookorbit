@@ -37,6 +37,7 @@ import { formatFontFamilyLabel } from '@/features/reader/shared/lib/font-display
 import { formatNumber } from '@/i18n/formatters'
 import { builtInVariants, closestVariant, familyVariants, fontVariantLabel, isSameVariant } from '@/features/reader/shared/lib/font-variants'
 import ReaderRangeField from '@/features/reader/shared/components/ReaderRangeField.vue'
+import ReaderLayoutControls from '../../layout/ReaderLayoutControls.vue'
 import ReaderSegmentedControl from '@/features/reader/shared/components/ReaderSegmentedControl.vue'
 import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 import type { ReaderSettingsScope } from '@/features/reader/shared/composables/useReaderSettings'
@@ -170,7 +171,9 @@ const letterSpacingLabel = computed(() => formatEmValue(letterSpacingValue.value
 const wordSpacingLabel = computed(() => formatEmValue(wordSpacingValue.value, 2))
 const textIndentLabel = computed(() => formatEmValue(textIndentValue.value, 2))
 
-const columnGapPercent = computed(() => Math.round(props.state.gap * 100))
+function updateLayout(patch: Partial<ReaderState>) {
+  emit('update', patch)
+}
 
 function setMode(value: string) {
   emit('update', { isDark: value === 'dark' })
@@ -282,10 +285,6 @@ function increaseColumns() {
   emit('update', {
     maxColumnCount: Math.min(COLUMN_MAX, props.state.maxColumnCount + 1),
   })
-}
-
-function setColumnGap(value: number) {
-  emit('update', { gap: Math.round(value) / 100 })
 }
 
 function setJustify(value: boolean) {
@@ -656,6 +655,8 @@ const cardBaseClass =
           />
         </div>
 
+        <ReaderLayoutControls :state="state" @update="updateLayout" />
+
         <div class="space-y-2.5 border-b border-border px-4 py-3.5" data-testid="header-footer-setting">
           <p :class="groupLabelClass">{{ t('reader.settings.headerFooter.title') }}</p>
           <div>
@@ -720,16 +721,6 @@ const cardBaseClass =
                 </button>
               </div>
             </div>
-
-            <ReaderRangeField
-              :model-value="columnGapPercent"
-              :min="0"
-              :max="50"
-              :step="1"
-              :label="t('reader.settings.columnGap')"
-              :display-value="t('reader.settings.percent', { value: columnGapPercent })"
-              @update:model-value="setColumnGap"
-            />
 
             <div class="space-y-2">
               <p class="text-[13px] font-medium text-foreground">
