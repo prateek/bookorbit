@@ -45,6 +45,8 @@ const EPUB_SETTINGS_SCHEMA = z
     textIndent: z.number().min(EPUB_TEXT_INDENT_MIN).max(EPUB_TEXT_INDENT_MAX).nullable(),
     maxColumnCount: z.number().int().min(1).max(10),
     gap: z.number().min(0).max(0.5),
+    verticalMargin: z.number().int().min(0).max(80).optional(),
+    informationDisplay: z.enum(['hidden', 'progress', 'full']).optional(),
     maxInlineSize: z.number().int().min(400).max(1600),
     maxBlockSize: z.number().int().min(600).max(2400),
     justify: z.boolean(),
