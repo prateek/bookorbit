@@ -113,6 +113,7 @@ const {
   activeMode,
   isDark,
   applyToRenderer,
+  applyLayoutToRenderer,
   setFontSize,
   setLineHeight,
   setParagraphSpacing,
@@ -124,6 +125,8 @@ const {
   setFontStyle,
   setMaxColumnCount,
   setGap,
+  setVerticalMargin,
+  setInformationDisplay,
   setMaxInlineSize,
   setMaxBlockSize,
   setJustify,
@@ -281,6 +284,15 @@ const runningText = useRunningText({
 
 const footSummary = computed(() => joinFoot(runningText.text.value))
 const isScrolledText = computed(() => state.value.flow === 'scrolled' && !isFixedLayout.value)
+const readerBottomPadding = computed(() => {
+  if (isScrolledText.value && state.value.informationDisplay === 'full' && footSummary.value) {
+    return 'pb-[calc(env(safe-area-inset-bottom)+1.75rem)]'
+  }
+  if (state.value.informationDisplay === 'progress' || (isScrolledText.value && state.value.informationDisplay === 'full')) {
+    return 'pb-[calc(env(safe-area-inset-bottom)+0.125rem)]'
+  }
+  return 'pb-[env(safe-area-inset-bottom)]'
+})
 const pageChromeStyle = computed(() => readerChromeThemeStyle(activeMode.value))
 
 function cycleFooterRight() {
@@ -812,6 +824,8 @@ function onRelocateHandler(detail: RelocateDetail) {
 function onApplyStylesHandler(renderer: FoliateRenderer) {
   if (shouldApplyStyles.value) {
     applyToRenderer(renderer, isFixedLayout.value ? { flow: 'paginated' } : undefined)
+  } else {
+    applyLayoutToRenderer(renderer, isFixedLayout.value ? { flow: 'paginated' } : undefined)
   }
 }
 
@@ -1004,6 +1018,10 @@ async function openReader() {
   if (effective.runningHead) setRunningHead(effective.runningHead)
   if (effective.footerLeft) setFooterLeft(effective.footerLeft)
   if (effective.footerRight) setFooterRight(effective.footerRight)
+  setInformationDisplay(effective.informationDisplay ?? 'full')
+  setVerticalMargin(effective.verticalMargin ?? 24)
+  setGap(effective.gap)
+  setFlow(effective.flow)
   if (effective.overrideBookFormatting) {
     shouldApplyStyles.value = true
     seedState(effective)
@@ -1012,8 +1030,9 @@ async function openReader() {
     // only as the default would not show up here: keep changes scoped to this book instead.
     settingsScope.value = 'book'
     if (bookSettings.isCustomized.value) {
-      shouldApplyStyles.value = true
-      seedState(bookSettings.bookDelta.value as Partial<ReaderState>)
+      const delta = bookSettings.bookDelta.value as Partial<ReaderState>
+      shouldApplyStyles.value = Object.keys(delta).some((key) => !RUNNING_TEXT_SETTING_KEYS.has(key as keyof ReaderState))
+      setStateFields(delta)
     } else {
       shouldApplyStyles.value = false
     }
@@ -1162,6 +1181,8 @@ const epubSetters: Record<string, (v: unknown) => void> = {
   fontStyle: (v) => setFontStyle(v as EpubReaderSettings['fontStyle']),
   maxColumnCount: (v) => setMaxColumnCount(v as number),
   gap: (v) => setGap(v as number),
+  verticalMargin: (v) => setVerticalMargin(v as number),
+  informationDisplay: (v) => setInformationDisplay(v as NonNullable<EpubReaderSettings['informationDisplay']>),
   maxInlineSize: (v) => setMaxInlineSize(v as number),
   maxBlockSize: (v) => setMaxBlockSize(v as number),
   justify: (v) => setJustify(v as boolean),
@@ -1208,6 +1229,8 @@ async function applyUpdate(partial: Partial<ReaderState>) {
     seedState(partial)
   } else {
     setStateFields(partial)
+    const renderer = getRenderer()
+    if (renderer) applyLayoutToRenderer(renderer, isFixedLayout.value ? { flow: 'paginated' } : undefined)
   }
   bookSettings.updateSettings(partial, settingsScope.value)
   if (shouldReopenForSpread) {
@@ -1554,7 +1577,7 @@ onUnmounted(() => {
       <div
         ref="containerRef"
         class="absolute inset-0 pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]"
-        :class="isScrolledText ? 'pb-[calc(env(safe-area-inset-bottom)+1.75rem)]' : 'pb-[env(safe-area-inset-bottom)]'"
+        :class="readerBottomPadding"
       />
       <div
         v-if="isNavigationLocked"
@@ -1830,6 +1853,7 @@ onUnmounted(() => {
       :sectionPages="sectionPages"
       :summary="footSummary"
       :scrolledText="isScrolledText"
+      :informationDisplay="state.informationDisplay"
       :navigationLocked="isNavigationLocked"
       class="transition-all duration-300"
       :class="footerVisible && !showTapZones ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-full pointer-events-none'"

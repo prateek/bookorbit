@@ -35,6 +35,8 @@ export interface ReaderState {
   fontStyle: FontStyle
   maxColumnCount: number
   gap: number
+  verticalMargin?: number
+  informationDisplay?: EpubReaderSettings['informationDisplay']
   maxInlineSize: number
   maxBlockSize: number
   justify: boolean
@@ -48,8 +50,16 @@ export interface ReaderState {
   footerRight: EpubFooterRightItem
 }
 
-/** Settings for the lines around the page, which change what they say but never the book's styles. */
-export const RUNNING_TEXT_SETTING_KEYS: ReadonlySet<keyof ReaderState> = new Set(['runningHead', 'footerLeft', 'footerRight'])
+/** Page information and spacing settings that leave the book's typography intact. */
+export const RUNNING_TEXT_SETTING_KEYS: ReadonlySet<keyof ReaderState> = new Set([
+  'runningHead',
+  'footerLeft',
+  'footerRight',
+  'informationDisplay',
+  'verticalMargin',
+  'gap',
+  'flow',
+])
 
 export interface ApplyReaderStateOptions {
   flow?: ReaderState['flow']
@@ -83,6 +93,8 @@ const defaults: ReaderState = {
   fontStyle: EPUB_READER_DEFAULTS.fontStyle,
   maxColumnCount: 2,
   gap: 0.05,
+  verticalMargin: EPUB_READER_DEFAULTS.verticalMargin,
+  informationDisplay: EPUB_READER_DEFAULTS.informationDisplay,
   maxInlineSize: 720,
   maxBlockSize: 1440,
   justify: true,
@@ -108,6 +120,8 @@ export function useReaderState() {
   const fontStyle = ref<FontStyle>(defaults.fontStyle)
   const maxColumnCount = ref(defaults.maxColumnCount)
   const gap = ref(defaults.gap)
+  const verticalMargin = ref(defaults.verticalMargin ?? 24)
+  const informationDisplay = ref<NonNullable<EpubReaderSettings['informationDisplay']>>(defaults.informationDisplay ?? 'full')
   const maxInlineSize = ref(defaults.maxInlineSize)
   const maxBlockSize = ref(defaults.maxBlockSize)
   const justify = ref(defaults.justify)
@@ -134,6 +148,8 @@ export function useReaderState() {
     fontStyle: fontStyle.value,
     maxColumnCount: maxColumnCount.value,
     gap: gap.value,
+    verticalMargin: verticalMargin.value,
+    informationDisplay: informationDisplay.value,
     maxInlineSize: maxInlineSize.value,
     maxBlockSize: maxBlockSize.value,
     justify: justify.value,
@@ -251,6 +267,8 @@ export function useReaderState() {
               color-scheme: ${dark ? 'dark' : 'light'};
               color: ${mode.fg};
               font-size: ${fs}px;
+              -webkit-text-size-adjust: 100%;
+              text-size-adjust: 100%;
           }${bodyFontRule}
           a:any-link {
               color: ${mode.link};
@@ -332,20 +350,25 @@ export function useReaderState() {
     `
   }
 
-  function applyToRenderer(renderer: FoliateRenderer, options: ApplyReaderStateOptions = {}): void {
+  function applyLayoutToRenderer(renderer: FoliateRenderer, options: ApplyReaderStateOptions = {}): void {
     if (!renderer) return
     const s = state.value
     const rendererFlow = options.flow ?? s.flow
+    // Scrolled padding uses the whole viewport; paginated gaps use its inset container.
+    const rendererGap = rendererFlow === 'scrolled' ? s.gap / (1 + s.gap) : s.gap
     renderer.setAttribute('max-column-count', String(s.maxColumnCount))
-    renderer.setAttribute('gap', `${s.gap * 100}%`)
+    renderer.setAttribute('gap', `${rendererGap * 100}%`)
     renderer.setAttribute('max-inline-size', `${s.maxInlineSize}px`)
     renderer.setAttribute('max-block-size', `${s.maxBlockSize}px`)
-    if (rendererFlow === 'paginated') {
-      renderer.setAttribute('margin', '40px')
-    } else {
-      renderer.removeAttribute('margin')
-    }
+    const hasRunningText = s.runningHead !== 'off' || s.footerLeft !== 'off' || s.footerRight !== 'off'
+    const minimumBand = rendererFlow === 'paginated' && s.informationDisplay === 'full' && hasRunningText ? 28 : 0
+    renderer.setAttribute('margin', `${Math.max(s.verticalMargin ?? 24, minimumBand)}px`)
     renderer.setAttribute('flow', rendererFlow)
+  }
+
+  function applyToRenderer(renderer: FoliateRenderer, options: ApplyReaderStateOptions = {}): void {
+    if (!renderer) return
+    applyLayoutToRenderer(renderer, options)
     if (typeof renderer.setStyles === 'function') {
       renderer.setStyles(generateCSS())
     }
@@ -383,6 +406,12 @@ export function useReaderState() {
   }
   function setGap(v: number) {
     gap.value = Math.max(0, Math.min(0.5, v))
+  }
+  function setVerticalMargin(v: number) {
+    verticalMargin.value = Math.max(0, Math.min(80, Math.round(v)))
+  }
+  function setInformationDisplay(v: NonNullable<EpubReaderSettings['informationDisplay']>) {
+    informationDisplay.value = v
   }
   function setMaxInlineSize(v: number) {
     maxInlineSize.value = Math.max(400, Math.min(1600, v))
@@ -436,6 +465,8 @@ export function useReaderState() {
     fontStyle,
     maxColumnCount,
     gap,
+    verticalMargin,
+    informationDisplay,
     maxInlineSize,
     maxBlockSize,
     justify,
@@ -452,6 +483,7 @@ export function useReaderState() {
     themes,
     generateCSS,
     applyToRenderer,
+    applyLayoutToRenderer,
     setFontSize,
     setLineHeight,
     setParagraphSpacing,
@@ -463,6 +495,8 @@ export function useReaderState() {
     setFontStyle,
     setMaxColumnCount,
     setGap,
+    setVerticalMargin,
+    setInformationDisplay,
     setMaxInlineSize,
     setMaxBlockSize,
     setJustify,

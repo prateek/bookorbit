@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+import type { EpubReaderSettings } from '@bookorbit/types'
 import { useI18n } from 'vue-i18n'
 import { ChevronLeft, ChevronRight, ChevronsUpDown } from '@lucide/vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -8,6 +9,7 @@ import { readerChromeThemeStyle, useReaderPageContext } from '../composables/rea
 const { t } = useI18n()
 
 const props = defineProps<{
+  informationDisplay?: EpubReaderSettings['informationDisplay']
   fraction: number
   sectionIndex: number
   totalSections: number
@@ -31,8 +33,12 @@ const emit = defineEmits<{
 
 const pageContext = useReaderPageContext()
 const chromeStyle = computed(() => readerChromeThemeStyle(pageContext?.mode.value))
-const showScrollProgress = computed(() => pageContext?.flow.value === 'scrolled')
-const showScrollStrip = computed(() => showScrollProgress.value && props.scrolledText !== false)
+const showScrollProgress = computed(
+  () => props.informationDisplay === 'progress' || ((props.informationDisplay ?? 'full') === 'full' && pageContext?.flow.value === 'scrolled'),
+)
+const showScrollStrip = computed(
+  () => showScrollProgress.value && (props.informationDisplay ?? 'full') === 'full' && props.scrolledText !== false && !!props.summary,
+)
 const progressPercent = computed(() => Math.round(Math.min(Math.max(props.fraction, 0), 1) * 1000) / 10)
 const scrollProgressStyle = computed(() => ({
   width: `${progressPercent.value}%`,
@@ -124,8 +130,7 @@ watch(
     <Teleport to="body">
       <div
         v-if="showScrollProgress"
-        class="pointer-events-none fixed inset-x-0 bottom-0 z-40"
-        :class="showScrollStrip ? 'pb-[env(safe-area-inset-bottom)]' : ''"
+        class="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)]"
         :style="showScrollStrip ? scrollStripStyle : undefined"
         data-testid="scroll-strip"
       >
