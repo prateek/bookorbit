@@ -854,7 +854,9 @@ onMounted(async () => {
 
     <template v-else-if="detail">
       <!-- Content layer -->
-      <div class="relative z-10 flex flex-col h-full text-white">
+      <div
+        class="relative z-10 flex flex-col h-full text-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+      >
         <!-- Header -->
         <div class="flex items-center gap-2 px-3 py-3 shrink-0">
           <button class="p-2 rounded-full hover:bg-white/10 transition-colors" @click="goBack">
