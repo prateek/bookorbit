@@ -404,7 +404,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col overflow-hidden bg-background" @mousemove="handleReaderActivity" @pointerdown="handleReaderActivity">
+  <div
+    class="flex h-full min-h-0 flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+    @mousemove="handleReaderActivity"
+    @pointerdown="handleReaderActivity"
+  >
     <PdfReaderToolbar
       v-show="headerVisible"
       :current-page-start="pageRange.start"
