@@ -1592,7 +1592,7 @@ onUnmounted(() => {
         <div v-if="showTapZones" class="absolute inset-0 z-20 pointer-events-none flex select-none">
           <!-- Floating Exit Button -->
           <button
-            class="absolute top-4 right-4 z-50 px-3.5 py-2 rounded-xl bg-background/90 text-foreground border border-border/80 shadow-lg hover:bg-background pointer-events-auto flex items-center gap-2 text-xs font-semibold cursor-pointer transition-all duration-200 active:scale-95 animate-pulse"
+            class="absolute top-[calc(env(safe-area-inset-top)+1rem)] right-[calc(env(safe-area-inset-right)+1rem)] z-50 px-3.5 py-2 rounded-xl bg-background/90 text-foreground border border-border/80 shadow-lg hover:bg-background pointer-events-auto flex items-center gap-2 text-xs font-semibold cursor-pointer transition-all duration-200 active:scale-95 animate-pulse"
             @click="showTapZones = false"
             title="Close Guide"
           >

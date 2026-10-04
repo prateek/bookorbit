@@ -796,7 +796,9 @@ onUnmounted(() => {
       class="absolute top-0 inset-x-0 z-50 transition-all duration-300"
       :class="headerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'"
     >
-      <div class="h-12 flex items-center gap-1 px-3 bg-background/90 backdrop-blur-md border-b border-border">
+      <div
+        class="h-[calc(3rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] flex items-center gap-1 px-3 bg-background/90 backdrop-blur-md border-b border-border"
+      >
         <button class="viewer-btn" @click="goBack"><ArrowLeft :size="16" /></button>
         <div class="flex-1 min-w-0 flex flex-col justify-center px-2">
           <span v-if="bookTitle" class="text-sm font-serif text-foreground truncate leading-tight">{{ bookTitle }}</span>
@@ -994,7 +996,10 @@ onUnmounted(() => {
     </div>
 
     <!-- ── End of book: next in series ─────────────────────────────────────── -->
-    <div v-if="showNextBookOverlay && nextBook" class="absolute inset-x-0 bottom-16 z-40 flex justify-center px-3 sm:bottom-20">
+    <div
+      v-if="showNextBookOverlay && nextBook"
+      class="absolute inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 flex justify-center px-3 sm:bottom-[calc(5rem+env(safe-area-inset-bottom))]"
+    >
       <NextIssueCard :next-book="nextBook" :auto-advance="canAutoAdvance" @open="openNextBook" />
     </div>
 
@@ -1003,7 +1008,9 @@ onUnmounted(() => {
       class="absolute bottom-0 inset-x-0 z-50 transition-all duration-300"
       :class="footerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-full pointer-events-none'"
     >
-      <div class="h-12 sm:h-14 flex items-center gap-1.5 px-2 sm:gap-3 sm:px-4 bg-background/90 backdrop-blur-md border-t border-border">
+      <div
+        class="h-[calc(3rem+env(safe-area-inset-bottom))] sm:h-[calc(3.5rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] flex items-center gap-1.5 px-2 sm:gap-3 sm:px-4 bg-background/90 backdrop-blur-md border-t border-border"
+      >
         <div class="hidden sm:block">
           <Tooltip>
             <TooltipTrigger as-child>
