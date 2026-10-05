@@ -1480,6 +1480,7 @@ onUnmounted(() => {
   <div
     v-else
     class="fixed inset-0 overflow-hidden"
+    :class="isIosHomeScreen ? '[--reader-top-inset:max(12px,env(safe-area-inset-top))]' : '[--reader-top-inset:env(safe-area-inset-top)]'"
     :style="
       shouldApplyStyles ? { background: activeMode.bg, colorScheme: isDark ? 'dark' : 'light' } : { background: '#ffffff', colorScheme: 'light' }
     "
@@ -1529,8 +1530,7 @@ onUnmounted(() => {
     <Transition name="bookmark-fade">
       <div
         v-if="bookmarks.isCurrentCfiBookmarked.value"
-        class="absolute left-8 z-30 pointer-events-none"
-        :class="isIosHomeScreen ? 'top-[max(12px,env(safe-area-inset-top))]' : 'top-[env(safe-area-inset-top)]'"
+        class="absolute left-8 top-[var(--reader-top-inset)] z-30 pointer-events-none"
         :style="pageChromeStyle"
         aria-hidden="true"
       >
@@ -1581,8 +1581,8 @@ onUnmounted(() => {
            text also stops above the strip that stands in for the bottom line. -->
       <div
         ref="containerRef"
-        class="absolute inset-0 pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]"
-        :class="[readerBottomPadding, isIosHomeScreen ? 'pt-[max(12px,env(safe-area-inset-top))]' : 'pt-[env(safe-area-inset-top)]']"
+        class="absolute inset-0 pt-[var(--reader-top-inset)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]"
+        :class="readerBottomPadding"
       />
       <div
         v-if="isNavigationLocked"

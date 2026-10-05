@@ -7,11 +7,11 @@ const standalone = isIosHomeScreenApp()
 </script>
 
 <template>
-  <!-- Previously installed iOS apps can report a zero safe inset; WebKit needs an edge taller than 10px to sample. -->
+  <!-- A fixed edge also tints native chrome in iOS apps installed before black-translucent was enabled. -->
   <div
     v-if="standalone && color"
     aria-hidden="true"
-    class="pointer-events-none fixed inset-x-0 top-0 z-40 h-[max(12px,env(safe-area-inset-top,0px))]"
+    class="pointer-events-none fixed inset-x-0 top-0 z-40 h-[var(--reader-top-inset)]"
     :style="{ backgroundColor: color }"
   />
 </template>
