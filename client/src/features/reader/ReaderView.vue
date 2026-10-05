@@ -15,6 +15,8 @@ import { useReadingPace } from './shared/composables/useReadingPace'
 import { joinFoot, nextFooterRight } from './shared/lib/running-text'
 import { readerChromeThemeStyle } from './epub/composables/readerPageContext'
 import { useReaderThemeColor } from './shared/composables/useReaderThemeColor'
+import ReaderStatusBar from './shared/status-bar/ReaderStatusBar.vue'
+import { isIosHomeScreenApp } from './shared/status-bar/home-screen'
 import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
 import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
 import { primarySeriesId, useReaderBack } from './shared/composables/useReaderBack'
@@ -77,6 +79,7 @@ const { coverUrl } = useCoverVersions()
 const bookId = Number(route.params.bookId)
 const fileId = Number(route.params.fileId)
 const fileFormat = (route.query.format as string) || 'epub'
+const isIosHomeScreen = isIosHomeScreenApp()
 useReaderPageTitle(bookId)
 const normalizedFileFormat = fileFormat.toLowerCase()
 const isAudioFormat = getFormatGroup(fileFormat) === 'audio'
@@ -1477,10 +1480,12 @@ onUnmounted(() => {
   <div
     v-else
     class="fixed inset-0 overflow-hidden"
+    :class="isIosHomeScreen ? '[--reader-top-inset:max(12px,env(safe-area-inset-top))]' : '[--reader-top-inset:env(safe-area-inset-top)]'"
     :style="
       shouldApplyStyles ? { background: activeMode.bg, colorScheme: isDark ? 'dark' : 'light' } : { background: '#ffffff', colorScheme: 'light' }
     "
   >
+    <ReaderStatusBar :color="shouldApplyStyles && !showSidebar && !showSearch ? activeMode.bg : null" />
     <ReaderHeader
       :chapterTitle="runningText.toolbarTitle.value.chapter"
       :seriesTitle="runningText.toolbarTitle.value.series"
@@ -1525,7 +1530,7 @@ onUnmounted(() => {
     <Transition name="bookmark-fade">
       <div
         v-if="bookmarks.isCurrentCfiBookmarked.value"
-        class="absolute left-8 top-[env(safe-area-inset-top)] z-30 pointer-events-none"
+        class="absolute left-8 top-[var(--reader-top-inset)] z-30 pointer-events-none"
         :style="pageChromeStyle"
         aria-hidden="true"
       >
@@ -1576,7 +1581,7 @@ onUnmounted(() => {
            text also stops above the strip that stands in for the bottom line. -->
       <div
         ref="containerRef"
-        class="absolute inset-0 pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]"
+        class="absolute inset-0 pt-[var(--reader-top-inset)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]"
         :class="readerBottomPadding"
       />
       <div
