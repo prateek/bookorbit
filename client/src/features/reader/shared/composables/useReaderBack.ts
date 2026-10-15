@@ -1,5 +1,7 @@
-import { useRouter, type HistoryState, type RouteLocationRaw } from 'vue-router'
+import { useRouter, type HistoryState, type RouteLocationRaw, type Router } from 'vue-router'
 import type { BookDetail } from '@bookorbit/types'
+import { freshHistoryEntryState } from '@/features/book/composables/useScrollRestoreOnActivate'
+import { entryBehindIsInThisDocument } from '../lib/document-history'
 
 type BookSeriesInfo = Pick<BookDetail, 'seriesId' | 'seriesMemberships'>
 
@@ -21,10 +23,14 @@ export function primarySeriesIndex(book: Partial<Pick<BookDetail, 'seriesIndex' 
   return primary ? primary.seriesIndex : (book?.seriesIndex ?? null)
 }
 
+function seriesRow(seriesId: number, bookId: number) {
+  return { name: 'series-detail', params: { seriesId }, query: { book: String(bookId) } }
+}
+
 /** Where the reader's back arrow leads when going back is not enough: the book's row on its series page. */
 export function resolveReaderBackTarget(bookId: number, book: BookSeriesInfo | null | undefined): RouteLocationRaw {
   const seriesId = primarySeriesId(book)
-  if (seriesId !== null) return { name: 'series-detail', params: { seriesId }, query: { book: String(bookId) } }
+  if (seriesId !== null) return seriesRow(seriesId, bookId)
   return { name: 'book-detail', params: { bookId } }
 }
 
@@ -44,10 +50,32 @@ export function enteredReaderBookId(currentBookId: number): number {
   return typeof value === 'number' ? value : currentBookId
 }
 
+/** True when the in-app page behind the reader is this series' page, shown earlier in this page load. */
+function seriesPageIsBehind(router: Router, seriesId: number): boolean {
+  const back = (window.history.state as { back?: unknown } | null)?.back
+  if (typeof back !== 'string' || !entryBehindIsInThisDocument()) return false
+  const behind = router.resolve(back)
+  return behind.name === 'series-detail' && Number(behind.params.seriesId) === seriesId
+}
+
+/**
+ * Goes back to the series page behind the reader and lands it on `target` instead, so history keeps
+ * one series page rather than gaining a second. The landed entry starts fresh, as a new visit would.
+ */
+function returnToSeriesPage(router: Router, seriesId: number, bookId: number) {
+  const removeGuard = router.beforeEach((to) => {
+    removeGuard()
+    if (to.name !== 'series-detail' || Number(to.params.seriesId) !== seriesId) return
+    return { ...seriesRow(seriesId, bookId), replace: true, state: freshHistoryEntryState() }
+  })
+  router.back()
+}
+
 /**
  * The reader's back action. Going back returns to the page the reader was opened from, unless the
  * reader has since moved on to another chapter (that page no longer matches what was read) or there
- * is no in-app history (a link opened in a fresh tab); both land on the current chapter's series row.
+ * is no in-app history (a link opened in a fresh tab); both land on the current chapter's series row,
+ * reusing the series page behind the reader when there is one.
  */
 export function useReaderBack(bookId: number, getBook: () => BookSeriesInfo | null | undefined) {
   const router = useRouter()
@@ -63,7 +91,13 @@ export function useReaderBack(bookId: number, getBook: () => BookSeriesInfo | nu
       router.back()
       return
     }
-    void router.replace(resolveReaderBackTarget(bookId, getBook()))
+    const book = getBook()
+    const seriesId = primarySeriesId(book)
+    if (seriesId !== null && seriesPageIsBehind(router, seriesId)) {
+      returnToSeriesPage(router, seriesId, bookId)
+      return
+    }
+    void router.replace(resolveReaderBackTarget(bookId, book))
   }
 
   return { goBack, handoffState }

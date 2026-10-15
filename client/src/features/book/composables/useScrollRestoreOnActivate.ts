@@ -28,6 +28,14 @@ export function isReturningToHistoryEntry(): boolean {
   return Boolean(routerHistoryState()?.forward)
 }
 
+/**
+ * History state for a redirect that lands on an existing entry as if newly visited: Vue Router only
+ * writes `forward`, so clearing it makes `isReturningToHistoryEntry` skip the saved position.
+ */
+export function freshHistoryEntryState(): { forward: null } {
+  return { forward: null }
+}
+
 export function readScrollPosition(key: string): number | null {
   try {
     const raw = sessionStorage.getItem(key)

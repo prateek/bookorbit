@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const router = vi.hoisted(() => ({ back: vi.fn<() => void>(), replace: vi.fn<(to: unknown) => Promise<void>>() }))
+const router = vi.hoisted(() => ({
+  back: vi.fn<() => void>(),
+  replace: vi.fn<(to: unknown) => Promise<void>>(),
+  resolve: vi.fn<(to: string) => { name: string; params: Record<string, string> }>(() => ({ name: 'dashboard', params: {} })),
+}))
 vi.mock('vue-router', () => ({ useRouter: () => router }))
 
 const { useReaderBack } = await import('../useReaderBack')
@@ -26,8 +30,8 @@ describe('useReaderBack after moving between chapters', () => {
     expect(router.replace).not.toHaveBeenCalled()
   })
 
-  it("lands on the current chapter's series row once the reader has moved on", () => {
-    window.history.replaceState({ back: '/series/5' }, '')
+  it("lands on the current chapter's series row once the reader has moved on from a page outside the series", () => {
+    window.history.replaceState({ back: '/' }, '')
     handOffTo(useReaderBack(10, inSeries).handoffState())
 
     useReaderBack(11, inSeries).goBack()
@@ -37,7 +41,7 @@ describe('useReaderBack after moving between chapters', () => {
   })
 
   it('remembers the starting chapter across several handoffs', () => {
-    window.history.replaceState({ back: '/series/5' }, '')
+    window.history.replaceState({ back: '/' }, '')
     handOffTo(useReaderBack(10, inSeries).handoffState())
     handOffTo(useReaderBack(11, inSeries).handoffState())
 
