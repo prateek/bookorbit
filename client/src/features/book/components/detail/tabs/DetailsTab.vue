@@ -30,6 +30,7 @@ import { bookFormatEntries, fileFormatKey, formatKeyName } from '@/features/book
 import { providerIconPathSafe } from '@/features/book/lib/provider-icons'
 import { createBookProviderLinks } from '@/features/book/lib/provider-links'
 import { faceMedium } from '@/features/book/lib/cover-slots'
+import { readerOpenQuery } from '@/features/book/lib/reader-open-query'
 import { readingDateToDateKey } from '@/features/book/lib/reading-date'
 import { getProviderColor, PROVIDER_SHORT_LABELS } from '@/lib/provider-colors'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
@@ -1176,7 +1177,7 @@ function openBookWithMode(mode?: 'peek') {
   router.push({
     name: 'reader',
     params: { bookId: props.book.id, fileId: primaryFile.value.id },
-    query: mode === 'peek' ? { format: primaryFile.value.format ?? 'epub', mode } : { format: primaryFile.value.format ?? 'epub' },
+    query: readerOpenQuery(primaryFile.value.format, localReadStatus.value, mode),
   })
 }
 
@@ -1194,7 +1195,7 @@ function openBookFile(file: BookDetail['files'][number], mode?: 'peek') {
   router.push({
     name: 'reader',
     params: { bookId: props.book.id, fileId: file.id },
-    query: mode === 'peek' ? { format: file.format ?? 'epub', mode } : { format: file.format ?? 'epub' },
+    query: readerOpenQuery(file.format, localReadStatus.value, mode),
   })
 }
 

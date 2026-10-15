@@ -27,6 +27,7 @@ import BookCoverSurface from './BookCoverSurface.vue'
 import { useI18n } from 'vue-i18n'
 import { decodeHtmlEntities } from '../lib/display-text'
 import { seriesCoverSeed } from '../lib/cover-seed'
+import { readerOpenQuery } from '../lib/reader-open-query'
 
 const { t } = useI18n()
 
@@ -187,7 +188,7 @@ function openBookWithMode(mode?: 'peek') {
   router.push({
     name: 'reader',
     params: { bookId: detail.value.id, fileId: primaryFile.value.id },
-    query: mode === 'peek' ? { format: primaryFile.value.format ?? 'epub', mode } : { format: primaryFile.value.format ?? 'epub' },
+    query: readerOpenQuery(primaryFile.value.format, readStatus.value, mode),
   })
   emit('update:open', false)
 }

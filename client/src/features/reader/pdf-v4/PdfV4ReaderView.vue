@@ -31,12 +31,13 @@ import { useReaderProgress } from '../shared/composables/useReaderProgress'
 import { useReadingSession } from '../shared/composables/useReadingSession'
 import { useReaderSettings } from '../shared/composables/useReaderSettings'
 import { useReaderBack } from '../shared/composables/useReaderBack'
+import { trackedReadingQuery, type StartTracking } from '../shared/composables/useReaderTracking'
 import PdfReaderContent from './components/PdfReaderContent.vue'
 import { toRotation, toScrollStrategy, toSpreadMode, toZoomLevel } from './pdf-viewer-utils'
 
 const { t } = useI18n()
 
-const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean }>()
+const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean; startTracking?: StartTracking }>()
 const route = useRoute()
 const router = useRouter()
 const trackingEnabled = computed(() => !props.peekMode)
@@ -179,8 +180,7 @@ function handleSettingsChange(patch: Partial<PdfReaderSettings>) {
 }
 
 async function handleStartReading() {
-  const query = { ...route.query }
-  delete query.mode
+  const query = trackedReadingQuery(route.query, props.startTracking)
   await router.replace({ name: 'reader', params: route.params, query })
   applyPendingProgress()
   await progress.save()

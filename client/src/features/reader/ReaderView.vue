@@ -20,6 +20,7 @@ import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
 import { isEndCardVisible, useEndCardRequest } from './shared/composables/useEndCardRequest'
 import { finishChapter, handOffToNextChapter, useEndCardReadState, type FinishChapterSteps } from './shared/composables/useEndCardReadState'
 import { primarySeriesId, useReaderBack } from './shared/composables/useReaderBack'
+import { readerModeOf, useReaderTracking } from './shared/composables/useReaderTracking'
 import { useCustomFonts } from './epub/composables/useCustomFonts'
 import { useVisibility } from './shared/composables/useVisibility'
 import { useWakeLock } from './shared/composables/useWakeLock'
@@ -87,11 +88,8 @@ const isPdfFormat = fileFormat === 'pdf'
 const isDjvuFormat = normalizedFileFormat === 'djvu'
 const isComicFormat = fileFormat === 'cbz' || fileFormat === 'cbr' || fileFormat === 'cb7' || isDjvuFormat
 const pageImageSource = isDjvuFormat ? 'djvu' : 'cbz'
-const isPeekMode = computed(() => {
-  const mode = route.query.mode
-  return (Array.isArray(mode) ? mode[0] : mode) === 'peek'
-})
-const trackingEnabled = computed(() => !isPeekMode.value)
+const tracking = useReaderTracking(readerModeOf(route.query.mode))
+const { trackingEnabled, peeking, resolved: trackingResolved } = tracking
 const isTtsAvailable = normalizedFileFormat === 'epub'
 
 const containerRef = ref<HTMLElement | null>(null)
@@ -228,8 +226,7 @@ function toggleHelpModal() {
 }
 
 async function startTrackedReading() {
-  const query = { ...route.query }
-  delete query.mode
+  const query = tracking.startTracking(route.query)
   await router.replace({ name: 'reader', params: route.params, query })
   await nextTick()
   await progress.save()
@@ -1040,7 +1037,9 @@ function tolerateUnreachable(reason: unknown) {
 }
 
 function loadBookMeta() {
-  void fetchBookMeta()
+  const meta = fetchBookMeta()
+  tracking.resolveFrom(meta.then((b) => b.readStatus?.status))
+  void meta
     .then((b) => {
       bookMeta.value = b
       readState.sync(b.readStatus?.status)
@@ -1049,9 +1048,14 @@ function loadBookMeta() {
     .catch(() => {})
 }
 
+/** Specialized readers load their saved position as they mount, so they mount once this has settled. */
+function resolveSpecializedTracking() {
+  tracking.resolveFrom(fetchBookMeta().then((b) => b.readStatus?.status))
+}
+
 onMounted(() => {
   // Specialized readers own their own progress/settings/loading lifecycle.
-  if (isSpecializedReader) return
+  if (isSpecializedReader) return resolveSpecializedTracking()
 
   loadBookMeta()
   if (isTtsAvailable) void loadUserPreferences().catch(() => {})
@@ -1105,6 +1109,7 @@ async function openReader() {
   await customFonts.fetchAllFonts().catch(tolerateUnreachable)
   await refreshFontFaces()
 
+  await tracking.whenResolved()
   await progress.load()
 
   await bookSettings.load().catch(tolerateUnreachable)
@@ -1580,9 +1585,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <PdfV4ReaderView v-if="isPdfFormat" :bookId="bookId" :fileId="fileId" :peek-mode="isPeekMode" />
-  <CbzReaderView v-else-if="isComicFormat" :bookId="bookId" :fileId="fileId" :peek-mode="isPeekMode" :source="pageImageSource" />
-  <AudiobookReaderView v-else-if="isAudioFormat" :bookId="bookId" :fileId="fileId" :peek-mode="isPeekMode" />
+  <div v-if="isSpecializedReader && !trackingResolved" class="fixed inset-0 flex flex-col items-center justify-center gap-3 bg-background">
+    <div class="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+    <p class="text-sm text-muted-foreground">{{ t('reader.loadingBook') }}</p>
+  </div>
+  <PdfV4ReaderView v-else-if="isPdfFormat" :bookId="bookId" :fileId="fileId" :peek-mode="peeking" :start-tracking="tracking.startTracking" />
+  <CbzReaderView :source="pageImageSource" v-else-if="isComicFormat" :bookId="bookId" :fileId="fileId" :peek-mode="peeking" :start-tracking="tracking.startTracking" />
+  <AudiobookReaderView v-else-if="isAudioFormat" :bookId="bookId" :fileId="fileId" :peek-mode="peeking" :start-tracking="tracking.startTracking" />
   <div
     v-else
     class="fixed inset-0 overflow-hidden"
@@ -1596,7 +1605,7 @@ onUnmounted(() => {
       :isBookmarked="bookmarks.isCurrentCfiBookmarked.value"
       :settings-open="showSettings"
       :footerRight="state.footerRight"
-      :peek-mode="isPeekMode"
+      :peek-mode="peeking"
       :isTtsActive="isTtsActive || (mediaOverlay.isActive.value && mediaOverlay.isPlaying.value)"
       :isTtsAvailable="isTtsAvailable"
       :isMediaOverlay="isMediaOverlayAvailable"
