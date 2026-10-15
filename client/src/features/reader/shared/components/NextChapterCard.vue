@@ -76,16 +76,25 @@ function handleDismiss() {
       </button>
     </div>
     <div class="mt-2 flex gap-2">
+      <p
+        v-if="markedRead"
+        class="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-3 text-sm text-muted-foreground"
+        role="status"
+        data-testid="reader-end-card-marked-read"
+      >
+        <Check :size="16" aria-hidden="true" />
+        <span class="truncate">{{ t('reader.endCard.markedAsRead') }}</span>
+      </p>
       <button
+        v-else
         type="button"
         class="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
-        :disabled="markedRead || markingRead"
+        :disabled="markingRead"
         data-testid="reader-end-card-mark-read"
         @click="handleMarkRead"
       >
-        <Check v-if="markedRead" :size="16" aria-hidden="true" />
-        <BookCheck v-else :size="16" aria-hidden="true" />
-        <span class="truncate">{{ markedRead ? t('reader.endCard.markedAsRead') : t('reader.endCard.markAsRead') }}</span>
+        <BookCheck :size="16" aria-hidden="true" />
+        <span class="truncate">{{ t('reader.endCard.markAsRead') }}</span>
       </button>
       <button
         v-if="nextBook"
