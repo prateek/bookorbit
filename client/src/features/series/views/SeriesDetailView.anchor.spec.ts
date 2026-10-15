@@ -112,6 +112,7 @@ function mountView({ grid = false } = {}) {
 
 describe('SeriesDetailView opened on a chapter', () => {
   beforeEach(() => {
+    sessionStorage.clear()
     mocks.route = reactive({ params: { seriesId: '42' }, query: {} })
     mocks.items = ref([chapter(54), chapter(55), chapter(56)])
     mocks.loadBooks.mockReset().mockResolvedValue(undefined)
@@ -174,7 +175,7 @@ describe('SeriesDetailView opened on a chapter', () => {
     expect(wrapper.find('[aria-current="location"]').exists()).toBe(false)
   })
 
-  it('leaves the scroll position to scroll restore when coming back to the page', async () => {
+  it('leaves the scroll position to scroll restore when coming back to a page with no saved run', async () => {
     mocks.route.query = { book: '55' }
     window.history.replaceState({ back: '/read/55/1', forward: '/read/60/1' }, '')
 
