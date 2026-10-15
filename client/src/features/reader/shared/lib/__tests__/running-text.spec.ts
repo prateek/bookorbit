@@ -88,10 +88,10 @@ describe('buildToolbarTitle', () => {
 })
 
 describe('nextFooterRight', () => {
-  it('cycles through time left, percent and unread, and a tap brings back a hidden slot', () => {
+  it('cycles through time left, percent, unread and chapter, and a tap brings back a hidden slot', () => {
     expect(nextFooterRight('time-left')).toBe('percent')
     expect(nextFooterRight('percent')).toBe('unread')
-    expect(nextFooterRight('unread')).toBe('time-left')
+    expect(nextFooterRight('unread')).toBe('chapter')
     expect(nextFooterRight('off')).toBe('time-left')
   })
 })

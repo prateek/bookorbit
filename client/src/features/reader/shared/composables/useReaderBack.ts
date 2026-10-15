@@ -5,11 +5,20 @@ type BookSeriesInfo = Pick<BookDetail, 'seriesId' | 'seriesMemberships'>
 
 const ENTERED_BOOK_STATE_KEY = 'readerEnteredBookId'
 
+function primaryMembership(book: Pick<BookDetail, 'seriesMemberships'> | null | undefined) {
+  const memberships = book?.seriesMemberships ?? []
+  return [...memberships].sort((a, b) => a.displayOrder - b.displayOrder)[0]
+}
+
 /** The series a book is read as part of: its first membership, matching how the book pages order them. */
 export function primarySeriesId(book: BookSeriesInfo | null | undefined): number | null {
-  const memberships = book?.seriesMemberships ?? []
-  const primary = [...memberships].sort((a, b) => a.displayOrder - b.displayOrder)[0]
-  return primary?.seriesId ?? book?.seriesId ?? null
+  return primaryMembership(book)?.seriesId ?? book?.seriesId ?? null
+}
+
+/** The book's number in the series `primarySeriesId` picks. */
+export function primarySeriesIndex(book: Partial<Pick<BookDetail, 'seriesIndex' | 'seriesMemberships'>> | null | undefined): string | null {
+  const primary = primaryMembership(book)
+  return primary ? primary.seriesIndex : (book?.seriesIndex ?? null)
 }
 
 /** Where the reader's back arrow leads when going back is not enough: the book's row on its series page. */
