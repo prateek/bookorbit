@@ -1247,7 +1247,7 @@ function updateAtBookEnd() {
   // The paginator knows exactly when the last page is showing; in scrolled flow (and for renderers
   // without `atEnd`) the reported fraction reaches 1 at the bottom of the last section.
   const reachedEnd = renderer && !renderer.scrolled && typeof renderer.atEnd === 'boolean' ? renderer.atEnd : fraction.value >= END_FRACTION
-  endCard.syncAtEnd(reachedEnd)
+  endCard.syncAtEnd(reachedEnd, { scrolled: renderer?.scrolled === true })
 }
 
 watch(
