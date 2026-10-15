@@ -32,6 +32,7 @@ import { useToc } from './epub/composables/useToc'
 import { useSearch, type FoliateView } from './epub/composables/useSearch'
 import { useReaderSelection } from './epub/composables/useReaderSelection'
 import { useReaderSidebarPin } from './epub/composables/useReaderSidebarPin'
+import { sidebarHandedOffPinned, sidebarHandoffState } from './series-nav/sidebar-handoff'
 import { useReaderKeyboardShortcuts } from './epub/composables/useReaderKeyboardShortcuts'
 import { useFoliateTts } from '@/features/tts/composables/useFoliateTts'
 import { useTtsPlayer } from '@/features/tts/composables/useTtsPlayer'
@@ -54,6 +55,8 @@ import SelectionPopup from './epub/components/SelectionPopup.vue'
 import ReaderSearchPanel from './epub/components/ReaderSearchPanel.vue'
 import NoteDialog from './shared/components/NoteDialog.vue'
 import NextChapterCard from './shared/components/NextChapterCard.vue'
+import SeriesChapterPanel from './series-nav/SeriesChapterPanel.vue'
+import { chapterPanelSeriesId, readerRouteForChapter, type SeriesChapterTarget } from './series-nav/series-chapter-panel'
 import DictionaryPopover from './epub/components/DictionaryPopover.vue'
 import TranslationPopover from './epub/components/TranslationPopover.vue'
 import TranslationSheet from './epub/components/TranslationSheet.vue'
@@ -174,7 +177,11 @@ const search = useSearch()
 const { results: searchResults, isSearching, search: doSearch, clear: clearSearch } = search
 
 const selection = useReaderSelection()
-const { isSidebarPinned, toggleSidebarPinned, shouldCloseAfterNavigation } = useReaderSidebarPin(fileId)
+const { isSidebarPinned, setSidebarPinned, toggleSidebarPinned, shouldCloseAfterNavigation } = useReaderSidebarPin(fileId)
+if (sidebarHandedOffPinned()) {
+  setSidebarPinned(true)
+  showSidebar.value = true
+}
 
 function closeAnyPanel() {
   if (showTapZones.value) {
@@ -297,6 +304,10 @@ function cycleFooterRight() {
   void applyUpdate({ footerRight: nextFooterRight(state.value.footerRight) })
 }
 const { goBack, handoffState } = useReaderBack(bookId, () => bookMeta.value)
+
+function chapterHandoffState() {
+  return { ...handoffState(), ...sidebarHandoffState(showSidebar.value, isSidebarPinned.value) }
+}
 
 const {
   foliateReady,
@@ -931,6 +942,12 @@ const setupPending = ref(!isSpecializedReader)
 const setupError = ref<string | null>(null)
 const readerLoading = computed(() => setupPending.value || loading.value)
 const readerError = computed(() => (readerLoading.value ? null : (setupError.value ?? error.value)))
+const panelSeriesId = computed(() => (readerLoading.value ? null : chapterPanelSeriesId(chapters.value, primarySeriesId(bookMeta.value))))
+
+function openSeriesChapter(target: SeriesChapterTarget) {
+  if (!canRunManualNavigation()) return
+  void router.replace(readerRouteForChapter(target, chapterHandoffState()))
+}
 
 /** The server's copy, or the one saved with a download when the server cannot be reached. */
 async function fetchBookMeta(): Promise<BookDetail> {
@@ -1177,7 +1194,7 @@ async function handleOpenNextChapter() {
           name: 'reader',
           params: { bookId: target.bookId, fileId: target.fileId },
           query: { format: target.format },
-          state: handoffState(),
+          state: chapterHandoffState(),
         }),
       onMarkFailed: () => toast.error(t('reader.endCard.markFailed')),
     })
@@ -1934,7 +1951,11 @@ onUnmounted(() => {
       @deleteBookmark="handleSidebarDeleteBookmark"
       @deleteAnnotation="handleSidebarDeleteAnnotation"
       @toggleExpand="toggleExpand"
-    />
+    >
+      <template v-if="panelSeriesId !== null" #chapters>
+        <SeriesChapterPanel :series-id="panelSeriesId" :book-id="bookId" :navigation-locked="isNavigationLocked" @open="openSeriesChapter" />
+      </template>
+    </ReaderSidebar>
 
     <ReaderSearchPanel
       v-if="showSearch"
