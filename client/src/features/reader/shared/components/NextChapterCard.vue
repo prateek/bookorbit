@@ -7,11 +7,13 @@ import type { SeriesNextBook } from '@bookorbit/types'
 const { t, locale } = useI18n()
 
 const props = defineProps<{
-  /** The next book in the series; the card offers only "Mark as read" without one. */
+  /** The next book in the series; without one the card offers only "Mark as read", and a peek shows no card. */
   nextBook: SeriesNextBook | null
   /** When this book was added, if it is the newest the reader has not read past: the series is caught up. */
   caughtUpSince?: string | null
   markedRead: boolean
+  /** A peek tracks nothing, so the card offers no "Mark as read". */
+  peek?: boolean
   markingRead?: boolean
   openingNext?: boolean
 }>()
@@ -86,7 +88,7 @@ function handleDismiss() {
         <span class="truncate">{{ t('reader.endCard.markedAsRead') }}</span>
       </p>
       <button
-        v-else
+        v-else-if="!peek"
         type="button"
         class="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
         :disabled="markingRead"
