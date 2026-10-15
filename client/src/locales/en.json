@@ -9872,7 +9872,7 @@
     "failedToLoadBook": "Failed to load book",
     "endCard": {
       "region": "End of chapter",
-      "eyebrow": "Next chapter",
+      "eyebrow": "End of chapter",
       "endOfBook": "End of book",
       "caughtUp": "You're caught up",
       "caughtUpSince": "Latest chapter, added {date}",
