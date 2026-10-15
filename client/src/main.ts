@@ -15,6 +15,7 @@ import { reconcilePushSubscription } from './features/push/composables/usePushNo
 import { offlineMode, registerOfflineGuard, watchForReconnect } from './features/offline/offline-mode'
 import { startOfflineSession, stopOfflineSession } from './features/offline/offline-session'
 import { installServiceWorkerUpdateChecks } from './features/pwa/lib/service-worker-updates'
+import { installPwaResume } from './features/pwa/lib/app-resume'
 
 // Chrome 124+ blocks aria-hidden from being applied to an element that contains
 // a focused descendant. Reka UI's dialog uses the aria-hidden package which sets
@@ -100,6 +101,7 @@ try {
 // app.use(router) triggers initial navigation and guard execution.
 await bootstrapSession()
 const { user, init } = useAuth()
+installPwaResume(router, user)
 
 registerOfflineGuard(router)
 app.use(router)
