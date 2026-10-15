@@ -107,6 +107,7 @@ const footerRightOptions = computed(() => [
   { value: 'time-left', label: t('reader.settings.headerFooter.footTimeLeft') },
   { value: 'percent', label: t('reader.settings.headerFooter.footPercent') },
   { value: 'unread', label: t('reader.settings.headerFooter.footUnread') },
+  { value: 'chapter', label: t('reader.settings.headerFooter.footChapter') },
   { value: 'off', label: t('reader.settings.headerFooter.off') },
 ])
 
@@ -679,7 +680,9 @@ const cardBaseClass =
           </div>
           <div>
             <p class="mb-1.5 text-[13px] font-medium text-foreground">{{ t('reader.settings.headerFooter.footRight') }}</p>
+            <!-- Five labels do not fit one row of the 21rem popover, so this control wraps three to a row. -->
             <ReaderSegmentedControl
+              class="flex-wrap *:basis-[30%]"
               :options="footerRightOptions"
               :model-value="state.footerRight"
               :aria-label="t('reader.settings.headerFooter.footRight')"

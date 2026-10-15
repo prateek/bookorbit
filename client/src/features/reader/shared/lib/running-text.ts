@@ -16,6 +16,8 @@ export interface RunningTextPosition {
   minutesLeftInChapter: number | null
   /** Unread books after this one in its series; null outside a series or until known. */
   unreadAfter: number | null
+  /** This book's number in its series, as the series lists it ("2.4"); null outside a series. */
+  seriesIndex?: string | null
 }
 
 export interface RunningTextSlots {
@@ -32,7 +34,7 @@ export interface RunningText {
 
 type Translate = (key: string, named?: Record<string, unknown>) => string
 
-const RIGHT_CYCLE: EpubFooterRightItem[] = ['time-left', 'percent', 'unread']
+const RIGHT_CYCLE: EpubFooterRightItem[] = ['time-left', 'percent', 'unread', 'chapter']
 
 /** The foot's right slot after a tap; "off" is left to the settings, so a tap never hides the line. */
 export function nextFooterRight(current: EpubFooterRightItem): EpubFooterRightItem {
@@ -81,6 +83,11 @@ function buildLeft(position: RunningTextPosition, item: EpubFooterLeftItem, t: T
   return t('reader.runningText.chapterPercent', { pct: Math.round(position.chapterFraction * 100) })
 }
 
+function buildTimeLeft(position: RunningTextPosition, t: Translate): string | null {
+  if (position.minutesLeftInChapter === null) return null
+  return t('reader.runningText.timeLeftInChapter', { time: formatMinutes(position.minutesLeftInChapter, t) })
+}
+
 function buildRight(position: RunningTextPosition, item: EpubFooterRightItem, t: Translate): string {
   if (item === 'off') return ''
   const percent = t('reader.runningText.percent', { pct: Math.round(position.bookFraction * 100) })
@@ -89,8 +96,10 @@ function buildRight(position: RunningTextPosition, item: EpubFooterRightItem, t:
     if (position.unreadAfter === null) return percent
     return position.unreadAfter === 0 ? t('reader.runningText.caughtUp') : t('reader.runningText.unreadAfter', { count: position.unreadAfter })
   }
-  if (position.minutesLeftInChapter === null) return percent
-  return t('reader.runningText.timeLeftInChapter', { time: formatMinutes(position.minutesLeftInChapter, t) })
+  const timeLeft = buildTimeLeft(position, t)
+  const index = item === 'chapter' ? position.seriesIndex?.trim() : null
+  if (index) return [t('reader.runningText.chapterNumber', { index }), timeLeft].filter(Boolean).join(' · ')
+  return timeLeft ?? percent
 }
 
 export function buildRunningText(position: RunningTextPosition, slots: RunningTextSlots, t: Translate): RunningText {

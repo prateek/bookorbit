@@ -11842,7 +11842,8 @@
         "time-left": "Footer: time left in chapter",
         "percent": "Footer: percent of book",
         "off": "Footer: hidden",
-        "unread": "Footer: unread after this"
+        "unread": "Footer: unread after this",
+        "chapter": "Footer: chapter number"
       }
     },
     "footer": {
@@ -11866,7 +11867,8 @@
       "hours": "{h} hr",
       "hoursMinutes": "{h} hr {m} min",
       "unreadAfter": "{count} more unread",
-      "caughtUp": "Caught up"
+      "caughtUp": "Caught up",
+      "chapterNumber": "#{index}"
     },
     "settings": {
       "title": "Settings",
@@ -11928,6 +11930,7 @@
         "footTimeLeft": "Time left",
         "footPercent": "Percent",
         "footUnread": "Unread",
+        "footChapter": "Chapter",
         "off": "Off"
       },
       "flow": {
