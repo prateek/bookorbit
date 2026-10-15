@@ -17,7 +17,7 @@ import { readerChromeThemeStyle } from './epub/composables/readerPageContext'
 import { useReaderThemeColor } from './shared/composables/useReaderThemeColor'
 import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
 import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
-import { isEndCardVisible, useEndCardRequest } from './shared/composables/useEndCardRequest'
+import { canShowEndCard, isEndCardVisible, useEndCardRequest } from './shared/composables/useEndCardRequest'
 import { finishChapter, handOffToNextChapter, useEndCardReadState, type FinishChapterSteps } from './shared/composables/useEndCardReadState'
 import { primarySeriesId, useReaderBack } from './shared/composables/useReaderBack'
 import { readerModeOf, useReaderTracking } from './shared/composables/useReaderTracking'
@@ -1152,6 +1152,8 @@ const showEndCard = computed(() =>
   }),
 )
 
+const endCardAvailable = computed(() => canShowEndCard({ tracking: trackingEnabled.value, hasNextBook: nextBook.value !== null }))
+
 type EndAwareRenderer = FoliateRenderer & { atEnd?: boolean; scrolled?: boolean }
 
 function updateAtBookEnd() {
@@ -1938,10 +1940,12 @@ onUnmounted(() => {
       :scrolledText="isScrolledText"
       :informationDisplay="state.informationDisplay"
       :navigationLocked="isNavigationLocked"
+      :endCardAvailable="endCardAvailable"
       class="transition-all duration-300"
       :class="footerVisible && !showTapZones ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-full pointer-events-none'"
       @prevSection="navigateToSection(sectionIndex - 1)"
       @nextSection="navigateToSection(sectionIndex + 1)"
+      @pastEnd="onPastEndHandler"
       @seek="navigateToFraction($event)"
     />
 

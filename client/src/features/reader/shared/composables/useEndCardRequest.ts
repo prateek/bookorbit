@@ -48,6 +48,10 @@ export interface EndCardVisibility {
 }
 
 /** A peek tracks nothing, so its card only exists to offer the next chapter. */
+export function canShowEndCard({ tracking, hasNextBook }: Pick<EndCardVisibility, 'tracking' | 'hasNextBook'>): boolean {
+  return tracking || hasNextBook
+}
+
 export function isEndCardVisible({ requested, readerBusy, tracking, hasNextBook }: EndCardVisibility): boolean {
-  return requested && !readerBusy && (tracking || hasNextBook)
+  return requested && !readerBusy && canShowEndCard({ tracking, hasNextBook })
 }

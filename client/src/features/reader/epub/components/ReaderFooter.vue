@@ -23,11 +23,14 @@ const props = defineProps<{
   navigationLocked?: boolean
   /** False when the renderer paginates despite a scrolled setting, as fixed-layout books do. */
   scrolledText?: boolean
+  /** Lets next on the last section turn past the end, as a page turn past the last page does. */
+  endCardAvailable?: boolean
 }>()
 
 const emit = defineEmits<{
   prevSection: []
   nextSection: []
+  pastEnd: []
   seek: [fraction: number]
 }>()
 
@@ -48,6 +51,13 @@ const scrollStripStyle = computed(() => ({
   ...chromeStyle.value,
   background: pageContext?.mode.value.bg,
 }))
+
+const onLastSection = computed(() => props.totalSections > 0 && props.sectionIndex >= props.totalSections - 1)
+
+function handleNextClick() {
+  if (onLastSection.value) emit('pastEnd')
+  else emit('nextSection')
+}
 
 const showGoToInput = ref(false)
 const goToValue = ref('')
@@ -242,8 +252,8 @@ watch(
           type="button"
           :aria-label="t('reader.footer.nextSection')"
           class="viewer-btn"
-          :disabled="(totalSections > 0 && sectionIndex >= totalSections - 1) || !!props.navigationLocked"
-          @click="emit('nextSection')"
+          :disabled="(onLastSection && !props.endCardAvailable) || !!props.navigationLocked"
+          @click="handleNextClick"
         >
           <ChevronRight :size="18" />
         </button>
