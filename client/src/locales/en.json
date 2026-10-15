@@ -10907,6 +10907,12 @@
       "confirmDelete": "Tap again to delete",
       "confirmDeleteShort": "Delete?",
       "approximatePosition": "Synced from device; exact position unavailable, jumps to the chapter",
+      "seriesChapters": {
+        "loading": "Loading chapters...",
+        "loadFailed": "Could not load the series chapters",
+        "earlier": "Show earlier chapters",
+        "later": "Show later chapters"
+      },
       "sort": {
         "readingOrder": "Reading order",
         "newest": "Newest first",
