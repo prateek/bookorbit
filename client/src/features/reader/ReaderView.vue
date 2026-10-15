@@ -17,7 +17,7 @@ import { readerChromeThemeStyle } from './epub/composables/readerPageContext'
 import { useReaderThemeColor } from './shared/composables/useReaderThemeColor'
 import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
 import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
-import { useEndCardRequest } from './shared/composables/useEndCardRequest'
+import { isEndCardVisible, useEndCardRequest } from './shared/composables/useEndCardRequest'
 import { finishChapter, handOffToNextChapter, useEndCardReadState, type FinishChapterSteps } from './shared/composables/useEndCardReadState'
 import { primarySeriesId, useReaderBack } from './shared/composables/useReaderBack'
 import { useCustomFonts } from './epub/composables/useCustomFonts'
@@ -929,7 +929,7 @@ function loadBookMeta() {
     .then((b) => {
       bookMeta.value = b
       readState.sync(b.readStatus?.status)
-      if (trackingEnabled.value) void loadNextBook(primarySeriesId(b), bookId)
+      void loadNextBook(primarySeriesId(b), bookId)
     })
     .catch(() => {})
 }
@@ -1088,14 +1088,13 @@ const markingRead = ref(false)
 const openingNext = ref(false)
 const END_FRACTION = 0.9999
 
-const showEndCard = computed(
-  () =>
-    trackingEnabled.value &&
-    endCard.requested.value &&
-    !readerLoading.value &&
-    !readerError.value &&
-    !isNavigationLocked.value &&
-    !showTapZones.value,
+const showEndCard = computed(() =>
+  isEndCardVisible({
+    requested: endCard.requested.value,
+    readerBusy: readerLoading.value || !!readerError.value || isNavigationLocked.value || showTapZones.value,
+    tracking: trackingEnabled.value,
+    hasNextBook: nextBook.value !== null,
+  }),
 )
 
 type EndAwareRenderer = FoliateRenderer & { atEnd?: boolean; scrolled?: boolean }
@@ -1107,11 +1106,6 @@ function updateAtBookEnd() {
   const reachedEnd = renderer && !renderer.scrolled && typeof renderer.atEnd === 'boolean' ? renderer.atEnd : fraction.value >= END_FRACTION
   endCard.syncAtEnd(reachedEnd)
 }
-
-// Peek mode stays inside one book; once tracked reading starts, the series handoff applies.
-watch(trackingEnabled, (enabled) => {
-  if (enabled && bookMeta.value && !nextBook.value) void loadNextBook(primarySeriesId(bookMeta.value), bookId)
-})
 
 watch(
   () => endCard.requested.value,
@@ -1133,6 +1127,7 @@ const finishChapterSteps: FinishChapterSteps = {
   },
   endSession,
   isRead: () => markedRead.value,
+  canMarkRead: () => trackingEnabled.value,
   markRead: readState.markRead,
 }
 
@@ -1871,6 +1866,7 @@ onUnmounted(() => {
         :next-book="nextBook"
         :caught-up-since="caughtUpSince"
         :marked-read="markedRead"
+        :peek="!trackingEnabled"
         :marking-read="markingRead"
         :opening-next="openingNext"
         @open-next="handleOpenNextChapter"
