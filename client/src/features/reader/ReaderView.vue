@@ -17,6 +17,7 @@ import { readerChromeThemeStyle } from './epub/composables/readerPageContext'
 import { useReaderThemeColor } from './shared/composables/useReaderThemeColor'
 import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
 import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
+import { useEndCardRequest } from './shared/composables/useEndCardRequest'
 import { primarySeriesId, useReaderBack } from './shared/composables/useReaderBack'
 import { useBookStatus } from '@/features/book/composables/useBookStatus'
 import { useCustomFonts } from './epub/composables/useCustomFonts'
@@ -810,10 +811,11 @@ function onApplyStylesHandler(renderer: FoliateRenderer) {
 
 function onMiddleTapHandler() {
   wakeLock.notifyActivity()
-  // The card sits over the last lines, so it is dismissed to read them; the tap that brings back
-  // the reader controls brings it back too, or there is no way on to the next chapter.
-  if (isAtBookEnd.value) endCardDismissed.value = false
   handleMiddleTap()
+}
+
+function onPastEndHandler() {
+  endCard.request()
 }
 
 function canRunManualNavigation(): boolean {
@@ -861,7 +863,15 @@ const {
   hasMediaOverlay,
   getMediaOverlay,
   getMediaActiveClass,
-} = useFoliate(() => containerRef.value, onRelocateHandler, onApplyStylesHandler, onMiddleTapHandler, onChapterLoadHandler, canRunManualNavigation)
+} = useFoliate(
+  () => containerRef.value,
+  onRelocateHandler,
+  onApplyStylesHandler,
+  onMiddleTapHandler,
+  onChapterLoadHandler,
+  canRunManualNavigation,
+  onPastEndHandler,
+)
 
 const { handleHighlight, handleOpenNoteDialog, handleSaveNote } = useReaderAnnotationActions({
   bookId,
@@ -1072,8 +1082,7 @@ async function openReader() {
 // ── End of book ────────────────────────────────────────────────────────────────
 // A web serial is one file per chapter, so the end of the book is the end of the chapter: offer the
 // next one in the series and an explicit "Mark as read".
-const isAtBookEnd = ref(false)
-const endCardDismissed = ref(false)
+const endCard = useEndCardRequest()
 const markedRead = ref(false)
 const markingRead = ref(false)
 const openingNext = ref(false)
@@ -1082,8 +1091,7 @@ const END_FRACTION = 0.9999
 const showEndCard = computed(
   () =>
     trackingEnabled.value &&
-    isAtBookEnd.value &&
-    !endCardDismissed.value &&
+    endCard.requested.value &&
     !readerLoading.value &&
     !readerError.value &&
     !isNavigationLocked.value &&
@@ -1097,8 +1105,7 @@ function updateAtBookEnd() {
   // The paginator knows exactly when the last page is showing; in scrolled flow (and for renderers
   // without `atEnd`) the reported fraction reaches 1 at the bottom of the last section.
   const reachedEnd = renderer && !renderer.scrolled && typeof renderer.atEnd === 'boolean' ? renderer.atEnd : fraction.value >= END_FRACTION
-  if (!reachedEnd) endCardDismissed.value = false
-  isAtBookEnd.value = reachedEnd
+  endCard.syncAtEnd(reachedEnd)
 }
 
 // Peek mode stays inside one book; once tracked reading starts, the series handoff applies.
@@ -1109,7 +1116,7 @@ watch(trackingEnabled, (enabled) => {
 const caughtUpSince = computed(() => (unreadAfter.value === 0 ? (bookMeta.value?.addedAt ?? null) : null))
 
 function dismissEndCard() {
-  endCardDismissed.value = true
+  endCard.dismiss()
 }
 
 async function handleOpenNextChapter() {

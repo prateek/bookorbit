@@ -305,11 +305,15 @@ export class FixedLayout extends HTMLElement {
   }
   async next() {
     const s = this.rtl ? this.#goLeft() : this.#goRight()
-    if (!s) return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page')
+    if (s) return
+    if (this.#index >= this.#spreads.length - 1) return this.dispatchEvent(new CustomEvent('past-end', { bubbles: true, composed: true }))
+    return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page')
   }
   async prev() {
     const s = this.rtl ? this.#goRight() : this.#goLeft()
-    if (!s) return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page')
+    if (s) return
+    if (this.#index <= 0) return this.dispatchEvent(new CustomEvent('past-start', { bubbles: true, composed: true }))
+    return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page')
   }
   getContents() {
     const frames = this.#center ? [this.#center] : [this.#left, this.#right]

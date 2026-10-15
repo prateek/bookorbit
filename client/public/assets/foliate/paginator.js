@@ -1060,9 +1060,10 @@ export class Paginator extends HTMLElement {
     if (!this.#view) return true
     if (this.scrolled) {
       if (this.start > 0) return this.#scrollTo(Math.max(0, this.start - (distance ?? this.size)), null, true)
+      if (this.#adjacentIndex(-1) == null) return this.#dispatchPast('past-start')
       return true
     }
-    if (this.atStart) return
+    if (this.atStart) return this.#dispatchPast('past-start')
     const page = this.page - 1
     return this.#scrollToPage(page, 'page', true).then(() => page <= 0)
   }
@@ -1070,12 +1071,16 @@ export class Paginator extends HTMLElement {
     if (!this.#view) return true
     if (this.scrolled) {
       if (this.viewSize - this.end > 2) return this.#scrollTo(Math.min(this.viewSize, distance ? this.start + distance : this.end), null, true)
+      if (this.#adjacentIndex(1) == null) return this.#dispatchPast('past-end')
       return true
     }
-    if (this.atEnd) return
+    if (this.atEnd) return this.#dispatchPast('past-end')
     const page = this.page + 1
     const pages = this.pages
     return this.#scrollToPage(page, 'page', true).then(() => page >= pages - 1)
+  }
+  #dispatchPast(type) {
+    this.dispatchEvent(new CustomEvent(type, { bubbles: true, composed: true }))
   }
   get atStart() {
     return this.#adjacentIndex(-1) == null && this.page <= 1
