@@ -24,6 +24,7 @@ import { useReadingSession } from '../shared/composables/useReadingSession'
 import { useCbz } from './composables/useCbz'
 import { useSeriesNextBook } from '../shared/composables/useSeriesNextBook'
 import { useReaderBack } from '../shared/composables/useReaderBack'
+import { trackedReadingQuery, type StartTracking } from '../shared/composables/useReaderTracking'
 import { useCbzSettings } from './composables/useCbzSettings'
 import { useReaderSettings } from '../shared/composables/useReaderSettings'
 import { useFullscreen } from '../shared/composables/useFullscreen'
@@ -45,7 +46,7 @@ const ZOOM_STEP = 0.25
 
 const { t } = useI18n()
 
-const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean }>()
+const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean; startTracking?: StartTracking }>()
 const route = useRoute()
 const router = useRouter()
 const trackingEnabled = computed(() => !props.peekMode)
@@ -732,8 +733,7 @@ function onResize() {
 }
 
 async function startTrackedReading() {
-  const query = { ...route.query }
-  delete query.mode
+  const query = trackedReadingQuery(route.query, props.startTracking)
   await router.replace({ name: 'reader', params: route.params, query })
   await nextTick()
   progress.pageNumber.value = progressPageIndex.value + 1
