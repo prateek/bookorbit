@@ -39,11 +39,12 @@ import { useAudioSettings } from './composables/useAudioSettings'
 import { useAudioBookmarks, type AudioBookmark } from './composables/useAudioBookmarks'
 import { useReadingSession } from '../shared/composables/useReadingSession'
 import { useReaderBack } from '../shared/composables/useReaderBack'
+import { trackedReadingQuery, type StartTracking } from '../shared/composables/useReaderTracking'
 import { useFullscreen } from '../shared/composables/useFullscreen'
 
 const { t } = useI18n()
 
-const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean }>()
+const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean; startTracking?: StartTracking }>()
 const route = useRoute()
 const router = useRouter()
 const { coverUrl } = useCoverVersions()
@@ -639,8 +640,7 @@ function handleScrubberLeave() {
 }
 
 async function startTrackedReading() {
-  const query = { ...route.query }
-  delete query.mode
+  const query = trackedReadingQuery(route.query, props.startTracking)
   await router.replace({ name: 'reader', params: route.params, query })
   await nextTick()
   const assetId = audioFiles.value[currentFileIndex.value]?.assetId
