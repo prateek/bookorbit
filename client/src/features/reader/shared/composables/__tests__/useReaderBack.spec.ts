@@ -16,7 +16,7 @@ const membership = (seriesId: number, displayOrder: number) => ({
 describe('resolveReaderBackTarget', () => {
   it('prefers the primary series page', () => {
     const book = { seriesId: 3, seriesMemberships: [membership(9, 1), membership(5, 0)] }
-    expect(resolveReaderBackTarget(1, book)).toEqual({ name: 'series-detail', params: { seriesId: 5 } })
+    expect(resolveReaderBackTarget(1, book)).toEqual({ name: 'series-detail', params: { seriesId: 5 }, query: { book: '1' } })
   })
 
   it('falls back to the book page for a book outside any series', () => {
@@ -44,6 +44,6 @@ describe('useReaderBack', () => {
     useReaderBack(1, () => ({ seriesId: 5, seriesMemberships: [] })).goBack()
 
     expect(router.back).not.toHaveBeenCalled()
-    expect(router.replace).toHaveBeenCalledWith({ name: 'series-detail', params: { seriesId: 5 } })
+    expect(router.replace).toHaveBeenCalledWith({ name: 'series-detail', params: { seriesId: 5 }, query: { book: '1' } })
   })
 })

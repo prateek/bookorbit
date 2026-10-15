@@ -5,10 +5,12 @@ import type { BookCard } from '@bookorbit/types'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { chapterProgressPercent, chapterReadState, type ChapterReadState } from '../lib/series-chapter'
 
-defineProps<{
+const props = defineProps<{
   books: BookCard[]
   nextBookId: number | null
   canMarkRead: boolean
+  /** The chapter the reader just left, outlined so the list opens on where the reader was. */
+  anchorBookId?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -34,6 +36,14 @@ function stateLabel(book: BookCard): string {
   return t(`series.detail.chapterState.${stateOf(book)}`)
 }
 
+function rowClass(book: BookCard): string[] {
+  return [book.id === props.nextBookId ? 'bg-primary/8' : '', isAnchor(book) ? 'ring-2 ring-inset ring-primary/40' : '']
+}
+
+function isAnchor(book: BookCard): boolean {
+  return props.anchorBookId != null && book.id === props.anchorBookId
+}
+
 function progressOf(book: BookCard): number | null {
   return chapterProgressPercent(book)
 }
@@ -57,7 +67,8 @@ function handleMarkReadUpTo(book: BookCard) {
       v-for="book in books"
       :key="book.id"
       class="flex items-stretch"
-      :class="book.id === nextBookId ? 'bg-primary/8' : ''"
+      :class="rowClass(book)"
+      :aria-current="isAnchor(book) ? 'location' : undefined"
       :data-book-id="book.id"
       data-testid="series-chapter-row"
     >
