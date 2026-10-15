@@ -34,6 +34,7 @@ import { useReaderSelection } from './epub/composables/useReaderSelection'
 import { useReaderSidebarPin } from './epub/composables/useReaderSidebarPin'
 import { sidebarHandedOffPinned, sidebarHandoffState } from './series-nav/sidebar-handoff'
 import { useReaderKeyboardShortcuts } from './epub/composables/useReaderKeyboardShortcuts'
+import { usePhoneSideMarginRefresh } from './layout/usePhoneSideMargin'
 import { useFoliateTts } from '@/features/tts/composables/useFoliateTts'
 import { useTtsPlayer } from '@/features/tts/composables/useTtsPlayer'
 import { useTtsMiniPlayerUi } from '@/features/tts/composables/useTtsMiniPlayerUi'
@@ -1297,6 +1298,14 @@ async function resetSettings() {
 }
 
 watch([runningText.text, activeMode, () => state.value.fontSize], () => runningText.render(getRenderer()))
+
+usePhoneSideMarginRefresh(
+  () => state.value.gap,
+  () => {
+    const renderer = getRenderer()
+    if (renderer) applyLayoutToRenderer(renderer, isFixedLayout.value ? { flow: 'paginated' } : undefined)
+  },
+)
 
 function setSettingsScope(scope: ReaderSettingsScope) {
   settingsScope.value = scope
