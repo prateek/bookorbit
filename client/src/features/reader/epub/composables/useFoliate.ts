@@ -118,6 +118,7 @@ export function useFoliate(
   onMiddleTap?: () => void,
   onChapterLoad?: (doc: Document, viewEl: HTMLElement) => void,
   canNavigate?: () => boolean,
+  onPastEnd?: () => void,
 ) {
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -274,6 +275,8 @@ export function useFoliate(
         fraction.value = detail?.fraction ?? 0
         onRelocate?.(initialNavigationPending ? { ...detail, restoring: true } : detail)
       })
+
+      view.addEventListener('past-end', () => onPastEnd?.())
 
       view.addEventListener('error', (e: Event) => {
         const detail = (e as CustomEvent).detail

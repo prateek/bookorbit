@@ -11781,7 +11781,7 @@
     "bookLoadTimeout": "The book took too long to open. Try refreshing the page.",
     "endCard": {
       "region": "End of chapter",
-      "eyebrow": "Next chapter",
+      "eyebrow": "End of chapter",
       "endOfBook": "End of book",
       "caughtUp": "You're caught up",
       "caughtUpSince": "Latest chapter, added {date}",
