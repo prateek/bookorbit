@@ -21,6 +21,7 @@ import { themes } from '../constants/themes'
 import type { Theme, ThemeMode } from '../constants/themes'
 import { MEDIA_OVERLAY_HIGHLIGHT_CSS_VARIABLE } from '../../media-overlay/lib/media-overlay-highlight'
 import { readerFontScaleDeclarations } from '../lib/publisher-font-sizes'
+import { phoneSafeGap } from '../../layout/phone-side-margin'
 import type { FoliateRenderer } from './useFoliate'
 import { READER_PAGE_CONTEXT } from './readerPageContext'
 
@@ -357,7 +358,8 @@ export function useReaderState() {
     const s = state.value
     const rendererFlow = options.flow ?? s.flow
     // Scrolled padding uses the whole viewport; paginated gaps use its inset container.
-    const rendererGap = rendererFlow === 'scrolled' ? s.gap / (1 + s.gap) : s.gap
+    const sideGap = phoneSafeGap(s.gap)
+    const rendererGap = rendererFlow === 'scrolled' ? sideGap / (1 + sideGap) : sideGap
     renderer.setAttribute('max-column-count', String(s.maxColumnCount))
     renderer.setAttribute('gap', `${rendererGap * 100}%`)
     renderer.setAttribute('max-inline-size', `${s.maxInlineSize}px`)
