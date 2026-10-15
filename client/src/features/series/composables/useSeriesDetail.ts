@@ -5,6 +5,7 @@ import { fetchSeriesBooks } from '../api/series'
 import type { SeriesBookReadFilter, SeriesBookSort, SortDirection } from '../types/series'
 
 const PAGE_SIZE = 50
+type ListSeriesBooksQuery = Parameters<typeof fetchSeriesBooks>[1]
 type LoadOptions = {
   reset?: boolean
   keepPreviousData?: boolean
@@ -114,21 +115,18 @@ export function useSeriesDetail(seriesId: Ref<number | null>) {
     }
   }
 
-  /**
-   * Reloads the listing starting at the page that holds `bookId`. Only series order can be
-   * anchored, so the caller should switch to it first; the server falls back to page 0 otherwise.
-   */
-  async function jumpTo(bookId: number): Promise<boolean> {
+  /** Replaces the loaded run with the one page `query` lands on; null when it failed or was superseded. */
+  async function replaceRun(query: ListSeriesBooksQuery): Promise<BookCard[] | null> {
     const currentSeriesId = seriesId.value
-    if (currentSeriesId == null) return false
+    if (currentSeriesId == null) return null
 
     const token = ++requestToken
     loading.value = true
     error.value = null
 
     try {
-      const data = await fetchSeriesBooks(currentSeriesId, { ...queryFor(0), anchorBookId: bookId })
-      if (token !== requestToken) return false
+      const data = await fetchSeriesBooks(currentSeriesId, query)
+      if (token !== requestToken) return null
 
       const landedPage = Number.isInteger(data.page) && data.page > 0 ? data.page : 0
       items.value = data.items
@@ -136,14 +134,29 @@ export function useSeriesDetail(seriesId: Ref<number | null>) {
       seriesInfo.value = data.seriesInfo
       firstPage.value = landedPage
       page.value = landedPage + 1
-      return data.items.some((book) => book.id === bookId)
+      return data.items
     } catch (err) {
-      if (token !== requestToken) return false
+      if (token !== requestToken) return null
       applyFailure(err)
-      return false
+      return null
     } finally {
       if (token === requestToken) loading.value = false
     }
+  }
+
+  /**
+   * Reloads the listing starting at the page that holds `bookId`. Only series order can be
+   * anchored, so the caller should switch to it first; the server falls back to page 0 otherwise.
+   */
+  async function jumpTo(bookId: number): Promise<boolean> {
+    const loaded = await replaceRun({ ...queryFor(0), anchorBookId: bookId })
+    return loaded?.some((book) => book.id === bookId) ?? false
+  }
+
+  /** Reloads the listing as a run starting at the page holding position `index`; false when it has no books. */
+  async function loadFrom(index: number): Promise<boolean> {
+    const loaded = await replaceRun(queryFor(Math.floor(index / PAGE_SIZE)))
+    return (loaded?.length ?? 0) > 0
   }
 
   async function loadEarlier(): Promise<number> {
@@ -216,6 +229,7 @@ export function useSeriesDetail(seriesId: Ref<number | null>) {
     readFilter,
     load,
     jumpTo,
+    loadFrom,
     loadEarlier,
     refresh,
   }
