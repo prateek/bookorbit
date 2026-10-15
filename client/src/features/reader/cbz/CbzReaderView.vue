@@ -46,10 +46,11 @@ const ZOOM_STEP = 0.25
 
 const { t } = useI18n()
 
-const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean; startTracking?: StartTracking }>()
+const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean; loadsPosition?: boolean; startTracking?: StartTracking }>()
 const route = useRoute()
 const router = useRouter()
 const trackingEnabled = computed(() => !props.peekMode)
+const loadsPosition = computed(() => trackingEnabled.value || props.loadsPosition)
 
 const { headerVisible, footerVisible, isPinned, handleMiddleTap, togglePinned, showHeader, showFooter, setVisibilityLock } = useVisibility()
 const { isFullscreen, toggleFullscreen } = useFullscreen()
@@ -62,7 +63,7 @@ const { onActivity, elapsedMinutes } = useReadingSession(
   }),
   { trackingEnabled },
 )
-const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes, 0, { trackingEnabled })
+const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes, 0, { trackingEnabled, loadsPosition })
 const { pageCount, bookTitle, seriesId, loading, error, pageUrl, load } = useCbz(props.fileId, props.bookId)
 const { goBack } = useReaderBack(props.bookId, () => ({ seriesId: seriesId.value, seriesMemberships: [] }))
 const {

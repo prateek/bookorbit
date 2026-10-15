@@ -8,6 +8,8 @@ export type FooterDisplayMode = 0 | 1 | 2
 
 export interface ReaderProgressOptions {
   trackingEnabled?: MaybeRef<boolean>
+  /** Loads the saved position even while untracked; defaults to `trackingEnabled`. */
+  loadsPosition?: MaybeRef<boolean>
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -115,6 +117,7 @@ export function useReaderProgress(
 
   const footerMode = ref<FooterDisplayMode>(initialFooterMode)
   const trackingEnabled = options.trackingEnabled ?? true
+  const loadsPosition = options.loadsPosition ?? trackingEnabled
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null
   // Set while the current position has not reached the server, including after a failed write.
@@ -158,7 +161,7 @@ export function useReaderProgress(
    * position another device read later wins over it after. Offline, the local one is all there is.
    */
   async function load() {
-    if (!unref(trackingEnabled)) return
+    if (!unref(loadsPosition)) return
     const session = await whenOfflineSession()
     let server: Record<string, unknown> | null = null
     try {

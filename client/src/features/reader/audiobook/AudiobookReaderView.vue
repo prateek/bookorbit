@@ -44,11 +44,12 @@ import { useFullscreen } from '../shared/composables/useFullscreen'
 
 const { t } = useI18n()
 
-const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean; startTracking?: StartTracking }>()
+const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean; loadsPosition?: boolean; startTracking?: StartTracking }>()
 const route = useRoute()
 const router = useRouter()
 const { coverUrl } = useCoverVersions()
 const trackingEnabled = computed(() => !props.peekMode)
+const loadsPosition = computed(() => trackingEnabled.value || props.loadsPosition)
 
 const detail = ref<BookDetail | null>(null)
 const { goBack } = useReaderBack(props.bookId, () => detail.value)
@@ -80,7 +81,13 @@ const audioFiles = computed<AudiobookManifestAsset[]>(() => manifest.value?.asse
 // ── Progress ──────────────────────────────────────────────────────────────────
 
 const manifestRevision = computed(() => manifest.value?.revision ?? '')
-const progress = useAudioProgress(props.bookId, { trackingEnabled, manifestRevision, assets: audioFiles, onManifestStale: reloadStaleManifest })
+const progress = useAudioProgress(props.bookId, {
+  trackingEnabled,
+  loadsPosition,
+  manifestRevision,
+  assets: audioFiles,
+  onManifestStale: reloadStaleManifest,
+})
 
 async function reloadStaleManifest() {
   try {
