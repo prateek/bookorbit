@@ -22,3 +22,15 @@ export function useEndCardRequest() {
 
   return { requested: readonly(requested), request, dismiss, syncAtEnd }
 }
+
+export interface EndCardVisibility {
+  requested: boolean
+  readerBusy: boolean
+  tracking: boolean
+  hasNextBook: boolean
+}
+
+/** A peek tracks nothing, so its card only exists to offer the next chapter. */
+export function isEndCardVisible({ requested, readerBusy, tracking, hasNextBook }: EndCardVisibility): boolean {
+  return requested && !readerBusy && (tracking || hasNextBook)
+}
