@@ -16,9 +16,6 @@ interface FoliateInputView {
   getBoundingClientRect?: () => DOMRect
   renderer?: {
     getAttribute?: (name: string) => string | null
-    atEnd?: boolean
-    viewSize?: number
-    end?: number
   }
 }
 
@@ -42,7 +39,6 @@ export function useFoliateInput(
   let touchStartScreenX = 0
   let touchStartScreenY = 0
   let touchStartTime = 0
-  let touchStartedAtScrolledEnd = false
   let lastTouchTime = 0
   let isTextSelectionInProgress = false
   let longHoldTimeout: ReturnType<typeof setTimeout> | null = null
@@ -75,25 +71,6 @@ export function useFoliateInput(
     getViewEl()?.next?.()
   }
 
-  // Same 2px slack the paginator's own scrolled-flow turn uses for the bottom.
-  function isAtScrolledEnd() {
-    if (!isScrolledFlow()) return false
-    try {
-      const renderer = getViewEl()?.renderer
-      if (renderer?.atEnd !== true || typeof renderer.viewSize !== 'number' || typeof renderer.end !== 'number') return false
-      return renderer.viewSize - renderer.end <= 2
-    } catch {
-      return false
-    }
-  }
-
-  // Scrolled flow has no page-turn gesture on touch, so a pull up from the very bottom of the
-  // book is the turn past its end.
-  function pullPastScrolledEnd() {
-    if (!canProceedNavigation()) return
-    navigateNext()
-  }
-
   function suppressNextTapNavigation() {
     suppressClickNavigationUntil = Date.now() + ANNOTATION_CLICK_SUPPRESSION_MS
     lastClickTime = 0
@@ -109,10 +86,7 @@ export function useFoliateInput(
   }
 
   function handleTouchStart(e: TouchEvent, doc: Document) {
-    if (e.touches.length !== 1) {
-      touchStartedAtScrolledEnd = false
-      return
-    }
+    if (e.touches.length !== 1) return
     handleSelectionInteractionStart?.(doc)
     const touch = e.touches[0]!
     touchStartX = touch.clientX
@@ -120,7 +94,6 @@ export function useFoliateInput(
     touchStartScreenX = touch.screenX
     touchStartScreenY = touch.screenY
     touchStartTime = Date.now()
-    touchStartedAtScrolledEnd = isAtScrolledEnd()
     isTextSelectionInProgress = false
     if (longHoldTimeout) clearTimeout(longHoldTimeout)
     longHoldTimeout = setTimeout(() => {
@@ -129,10 +102,7 @@ export function useFoliateInput(
   }
 
   function handleTouchMove(e: TouchEvent, doc: Document) {
-    if (e.touches.length !== 1) {
-      touchStartedAtScrolledEnd = false
-      return
-    }
+    if (e.touches.length !== 1) return
     const touch = e.touches[0]!
     const deltaX = Math.abs(touch.clientX - touchStartX)
     const deltaY = Math.abs(touch.clientY - touchStartY)
@@ -177,12 +147,6 @@ export function useFoliateInput(
       // separate a stationary tap from a flick that scrolled the page under the finger.
       const screenDeltaX = Math.abs(touch.screenX - touchStartScreenX)
       const screenDeltaY = Math.abs(touch.screenY - touchStartScreenY)
-
-      const pulledUp = touchStartScreenY - touch.screenY
-      if (touchStartedAtScrolledEnd && e.touches.length === 0 && pulledUp >= SWIPE_THRESHOLD && pulledUp > screenDeltaX) {
-        pullPastScrolledEnd()
-        return
-      }
 
       if (touchDuration < 500 && screenDeltaX < TAP_MOVEMENT_THRESHOLD && screenDeltaY < TAP_MOVEMENT_THRESHOLD) {
         const iframe = doc.defaultView?.frameElement as HTMLIFrameElement | null
