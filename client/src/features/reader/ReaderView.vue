@@ -89,8 +89,8 @@ const normalizedFileFormat = fileFormat.toLowerCase()
 const isAudioFormat = getFormatGroup(fileFormat) === 'audio'
 const isPdfFormat = fileFormat === 'pdf'
 const isComicFormat = fileFormat === 'cbz' || fileFormat === 'cbr' || fileFormat === 'cb7'
-const tracking = useReaderTracking(readerModeOf(route.query.mode))
-const { trackingEnabled, peeking, resolved: trackingResolved } = tracking
+const tracking = useReaderTracking(readerModeOf(route.query.mode), { entryPath: route.path })
+const { trackingEnabled, peeking, loadsPosition, resolved: trackingResolved } = tracking
 const isTtsAvailable = normalizedFileFormat === 'epub'
 
 const containerRef = ref<HTMLElement | null>(null)
@@ -159,6 +159,7 @@ const { onActivity, endSession, elapsedMinutes } = useReadingSession(
 
 const progress = useReaderProgress(bookId, fileId, elapsedMinutes, 0, {
   trackingEnabled,
+  loadsPosition,
 })
 const { cfi, chapterTitle, sectionIndex, totalSections, fraction, sectionPage, sectionPages, sectionFraction, timeSection } = progress
 const pace = useReadingPace()
@@ -1532,9 +1533,30 @@ onUnmounted(() => {
     <div class="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
     <p class="text-sm text-muted-foreground">{{ t('reader.loadingBook') }}</p>
   </div>
-  <PdfV4ReaderView v-else-if="isPdfFormat" :bookId="bookId" :fileId="fileId" :peek-mode="peeking" :start-tracking="tracking.startTracking" />
-  <CbzReaderView v-else-if="isComicFormat" :bookId="bookId" :fileId="fileId" :peek-mode="peeking" :start-tracking="tracking.startTracking" />
-  <AudiobookReaderView v-else-if="isAudioFormat" :bookId="bookId" :fileId="fileId" :peek-mode="peeking" :start-tracking="tracking.startTracking" />
+  <PdfV4ReaderView
+    v-else-if="isPdfFormat"
+    :bookId="bookId"
+    :fileId="fileId"
+    :peek-mode="peeking"
+    :loads-position="loadsPosition"
+    :start-tracking="tracking.startTracking"
+  />
+  <CbzReaderView
+    v-else-if="isComicFormat"
+    :bookId="bookId"
+    :fileId="fileId"
+    :peek-mode="peeking"
+    :loads-position="loadsPosition"
+    :start-tracking="tracking.startTracking"
+  />
+  <AudiobookReaderView
+    v-else-if="isAudioFormat"
+    :bookId="bookId"
+    :fileId="fileId"
+    :peek-mode="peeking"
+    :loads-position="loadsPosition"
+    :start-tracking="tracking.startTracking"
+  />
   <div
     v-else
     class="fixed inset-0 overflow-hidden"
