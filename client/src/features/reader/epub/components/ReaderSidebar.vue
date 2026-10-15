@@ -343,7 +343,8 @@ function togglePinned() {
       </div>
 
       <div ref="scrollContainer" class="flex-1 overflow-y-auto">
-        <template v-if="activeTab === 'chapters'">
+        <slot v-if="activeTab === 'chapters' && $slots.chapters" name="chapters" />
+        <template v-else-if="activeTab === 'chapters'">
           <TocList
             :items="chapters"
             :activeHref="activeHref"
