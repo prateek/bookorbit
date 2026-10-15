@@ -41,6 +41,7 @@ import { seriesAnchorBookId } from '../lib/series-anchor'
 import type { SeriesBookReadFilter } from '../types/series'
 import { groupSeriesBooksByMedia } from '../composables/useSeriesBookMediaGroups'
 import { useSeriesDetail } from '../composables/useSeriesDetail'
+import { useSeriesRunSlot } from '../composables/useSeriesRunSlot'
 import { useCoverStack, MAX_VISIBLE as MAX_STACK_VISIBLE } from '../composables/useCoverStack'
 import {
   PORTRAIT_STACK_FRAME_ASPECT_RATIO,
@@ -88,9 +89,11 @@ const {
   readFilter,
   load: loadBooks,
   jumpTo,
+  loadFrom,
   loadEarlier,
   refresh: refreshBooks,
 } = useSeriesDetail(seriesId)
+const { savedRunStart } = useSeriesRunSlot(firstIndex)
 
 /** Phones get a dense chapter list and a compact control row instead of the cover grid. */
 const isCompact = useMediaQuery('(max-width: 767px)')
@@ -494,12 +497,18 @@ const anchorBookId = computed(() => seriesAnchorBookId(route.query))
 
 /** Opens the listing on the chapter named by `?book=`, the one the reader just left. */
 async function loadInitialBooks() {
+  // Back on an entry seen before, scroll restore owns the position; rebuild the run it was saved against.
+  if (savedRunStart !== null) {
+    if (savedRunStart > 0 && (await loadFrom(savedRunStart))) return
+    await loadBooks({ reset: true })
+    return
+  }
   const anchor = anchorBookId.value
   if (anchor === null || sort.value !== 'seriesIndex' || order.value !== 'asc') {
     await loadBooks({ reset: true })
     return
   }
-  // Back on an entry seen before, scroll restore owns the position; the jump only reloads the run it was saved against.
+  // Nothing saved for this entry: the chapter's page is the closest guess at that run.
   const returning = isReturningToHistoryEntry()
   const found = await jumpTo(anchor)
   if (!found || returning) return
