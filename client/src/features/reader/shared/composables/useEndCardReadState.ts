@@ -8,6 +8,8 @@ export interface FinishChapterSteps {
   saveEndPosition: () => Promise<unknown>
   endSession: () => void
   isRead: () => boolean
+  /** A peek tracks nothing, so finishing it leaves the read status alone. Defaults to true. */
+  canMarkRead?: () => boolean
   markRead: () => Promise<unknown>
 }
 
@@ -25,7 +27,11 @@ export interface NextChapterHandoffSteps extends FinishChapterSteps {
  */
 export async function finishChapter(steps: FinishChapterSteps): Promise<void> {
   await closeChapter(steps)
-  if (!steps.isRead()) await steps.markRead()
+  if (shouldMark(steps)) await steps.markRead()
+}
+
+function shouldMark(steps: FinishChapterSteps): boolean {
+  return (steps.canMarkRead?.() ?? true) && !steps.isRead()
 }
 
 async function closeChapter(steps: FinishChapterSteps): Promise<void> {
@@ -40,7 +46,7 @@ async function closeChapter(steps: FinishChapterSteps): Promise<void> {
  */
 export async function handOffToNextChapter(steps: NextChapterHandoffSteps): Promise<void> {
   await closeChapter(steps)
-  if (!steps.isRead()) void steps.markRead().catch(steps.onMarkFailed)
+  if (shouldMark(steps)) void steps.markRead().catch(steps.onMarkFailed)
   await steps.open()
 }
 
