@@ -1,6 +1,7 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { LocationQuery } from 'vue-router'
 import type { ReadStatus } from '@bookorbit/types'
+import { enterReaderEntry, markTrackedReaderEntry } from '../lib/reader-entry'
 
 export type ReaderMode = 'peek' | 'reread' | null
 
@@ -45,12 +46,26 @@ export function isTrackingEnabled(input: TrackingInput): boolean {
 }
 
 /**
+ * Whether the saved position is loaded. A session that tracked until the book was finished reopens
+ * where it was left when the reader comes back to it (a resumed launch, back or forward, a reload),
+ * but untracked so no reread starts.
+ */
+export function restoresPosition(input: TrackingInput, returning: boolean): boolean {
+  return isTrackingEnabled(input) || (returning && input.mode !== 'peek' && isAutoPeek(input))
+}
+
+export interface ReaderTrackingOptions {
+  /** The reader's route path. Its history entry is marked once tracking starts, so a return to it restores the position. */
+  entryPath?: string
+}
+
+/**
  * Decides once per open whether the reader records position and sessions. Status changes made while
  * reading (the end card's Mark as read) must not switch tracking off mid-chapter, so only the first
  * status reported counts. The mode is latched too: leaving the reader updates the route before it
  * unmounts, and the final position save and session end must still see the mode it was opened with.
  */
-export function useReaderTracking(initialMode: ReaderMode) {
+export function useReaderTracking(initialMode: ReaderMode, { entryPath }: ReaderTrackingOptions = {}) {
   const mode = ref<ReaderMode>(initialMode)
   const resolved = ref(false)
   const status = ref<ReadStatus | null>(null)
@@ -62,6 +77,18 @@ export function useReaderTracking(initialMode: ReaderMode) {
   const input = computed<TrackingInput>(() => ({ mode: mode.value, resolved: resolved.value, status: status.value }))
   const trackingEnabled = computed(() => isTrackingEnabled(input.value))
   const peeking = computed(() => input.value.mode === 'peek' || isAutoPeek(input.value))
+  const returning = entryPath !== undefined && enterReaderEntry(entryPath)
+  const loadsPosition = computed(() => restoresPosition(input.value, returning))
+
+  if (entryPath !== undefined) {
+    watch(
+      trackingEnabled,
+      (enabled) => {
+        if (enabled) markTrackedReaderEntry(entryPath)
+      },
+      { immediate: true, flush: 'sync' },
+    )
+  }
 
   /** Unknown status (no book details, offline with no snapshot) falls back to tracking as before. */
   function resolve(readStatus: ReadStatus | null | undefined) {
@@ -86,5 +113,14 @@ export function useReaderTracking(initialMode: ReaderMode) {
     return next
   }
 
-  return { trackingEnabled, peeking, resolved: computed(() => resolved.value), resolve, resolveFrom, whenResolved: () => ready, startTracking }
+  return {
+    trackingEnabled,
+    peeking,
+    loadsPosition,
+    resolved: computed(() => resolved.value),
+    resolve,
+    resolveFrom,
+    whenResolved: () => ready,
+    startTracking,
+  }
 }
