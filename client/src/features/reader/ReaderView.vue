@@ -36,6 +36,7 @@ import { useReaderSidebarPin } from './epub/composables/useReaderSidebarPin'
 import { sidebarHandedOffPinned, sidebarHandoffState } from './series-nav/sidebar-handoff'
 import { useReaderKeyboardShortcuts } from './epub/composables/useReaderKeyboardShortcuts'
 import { usePhoneSideMarginRefresh } from './layout/usePhoneSideMargin'
+import { pinnedSidebarInset } from './layout/pinned-sidebar-inset'
 import { useFoliateTts } from '@/features/tts/composables/useFoliateTts'
 import { useTtsPlayer } from '@/features/tts/composables/useTtsPlayer'
 import { useTtsMiniPlayerUi } from '@/features/tts/composables/useTtsMiniPlayerUi'
@@ -189,6 +190,7 @@ if (sidebarHandedOffPinned()) {
   setSidebarPinned(true)
   showSidebar.value = true
 }
+const pinnedSidebarClass = computed(() => pinnedSidebarInset(showSidebar.value, isSidebarPinned.value))
 
 async function toggleBookmark() {
   const wasBookmarked = bookmarks.isCurrentCfiBookmarked.value
@@ -1721,7 +1723,7 @@ onUnmounted(() => {
       <div
         ref="containerRef"
         class="absolute inset-0 pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]"
-        :class="readerBottomPadding"
+        :class="[readerBottomPadding, pinnedSidebarClass]"
       />
       <div
         v-if="isNavigationLocked"
@@ -2009,6 +2011,7 @@ onUnmounted(() => {
     <div
       v-if="showEndCard"
       class="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5rem)] z-[45] flex justify-center px-3"
+      :class="pinnedSidebarClass"
       :style="pageChromeStyle"
     >
       <NextChapterCard
