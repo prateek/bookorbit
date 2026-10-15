@@ -10,6 +10,7 @@ import {
   Clock3,
   Columns3,
   EyeOff,
+  Hash,
   Headphones,
   ListChecks,
   Maximize,
@@ -92,6 +93,7 @@ const footerModeIcon = computed(() => {
   if (props.footerRight === 'time-left') return Clock3
   if (props.footerRight === 'percent') return Percent
   if (props.footerRight === 'unread') return ListChecks
+  if (props.footerRight === 'chapter') return Hash
   return EyeOff
 })
 

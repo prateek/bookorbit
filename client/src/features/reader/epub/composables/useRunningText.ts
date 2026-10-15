@@ -1,5 +1,7 @@
 import { computed, type ComputedRef, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { BookDetail } from '@bookorbit/types'
+import { primarySeriesIndex } from '../../shared/composables/useReaderBack'
 import { buildRunningText, buildToolbarTitle, type RunningText, type RunningTextPosition } from '../../shared/lib/running-text'
 import type { ThemeMode } from '../constants/themes'
 import type { FoliateRenderer } from './useFoliate'
@@ -8,7 +10,7 @@ import type { ReaderState } from './useReaderState'
 interface RunningTextSources {
   state: ComputedRef<ReaderState>
   mode: ComputedRef<ThemeMode>
-  book: Ref<{ title: string | null; seriesName: string | null } | null>
+  book: Ref<({ title: string | null; seriesName: string | null } & Partial<Pick<BookDetail, 'seriesIndex' | 'seriesMemberships'>>) | null>
   chapterLabel: Ref<string>
   page: Ref<number | null>
   pages: Ref<number | null>
@@ -47,6 +49,7 @@ export function useRunningText(sources: RunningTextSources) {
     bookFraction: sources.bookFraction.value,
     minutesLeftInChapter: sources.minutesLeftInChapter.value,
     unreadAfter: sources.unreadAfter.value,
+    seriesIndex: primarySeriesIndex(sources.book.value),
   }))
 
   const text = computed<RunningText>(() =>
