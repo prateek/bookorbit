@@ -18,8 +18,8 @@ import { useReaderThemeColor } from './shared/composables/useReaderThemeColor'
 import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
 import { useSeriesNextBook } from './shared/composables/useSeriesNextBook'
 import { useEndCardRequest } from './shared/composables/useEndCardRequest'
+import { finishChapter, handOffToNextChapter, useEndCardReadState, type FinishChapterSteps } from './shared/composables/useEndCardReadState'
 import { primarySeriesId, useReaderBack } from './shared/composables/useReaderBack'
-import { useBookStatus } from '@/features/book/composables/useBookStatus'
 import { useCustomFonts } from './epub/composables/useCustomFonts'
 import { useVisibility } from './shared/composables/useVisibility'
 import { useWakeLock } from './shared/composables/useWakeLock'
@@ -144,7 +144,7 @@ const {
 
 const customFonts = useCustomFonts()
 
-const { onActivity, elapsedMinutes } = useReadingSession(
+const { onActivity, endSession, elapsedMinutes } = useReadingSession(
   fileId,
   () => ({
     percentage: progress.percentage.value,
@@ -301,7 +301,6 @@ function cycleFooterRight() {
   void applyUpdate({ footerRight: nextFooterRight(state.value.footerRight) })
 }
 const { goBack } = useReaderBack(bookId, () => bookMeta.value)
-const { setStatus } = useBookStatus()
 
 const {
   foliateReady,
@@ -929,7 +928,7 @@ function loadBookMeta() {
   void fetchBookMeta()
     .then((b) => {
       bookMeta.value = b
-      markedRead.value = b.readStatus?.status === 'read'
+      readState.sync(b.readStatus?.status)
       if (trackingEnabled.value) void loadNextBook(primarySeriesId(b), bookId)
     })
     .catch(() => {})
@@ -1083,7 +1082,8 @@ async function openReader() {
 // A web serial is one file per chapter, so the end of the book is the end of the chapter: offer the
 // next one in the series and an explicit "Mark as read".
 const endCard = useEndCardRequest()
-const markedRead = ref(false)
+const readState = useEndCardReadState(bookId)
+const { markedRead } = readState
 const markingRead = ref(false)
 const openingNext = ref(false)
 const END_FRACTION = 0.9999
@@ -1113,10 +1113,27 @@ watch(trackingEnabled, (enabled) => {
   if (enabled && bookMeta.value && !nextBook.value) void loadNextBook(primarySeriesId(bookMeta.value), bookId)
 })
 
+watch(
+  () => endCard.requested.value,
+  (requested) => {
+    if (requested) void progress.flush().then(readState.refresh)
+  },
+)
+
 const caughtUpSince = computed(() => (unreadAfter.value === 0 ? (bookMeta.value?.addedAt ?? null) : null))
 
 function dismissEndCard() {
   endCard.dismiss()
+}
+
+const finishChapterSteps: FinishChapterSteps = {
+  saveEndPosition: () => {
+    progress.percentage.value = 100
+    return progress.save()
+  },
+  endSession,
+  isRead: () => markedRead.value,
+  markRead: readState.markRead,
 }
 
 async function handleOpenNextChapter() {
@@ -1124,10 +1141,11 @@ async function handleOpenNextChapter() {
   if (!target || openingNext.value) return
   openingNext.value = true
   try {
-    // The route keeps its name and only its params change, so the last position has to be written
-    // here or the chapter just finished stays short of complete.
-    await progress.flush()
-    await router.replace({ name: 'reader', params: { bookId: target.bookId, fileId: target.fileId }, query: { format: target.format } })
+    await handOffToNextChapter({
+      ...finishChapterSteps,
+      open: () => router.replace({ name: 'reader', params: { bookId: target.bookId, fileId: target.fileId }, query: { format: target.format } }),
+      onMarkFailed: () => toast.error(t('reader.endCard.markFailed')),
+    })
   } finally {
     openingNext.value = false
   }
@@ -1137,9 +1155,7 @@ async function handleMarkRead() {
   if (markingRead.value || markedRead.value) return
   markingRead.value = true
   try {
-    await progress.flush()
-    await setStatus(bookId, 'read')
-    markedRead.value = true
+    await finishChapter(finishChapterSteps)
   } catch {
     toast.error(t('reader.endCard.markFailed'))
   } finally {

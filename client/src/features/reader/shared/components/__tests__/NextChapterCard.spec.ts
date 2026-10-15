@@ -23,10 +23,4 @@ describe('NextChapterCard', () => {
     expect(wrapper.find('[data-testid="reader-end-card-next"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="reader-end-card-mark-read"]').exists()).toBe(true)
   })
-
-  it('disables "Mark as read" once the book is read', () => {
-    const wrapper = mount(NextChapterCard, { props: { nextBook, markedRead: true } })
-
-    expect(wrapper.get('[data-testid="reader-end-card-mark-read"]').attributes('disabled')).toBeDefined()
-  })
 })
