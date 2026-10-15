@@ -26,6 +26,7 @@ const props = withDefaults(
     railGutter?: boolean
     railGutterKind?: JumpBucketKind | null
     allowMoveToLibrary?: boolean
+    anchorBookId?: number | null
   }>(),
   {
     selectionMode: false,
@@ -35,6 +36,7 @@ const props = withDefaults(
     squareCoverScale: 1,
     railGutter: false,
     railGutterKind: null,
+    anchorBookId: null,
   },
 )
 
@@ -152,6 +154,10 @@ const hideFormatBadges = computed(() => hasUniformFormat(props.books))
 
 function asBook(slot: BookSlot): BookCard {
   return slot as BookCard
+}
+
+function isAnchor(book: BookCard): boolean {
+  return props.anchorBookId != null && book.id === props.anchorBookId
 }
 
 function staticItemStyle(book: BookCard): { width: string; maxWidth: string } {
@@ -276,8 +282,10 @@ defineExpose({ scrollToIndex })
         v-for="book in staticBooks"
         :key="book.id"
         class="min-w-0 shrink-0"
-        :class="{ 'book-grid-cell--new': props.newBookIds.has(book.id) }"
+        :class="{ 'book-grid-cell--new': props.newBookIds.has(book.id), 'rounded-md outline-2 outline-offset-4 outline-primary/40': isAnchor(book) }"
         :style="staticItemStyle(book)"
+        :data-book-id="book.id"
+        :aria-current="isAnchor(book) ? 'location' : undefined"
       >
         <CollapsedSeriesCard v-if="book.collapsedSeries" :book="book" :show-label="showLabel" :selection-mode="selectionMode" />
         <BookCoverCard
@@ -297,7 +305,14 @@ defineExpose({ scrollToIndex })
     </div>
 
     <div v-else-if="!virtualized" class="grid w-full max-w-full items-end" :style="staticGridStyle" data-testid="book-grid-static">
-      <div v-for="book in staticBooks" :key="book.id" class="min-w-0" :class="{ 'book-grid-cell--new': props.newBookIds.has(book.id) }">
+      <div
+        v-for="book in staticBooks"
+        :key="book.id"
+        class="min-w-0"
+        :class="{ 'book-grid-cell--new': props.newBookIds.has(book.id), 'rounded-md outline-2 outline-offset-4 outline-primary/40': isAnchor(book) }"
+        :data-book-id="book.id"
+        :aria-current="isAnchor(book) ? 'location' : undefined"
+      >
         <CollapsedSeriesCard v-if="book.collapsedSeries" :book="book" :show-label="showLabel" :selection-mode="selectionMode" />
         <BookCoverCard
           v-else

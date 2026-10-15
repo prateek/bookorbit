@@ -12,7 +12,7 @@ import VirtualBookGrid from '@/features/book/components/VirtualBookGrid.vue'
 import BookCoverArtwork from '@/features/book/components/BookCoverArtwork.vue'
 import { bookCoverStyle } from '@/features/book/lib/book-cover'
 import { useCoverVersions } from '@/features/book/composables/useCoverVersions'
-import { useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
+import { isReturningToHistoryEntry, useScrollRestoreOnActivate } from '@/features/book/composables/useScrollRestoreOnActivate'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { usePermissions } from '@/features/auth/composables/usePermissions'
 import { useBookNavigation } from '@/features/book/composables/useBookNavigation'
@@ -37,6 +37,7 @@ import SeriesGapBanner from '../components/SeriesGapBanner.vue'
 import SeriesChapterList from '../components/SeriesChapterList.vue'
 import { fetchSeriesBooks, markSeriesRead, setSeriesFollowing } from '../api/series'
 import { chapterReaderFile } from '../lib/series-chapter'
+import { seriesAnchorBookId } from '../lib/series-anchor'
 import type { SeriesBookReadFilter } from '../types/series'
 import { groupSeriesBooksByMedia } from '../composables/useSeriesBookMediaGroups'
 import { useSeriesDetail } from '../composables/useSeriesDetail'
@@ -489,6 +490,23 @@ function scrollToBook(bookId: number) {
   booksSectionRef.value?.scrollIntoView?.({ block: 'start' })
 }
 
+const anchorBookId = computed(() => seriesAnchorBookId(route.query))
+
+/** Opens the listing on the chapter named by `?book=`, the one the reader just left. */
+async function loadInitialBooks() {
+  const anchor = anchorBookId.value
+  if (anchor === null || sort.value !== 'seriesIndex' || order.value !== 'asc') {
+    await loadBooks({ reset: true })
+    return
+  }
+  // Back on an entry seen before, scroll restore owns the position; the jump only reloads the run it was saved against.
+  const returning = isReturningToHistoryEntry()
+  const found = await jumpTo(anchor)
+  if (!found || returning) return
+  await nextTick()
+  scrollToBook(anchor)
+}
+
 async function handleJumpToNext() {
   const target = continueTarget.value
   if (!target) {
@@ -581,7 +599,7 @@ async function toggleFollowing() {
 
 onMounted(async () => {
   await fetchLibraries()
-  await loadBooks({ reset: true })
+  await loadInitialBooks()
 
   observer = new IntersectionObserver(
     (entries) => {
@@ -1043,6 +1061,7 @@ defineOptions({ name: 'SeriesDetailView' })
               v-if="isCompact"
               :books="books"
               :next-book-id="continueTarget?.bookId ?? null"
+              :anchor-book-id="anchorBookId"
               :can-mark-read="canMarkRead"
               @open="handleOpenChapter"
               @details="handleChapterDetails"
@@ -1061,6 +1080,7 @@ defineOptions({ name: 'SeriesDetailView' })
                   :grid-gap="gridGap"
                   :square-cover-scale="SERIES_SQUARE_COVER_SCALE"
                   :virtualized="false"
+                  :anchor-book-id="anchorBookId"
                   @action="handleBookAction"
                   @update:book="handleBookUpdate"
                 />
@@ -1074,6 +1094,7 @@ defineOptions({ name: 'SeriesDetailView' })
               :grid-gap="gridGap"
               :square-cover-scale="SERIES_SQUARE_COVER_SCALE"
               :virtualized="false"
+              :anchor-book-id="anchorBookId"
               @action="handleBookAction"
               @update:book="handleBookUpdate"
             />
