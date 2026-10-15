@@ -37,10 +37,11 @@ import { toRotation, toScrollStrategy, toSpreadMode, toZoomLevel } from './pdf-v
 
 const { t } = useI18n()
 
-const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean; startTracking?: StartTracking }>()
+const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean; loadsPosition?: boolean; startTracking?: StartTracking }>()
 const route = useRoute()
 const router = useRouter()
 const trackingEnabled = computed(() => !props.peekMode)
+const loadsPosition = computed(() => trackingEnabled.value || props.loadsPosition)
 
 const bookSettings = useReaderSettings(props.fileId, 'pdf')
 const effectiveSettings = computed(() => bookSettings.effective.value as PdfReaderSettings)
@@ -52,7 +53,7 @@ const { onActivity, elapsedMinutes } = useReadingSession(
   }),
   { trackingEnabled, bookId: props.bookId },
 )
-const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes, 0, { trackingEnabled })
+const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes, 0, { trackingEnabled, loadsPosition })
 const absolutePdfiumWasmUrl = new URL(pdfiumWasmUrl, window.location.href).href
 const embedPdfConfig: PluginRegistryConfig = {
   permissions: {

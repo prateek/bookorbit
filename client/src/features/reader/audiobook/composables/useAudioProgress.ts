@@ -7,6 +7,8 @@ const SAVE_THROTTLE_MS = 5_000
 
 export interface AudioProgressOptions {
   trackingEnabled?: MaybeRef<boolean>
+  /** Loads the saved position even while untracked; defaults to `trackingEnabled`. */
+  loadsPosition?: MaybeRef<boolean>
   manifestRevision: MaybeRef<string>
   assets?: MaybeRef<Pick<AudiobookManifestAsset, 'assetId' | 'durationMs'>[]>
   onManifestStale?: () => void
@@ -25,6 +27,7 @@ export function useAudioProgress(bookId: number, options: AudioProgressOptions) 
   const revision = ref(0)
   const loaded = ref(false)
   const trackingEnabled = options.trackingEnabled ?? true
+  const loadsPosition = options.loadsPosition ?? trackingEnabled
   const url = `/api/v1/audiobooks/${bookId}/playback-state`
 
   let pending: PendingWrite | null = null
@@ -39,7 +42,7 @@ export function useAudioProgress(bookId: number, options: AudioProgressOptions) 
   }
 
   async function load() {
-    if (!unref(trackingEnabled)) {
+    if (!unref(loadsPosition)) {
       loaded.value = true
       return
     }

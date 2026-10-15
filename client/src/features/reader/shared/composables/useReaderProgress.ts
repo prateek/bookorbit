@@ -12,6 +12,8 @@ export interface ReaderProgressOptions {
   narrationSeconds?: (fragment: string, sectionIndex: number | null) => Promise<number | null>
   /** Told when a narration save was held back because another device sent the narration well behind it. */
   onNarrationMovedBack?: (position: NewerPosition) => void
+  /** Loads the saved position even while untracked; defaults to `trackingEnabled`. */
+  loadsPosition?: MaybeRef<boolean>
 }
 
 /** How far behind the sentence being saved another device must send narration for the save to wait. */
@@ -143,6 +145,7 @@ export function useReaderProgress(
 
   const footerMode = ref<FooterDisplayMode>(initialFooterMode)
   const trackingEnabled = options.trackingEnabled ?? true
+  const loadsPosition = options.loadsPosition ?? trackingEnabled
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null
   let saving = false
@@ -189,7 +192,7 @@ export function useReaderProgress(
    * position another device read later wins over it after. Offline, the local one is all there is.
    */
   async function load() {
-    if (!unref(trackingEnabled)) return
+    if (!unref(loadsPosition)) return
     const session = await whenOfflineSession()
     let server: Record<string, unknown> | null = null
     try {

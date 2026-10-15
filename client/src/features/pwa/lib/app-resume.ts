@@ -1,6 +1,7 @@
 import { watch, type Ref } from 'vue'
 import type { Router } from 'vue-router'
 import { isStandaloneDisplay } from '@/features/push/lib/push-support'
+import { isTrackedReaderEntry, trackedReaderState } from '@/features/reader/shared/lib/reader-entry'
 import { storage } from '@/services/storage'
 
 const STORAGE_KEY = 'bookorbit:pwa-resume'
@@ -13,6 +14,8 @@ interface ResumeLocation {
   version: 1
   userId: number
   path: string
+  /** The reader was tracking there, so a resume reopens it where it was left even once finished. */
+  tracked?: boolean
 }
 
 function resumablePath(router: Router, value: unknown): string | null {
@@ -31,11 +34,12 @@ function resumablePath(router: Router, value: unknown): string | null {
   return router.resolve({ path: route.path, query }).fullPath
 }
 
-function readLocation(router: Router, userId: number): string | null {
+function readLocation(router: Router, userId: number): Pick<ResumeLocation, 'path' | 'tracked'> | null {
   try {
     const saved = storage.get<Partial<ResumeLocation> | null>(STORAGE_KEY, null)
     if (saved?.version !== 1 || saved.userId !== userId) return null
-    return resumablePath(router, saved.path)
+    const path = resumablePath(router, saved.path)
+    return path ? { path, tracked: saved.tracked === true } : null
   } catch {
     return null
   }
@@ -99,19 +103,22 @@ export function installPwaResume(router: Router, user: Readonly<Ref<{ id: number
     resumePending = false
     setPendingLogin(false)
     if (to.fullPath !== '/') return
-    const path = readLocation(router, user.value.id)
-    if (path && path !== '/') {
-      const target = router.resolve(path)
-      return { path: target.path, query: target.query, replace: true }
+    const saved = readLocation(router, user.value.id)
+    if (saved && saved.path !== '/') {
+      const target = router.resolve(saved.path)
+      const state = target.name === 'reader' && saved.tracked ? trackedReaderState(target.path) : undefined
+      return { path: target.path, query: target.query, replace: true, state }
     }
   })
 
   function rememberLocation() {
     if (routeUserId === null || routeUserId !== user.value?.id) return
-    const path = resumablePath(router, router.currentRoute.value.fullPath)
+    const route = router.currentRoute.value
+    const path = resumablePath(router, route.fullPath)
     if (!path) return
+    const tracked = route.name === 'reader' && isTrackedReaderEntry(route.path)
     try {
-      storage.set(STORAGE_KEY, { version: 1, userId: routeUserId, path } satisfies ResumeLocation)
+      storage.set(STORAGE_KEY, { version: 1, userId: routeUserId, path, ...(tracked && { tracked }) } satisfies ResumeLocation)
     } catch {
       // A full or unavailable store only disables restoration.
     }

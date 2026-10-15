@@ -48,10 +48,18 @@ const ZOOM_STEP = 0.25
 
 const { t } = useI18n()
 
-const props = defineProps<{ bookId: number; fileId: number; peekMode?: boolean; source?: 'cbz' | 'djvu'; startTracking?: StartTracking }>()
+const props = defineProps<{
+  bookId: number
+  fileId: number
+  peekMode?: boolean
+  loadsPosition?: boolean
+  source?: 'cbz' | 'djvu'
+  startTracking?: StartTracking
+}>()
 const route = useRoute()
 const router = useRouter()
 const trackingEnabled = computed(() => !props.peekMode)
+const loadsPosition = computed(() => trackingEnabled.value || props.loadsPosition)
 
 const { headerVisible, footerVisible, isPinned, handleMiddleTap, togglePinned, showHeader, showFooter, setVisibilityLock } = useVisibility()
 const { isFullscreen, toggleFullscreen } = useFullscreen()
@@ -64,7 +72,7 @@ const { onActivity, elapsedMinutes } = useReadingSession(
   }),
   { trackingEnabled },
 )
-const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes, 0, { trackingEnabled })
+const progress = useReaderProgress(props.bookId, props.fileId, elapsedMinutes, 0, { trackingEnabled, loadsPosition })
 const { pageCount, bookTitle, seriesId, loading, error, pageUrl, load } = useCbz(props.fileId, props.bookId, props.source ?? 'cbz')
 const { goBack } = useReaderBack(props.bookId, () => ({ seriesId: seriesId.value, seriesMemberships: [] }))
 const {
@@ -882,7 +890,9 @@ onUnmounted(() => {
       class="absolute top-0 inset-x-0 z-50 transition-all duration-300"
       :class="headerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'"
     >
-      <div class="h-[calc(3rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] flex items-center gap-1 px-3 bg-background/90 backdrop-blur-md border-b border-border">
+      <div
+        class="h-[calc(3rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] flex items-center gap-1 px-3 bg-background/90 backdrop-blur-md border-b border-border"
+      >
         <button
           class="viewer-btn focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
           :aria-label="t('common.back')"
