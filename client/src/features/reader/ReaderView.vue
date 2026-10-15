@@ -299,7 +299,7 @@ const pageChromeStyle = computed(() => readerChromeThemeStyle(activeMode.value))
 function cycleFooterRight() {
   void applyUpdate({ footerRight: nextFooterRight(state.value.footerRight) })
 }
-const { goBack } = useReaderBack(bookId, () => bookMeta.value)
+const { goBack, handoffState } = useReaderBack(bookId, () => bookMeta.value)
 
 const {
   foliateReady,
@@ -1172,7 +1172,13 @@ async function handleOpenNextChapter() {
   try {
     await handOffToNextChapter({
       ...finishChapterSteps,
-      open: () => router.replace({ name: 'reader', params: { bookId: target.bookId, fileId: target.fileId }, query: { format: target.format } }),
+      open: () =>
+        router.replace({
+          name: 'reader',
+          params: { bookId: target.bookId, fileId: target.fileId },
+          query: { format: target.format },
+          state: handoffState(),
+        }),
       onMarkFailed: () => toast.error(t('reader.endCard.markFailed')),
     })
   } finally {
