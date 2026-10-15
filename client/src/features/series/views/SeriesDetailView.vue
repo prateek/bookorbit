@@ -701,9 +701,9 @@ defineOptions({ name: 'SeriesDetailView' })
         </div>
 
         <!-- Series header -->
-        <div v-if="seriesInfo" class="mb-4 rounded-lg border border-border/70 bg-card/60 p-4">
-          <div class="flex flex-col gap-4 md:flex-row md:items-start">
-            <div class="mx-auto w-full max-w-[200px] md:mx-0 md:w-[340px] md:max-w-[360px] md:shrink-0 lg:w-[360px]">
+        <div v-if="seriesInfo" class="@container mb-4 rounded-lg border border-border/70 bg-card/60 p-4">
+          <div class="flex flex-col gap-4 @5xl:flex-row @5xl:items-start">
+            <div class="mx-auto w-full max-w-[200px] @5xl:mx-0 @5xl:w-[360px] @5xl:max-w-[360px] @5xl:shrink-0">
               <div
                 class="series-cover-stack-container relative isolate rounded-lg border border-border/60 bg-linear-to-b from-white/[0.035] via-background/5 to-black/[0.07]"
                 style="aspect-ratio: 11 / 8; transform-style: preserve-3d; perspective: 1000px"
@@ -751,8 +751,8 @@ defineOptions({ name: 'SeriesDetailView' })
               </div>
             </div>
 
-            <div class="min-w-0 flex-1 md:border-l md:border-border/60 md:pl-6">
-              <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div class="min-w-0 flex-1 @5xl:border-l @5xl:border-border/60 @5xl:pl-6">
+              <div class="flex flex-col gap-3 @5xl:flex-row @5xl:items-start @5xl:justify-between">
                 <div class="min-w-0">
                   <h1 class="text-xl font-bold text-foreground">{{ seriesInfo.name }}</h1>
                   <div class="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -772,12 +772,12 @@ defineOptions({ name: 'SeriesDetailView' })
                   </div>
                 </div>
 
-                <div class="flex w-full min-w-0 items-center gap-2 md:w-auto md:shrink-0">
+                <div class="flex w-full min-w-0 items-center gap-2 @5xl:w-auto @5xl:shrink-0">
                   <button
                     v-if="continueLabel"
                     type="button"
                     data-testid="series-continue"
-                    class="flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 md:h-8 md:max-w-[320px] md:flex-none"
+                    class="flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 md:h-8 md:max-w-[320px] @5xl:flex-none"
                     @click="handleContinue"
                   >
                     <Play :size="14" class="shrink-0" />
