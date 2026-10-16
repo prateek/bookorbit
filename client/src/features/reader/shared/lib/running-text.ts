@@ -102,6 +102,32 @@ function buildRight(position: RunningTextPosition, item: EpubFooterRightItem, t:
   return timeLeft ?? percent
 }
 
+/** Fallbacks in `buildRight`: an item showing the same text as one of these adds nothing to the tap cycle. */
+const RIGHT_FALLBACKS: Partial<Record<EpubFooterRightItem, EpubFooterRightItem[]>> = {
+  'time-left': ['percent'],
+  unread: ['percent'],
+  chapter: ['time-left', 'percent'],
+}
+
+/**
+ * The foot's right slot after a tap, skipping items that would read the same as their fallback or as
+ * what the slot shows now, so outside a series every tap changes the line.
+ */
+export function nextDistinctFooterRight(current: EpubFooterRightItem, position: RunningTextPosition, t: Translate): EpubFooterRightItem {
+  const textOf = (item: EpubFooterRightItem) => buildRight(position, item, t)
+  const shown = textOf(current)
+  let candidate = current
+  let sameAsShown: EpubFooterRightItem | null = null
+  for (let step = 0; step < RIGHT_CYCLE.length; step++) {
+    candidate = nextFooterRight(candidate)
+    const text = textOf(candidate)
+    if (RIGHT_FALLBACKS[candidate]?.some((fallback) => textOf(fallback) === text)) continue
+    if (text !== shown) return candidate
+    sameAsShown ??= candidate
+  }
+  return sameAsShown ?? 'percent'
+}
+
 export function buildRunningText(position: RunningTextPosition, slots: RunningTextSlots, t: Translate): RunningText {
   return {
     head: buildHead(position, slots.runningHead),
