@@ -1,8 +1,14 @@
 import { computed, type ComputedRef, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { BookDetail } from '@bookorbit/types'
+import type { BookDetail, EpubFooterRightItem } from '@bookorbit/types'
 import { primarySeriesIndex } from '../../shared/composables/useReaderBack'
-import { buildRunningText, buildToolbarTitle, type RunningText, type RunningTextPosition } from '../../shared/lib/running-text'
+import {
+  buildRunningText,
+  buildToolbarTitle,
+  nextDistinctFooterRight,
+  type RunningText,
+  type RunningTextPosition,
+} from '../../shared/lib/running-text'
 import type { ThemeMode } from '../constants/themes'
 import type { FoliateRenderer } from './useFoliate'
 import type { ReaderState } from './useReaderState'
@@ -62,6 +68,11 @@ export function useRunningText(sources: RunningTextSources) {
     () => `${Math.min(RUNNING_TEXT_MAX_PX, Math.max(RUNNING_TEXT_MIN_PX, Math.round(sources.state.value.fontSize * RUNNING_TEXT_SCALE)))}px`,
   )
 
+  /** Built from the position rather than `text`, which is blank while the foot is hidden. */
+  function nextFooterRight(): EpubFooterRightItem {
+    return nextDistinctFooterRight(sources.state.value.footerRight, position.value, t)
+  }
+
   function onFootClick(event: MouseEvent) {
     event.stopPropagation()
     sources.onFootTap()
@@ -103,5 +114,5 @@ export function useRunningText(sources: RunningTextSources) {
     })
   }
 
-  return { text, toolbarTitle, render }
+  return { text, toolbarTitle, render, nextFooterRight }
 }
