@@ -26,9 +26,9 @@ export function seriesChapterTarget(book: BookCard): SeriesChapterTarget | null 
 }
 
 /**
- * Opens another chapter the way "Next chapter" does: the current history entry is replaced and
- * carries the reader visit's starting book, and no reading mode is passed on, so a finished chapter
- * opens as a peek and an unread one is tracked.
+ * Opens another chapter, from "Next chapter" or the chapter panel: the current history entry is
+ * replaced and carries the reader visit's starting book, and no reading mode is passed on, so a
+ * finished chapter opens as a peek and an unread one is tracked.
  */
 export function readerRouteForChapter(target: SeriesChapterTarget, state: HistoryState): RouteLocationRaw {
   return {

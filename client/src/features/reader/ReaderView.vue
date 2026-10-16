@@ -1195,13 +1195,7 @@ async function handleOpenNextChapter() {
   try {
     await handOffToNextChapter({
       ...finishChapterSteps,
-      open: () =>
-        router.replace({
-          name: 'reader',
-          params: { bookId: target.bookId, fileId: target.fileId },
-          query: { format: target.format },
-          state: chapterHandoffState(),
-        }),
+      open: () => router.replace(readerRouteForChapter(target, chapterHandoffState())),
       onMarkFailed: () => toast.error(t('reader.endCard.markFailed')),
     })
   } finally {
