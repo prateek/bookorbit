@@ -12,7 +12,7 @@ import { useReaderPageTitle } from './shared/composables/useReaderPageTitle'
 import { RUNNING_TEXT_SETTING_KEYS, useReaderState } from './epub/composables/useReaderState'
 import { useRunningText } from './epub/composables/useRunningText'
 import { useReadingPace } from './shared/composables/useReadingPace'
-import { joinFoot, nextFooterRight } from './shared/lib/running-text'
+import { joinFoot } from './shared/lib/running-text'
 import { readerChromeThemeStyle } from './epub/composables/readerPageContext'
 import { useReaderThemeColor } from './shared/composables/useReaderThemeColor'
 import { useReaderSettings, type ReaderSettingsScope } from './shared/composables/useReaderSettings'
@@ -305,7 +305,7 @@ const readerBottomPadding = computed(() => {
 const pageChromeStyle = computed(() => readerChromeThemeStyle(activeMode.value))
 
 function cycleFooterRight() {
-  void applyUpdate({ footerRight: nextFooterRight(state.value.footerRight) })
+  void applyUpdate({ footerRight: runningText.nextFooterRight() })
 }
 const { goBack, handoffState } = useReaderBack(bookId, () => bookMeta.value)
 
