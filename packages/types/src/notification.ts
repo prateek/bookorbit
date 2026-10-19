@@ -1,4 +1,5 @@
 export const NotificationType = {
+  NewBooks: "new_books",
   ScanCompleted: "scan_completed",
   ScanFailed: "scan_failed",
   BooksUnavailable: "books_unavailable",
@@ -75,6 +76,7 @@ export interface NotificationTypeMeta {
  * what let `bulk_rename_failed` render as a success for as long as it did.
  */
 export const NOTIFICATION_TYPE_META: Record<NotificationType, NotificationTypeMeta> = {
+  [NotificationType.NewBooks]: { category: "scanning", severity: "success" },
   [NotificationType.ScanCompleted]: { category: "scanning", severity: "success" },
   [NotificationType.ScanFailed]: { category: "scanning", severity: "error" },
   [NotificationType.BooksUnavailable]: { category: "scanning", severity: "warning" },

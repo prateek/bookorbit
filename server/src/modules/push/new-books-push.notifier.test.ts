@@ -19,12 +19,13 @@ describe('NewBooksPushNotifier', () => {
     vi.useFakeTimers();
     repo = {
       summarizeNewBooks: vi.fn().mockResolvedValue([]),
+      orderNewBookIds: vi.fn((ids: number[]) => Promise.resolve(ids)),
       findRecipientsForLibrary: vi.fn().mockResolvedValue([]),
       findLaunchTargets: vi.fn().mockResolvedValue([]),
       findUnfollowedSeriesByUser: vi.fn().mockResolvedValue(new Map()),
     };
     pushService = { deliver: vi.fn().mockResolvedValue({ sent: 0, failed: 0, expired: 0 }) };
-    notifier = new NewBooksPushNotifier(repo as never, pushService as never);
+    notifier = new NewBooksPushNotifier(repo as never, pushService as never, { notify: vi.fn().mockResolvedValue(true) } as never);
   });
 
   afterEach(() => {
@@ -72,10 +73,10 @@ describe('NewBooksPushNotifier', () => {
     for (const d of deliveries) byUser.set(d.recipient.userId, [...(byUser.get(d.recipient.userId) ?? []), d.payload]);
 
     expect(byUser.get(1)).toEqual([
-      { title: 'New chapters', body: 'Chrysalis: 2 new, The Sixth School: 1 new', url: '/' },
-      { title: 'New chapters', body: 'Chrysalis: 2 new, The Sixth School: 1 new', url: '/' },
+      { title: 'New chapters', body: 'Chrysalis: 2 new, The Sixth School: 1 new', url: expect.stringMatching(/^\/new-arrivals\//) },
+      { title: 'New chapters', body: 'Chrysalis: 2 new, The Sixth School: 1 new', url: expect.stringMatching(/^\/new-arrivals\//) },
     ]);
-    expect(byUser.get(2)).toEqual([{ title: 'New chapters', body: 'Chrysalis: 2 new', url: '/series/7' }]);
+    expect(byUser.get(2)).toEqual([{ title: 'New chapters', body: 'Chrysalis: 2 new', url: expect.stringMatching(/^\/new-arrivals\//) }]);
   });
 
   it('deep-links a single new book into the reader', async () => {

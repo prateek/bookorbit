@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 vi.mock('vue-router', () => ({
+  onBeforeRouteUpdate: vi.fn<(guard: () => Promise<void>) => void>(),
   useRoute: () => ({ params: { bookId: '11', fileId: '22' }, query: {} }),
   useRouter: () => ({ back: vi.fn<() => void>(), push: mocks.routerPush, replace: vi.fn<() => Promise<void>>().mockResolvedValue(undefined) }),
   onBeforeRouteLeave: mocks.onBeforeRouteLeave,

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { flushProgressBeforeNavigation } from '../shared/lib/bounded-progress-flush'
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { computed, onMounted, onUnmounted, shallowRef } from 'vue'
 import { openDownloadedFile, trackOpenedBook } from '@/features/offline/offline-session'
 import { useI18n } from 'vue-i18n'
@@ -145,6 +147,19 @@ function applyPendingProgress() {
 function flushProgress() {
   if (applyPendingProgress()) void progress.save()
 }
+
+async function saveBeforeNavigation() {
+  if (saveTimer) clearTimeout(saveTimer)
+  if (applyPendingProgress()) await progress.save()
+  await progress.flush()
+}
+
+function handleNavigation() {
+  return flushProgressBeforeNavigation(saveBeforeNavigation)
+}
+
+onBeforeRouteLeave(handleNavigation)
+onBeforeRouteUpdate(handleNavigation)
 
 function handlePageChange(pageNumber: number, totalPages: number) {
   onActivity()

@@ -3,20 +3,20 @@ import { describe, expect, it } from 'vitest';
 import { buildNewBooksMessage, mergeGroupsBySeries } from './new-books-message';
 
 describe('buildNewBooksMessage', () => {
-  it('lists each series with its count and links to the series when only one is involved', () => {
+  it('lists each series with its count and uses an arrivals destination when only one series is involved', () => {
     expect(buildNewBooksMessage([{ seriesId: 7, seriesName: 'Chrysalis', count: 2, sampleBookId: 11 }])).toEqual({
       title: 'New chapters',
       body: 'Chrysalis: 2 new',
-      url: '/series/7',
+      url: '/new-arrivals',
     });
   });
 
-  it('orders series by count and links to home when several series changed', () => {
+  it('orders series by count and uses an arrivals destination when several series changed', () => {
     const message = buildNewBooksMessage([
       { seriesId: 3, seriesName: 'The Sixth School', count: 1, sampleBookId: 20 },
       { seriesId: 7, seriesName: 'Chrysalis', count: 2, sampleBookId: 11 },
     ]);
-    expect(message).toEqual({ title: 'New chapters', body: 'Chrysalis: 2 new, The Sixth School: 1 new', url: '/' });
+    expect(message).toEqual({ title: 'New chapters', body: 'Chrysalis: 2 new, The Sixth School: 1 new', url: '/new-arrivals' });
   });
 
   it('summarises books outside a series and caps the number of series named', () => {
@@ -24,7 +24,7 @@ describe('buildNewBooksMessage', () => {
     const message = buildNewBooksMessage([...groups, { seriesId: null, seriesName: null, count: 3, sampleBookId: 99 }]);
     expect(message?.title).toBe('New books');
     expect(message?.body).toBe('S1: 1 new, S2: 1 new, S3: 1 new, S4: 1 new, 1 more series, 3 other new');
-    expect(message?.url).toBe('/');
+    expect(message?.url).toBe('/new-arrivals');
   });
 
   it('opens a single new EPUB straight in the reader', () => {

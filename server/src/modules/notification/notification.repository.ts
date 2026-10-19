@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, inArray, lt, notInArray, sql } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, inArray, lt, ne, notInArray, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { APP_FEATURES, NOTIFICATION_TYPE_META, NotificationType } from '@bookorbit/types';
@@ -16,7 +16,10 @@ const PODCAST_NOTIFICATION_TYPES = [
   NotificationType.PodcastDownloadFailed,
 ];
 
-const visibleNotificationCondition = APP_FEATURES.podcasts ? undefined : notInArray(notifications.type, PODCAST_NOTIFICATION_TYPES);
+const visibleNotificationCondition = and(
+  APP_FEATURES.podcasts ? undefined : notInArray(notifications.type, PODCAST_NOTIFICATION_TYPES),
+  sql`(${notifications.type} <> ${NotificationType.NewBooks} OR COALESCE(${notifications.meta}->>'dismissed', 'false') <> 'true')`,
+);
 const BOOK_REQUEST_NOTIFICATION_TYPES = Object.values(NotificationType).filter((type) => NOTIFICATION_TYPE_META[type]?.category === 'bookRequests');
 
 @Injectable()
@@ -71,7 +74,10 @@ export class NotificationRepository {
     const condition = and(eq(notifications.userId, userId), visibleNotificationCondition, requestCondition);
     const [items, [{ value: total }]] = await Promise.all([
       this.db
-        .select()
+        .select({
+          ...getTableColumns(notifications),
+          meta: sql<unknown>`CASE WHEN ${notifications.type} = ${NotificationType.NewBooks} THEN NULL ELSE ${notifications.meta} END`,
+        })
         .from(notifications)
         .where(condition)
         .orderBy(desc(notifications.updatedAt), desc(notifications.id))
@@ -80,6 +86,31 @@ export class NotificationRepository {
       this.db.select({ value: count() }).from(notifications).where(condition),
     ]);
     return { items, total };
+  }
+
+  async findArrival(userId: number, token: string, limit: number, offset: number) {
+    const [row] = await this.db
+      .select({
+        title: notifications.title,
+        message: notifications.message,
+        total: sql<number>`jsonb_array_length(${notifications.meta}->'bookIds')`,
+        seriesId: sql<number | null>`(${notifications.meta}->>'seriesId')::integer`,
+        bookIds: sql<number[]>`ARRAY(
+          SELECT value::integer
+          FROM jsonb_array_elements_text(${notifications.meta}->'bookIds') WITH ORDINALITY AS entries(value, position)
+          ORDER BY position LIMIT ${limit} OFFSET ${offset}
+        )`,
+      })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.type, NotificationType.NewBooks),
+          eq(notifications.actionUrl, `/new-arrivals/${token}`),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
   }
 
   async countUnread(userId: number): Promise<number> {
@@ -116,16 +147,36 @@ export class NotificationRepository {
   }
 
   async deleteOne(id: number, userId: number): Promise<boolean> {
-    const result = await this.db
-      .delete(notifications)
-      .where(and(eq(notifications.id, id), eq(notifications.userId, userId), visibleNotificationCondition));
-    return (result.rowCount ?? 0) > 0;
+    return this.db.transaction(async (tx) => {
+      const condition = and(eq(notifications.id, id), eq(notifications.userId, userId), visibleNotificationCondition);
+      const retained = await tx
+        .update(notifications)
+        .set({
+          read: true,
+          meta: sql`jsonb_set(${notifications.meta}, '{dismissed}', 'true'::jsonb)`,
+          updatedAt: sql`${notifications.updatedAt}`,
+        })
+        .where(and(condition, eq(notifications.type, NotificationType.NewBooks)));
+      const deleted = await tx.delete(notifications).where(and(condition, ne(notifications.type, NotificationType.NewBooks)));
+      return (retained.rowCount ?? 0) + (deleted.rowCount ?? 0) > 0;
+    });
   }
 
   async deleteAllForUser(userId: number): Promise<number> {
     const requestCondition = await this.requestVisibilityCondition(userId);
-    const result = await this.db.delete(notifications).where(and(eq(notifications.userId, userId), visibleNotificationCondition, requestCondition));
-    return result.rowCount ?? 0;
+    return this.db.transaction(async (tx) => {
+      const condition = and(eq(notifications.userId, userId), visibleNotificationCondition, requestCondition);
+      const retained = await tx
+        .update(notifications)
+        .set({
+          read: true,
+          meta: sql`jsonb_set(${notifications.meta}, '{dismissed}', 'true'::jsonb)`,
+          updatedAt: sql`${notifications.updatedAt}`,
+        })
+        .where(and(condition, eq(notifications.type, NotificationType.NewBooks)));
+      const deleted = await tx.delete(notifications).where(and(condition, ne(notifications.type, NotificationType.NewBooks)));
+      return (retained.rowCount ?? 0) + (deleted.rowCount ?? 0);
+    });
   }
 
   async deleteOlderThan(date: Date, batchSize = 1_000): Promise<{ deleted: number; userIds: number[] }> {

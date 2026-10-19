@@ -201,6 +201,17 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/components/AppLayout.vue'),
     children: [
       {
+        path: 'new-arrivals/:token',
+        name: 'new-arrivals',
+        component: () => import('@/features/push/views/NewArrivalsView.vue'),
+        meta: {
+          requiredPermission: Permission.NotificationAccess,
+          forbiddenPermission: Permission.DemoRestricted,
+          remountOnParamChange: true,
+          title: () => t('newArrivals.title'),
+        },
+      },
+      {
         path: '',
         name: 'dashboard',
         component: () => import('@/views/DashboardView.vue'),

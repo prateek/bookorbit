@@ -89,3 +89,4 @@ export * from "./watch-download";
 export * from "./podcast";
 export * from "./delivery";
 export * from "./email";
+export * from "./new-arrivals";

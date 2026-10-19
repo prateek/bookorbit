@@ -44,6 +44,37 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, options).then(syncAppBadge))
 })
 
+function askWindow(client, message) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel()
+    const timer = setTimeout(() => finish(null), 250)
+    function finish(value) {
+      clearTimeout(timer)
+      channel.port1.close()
+      resolve(value)
+    }
+    channel.port1.onmessage = (event) => finish(event.data)
+    try {
+      client.postMessage(message, [channel.port2])
+    } catch {
+      finish(null)
+    }
+  })
+}
+
+function findAppWindow(candidates) {
+  return new Promise((resolve) => {
+    let remaining = candidates.length
+    if (!remaining) resolve(null)
+    for (const client of candidates) {
+      askWindow(client, { type: 'BOOKORBIT_NOTIFICATION_PROBE' }).then((reply) => {
+        if (reply && reply.standalone === true) resolve(client)
+        if (--remaining === 0) resolve(null)
+      })
+    }
+  })
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const target = sameOriginUrl(event.notification.data && event.notification.data.url)
@@ -51,11 +82,13 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-      const existing = windows.find((client) => new URL(client.url).origin === self.location.origin)
+      const candidates = windows.filter((client) => new URL(client.url).origin === self.location.origin)
+      const existing = await findAppWindow(candidates)
       if (existing) {
         try {
-          const focused = await existing.focus()
-          await (focused || existing).navigate(target)
+          await existing.focus()
+          const accepted = await askWindow(existing, { type: 'BOOKORBIT_NOTIFICATION_OPEN', url: target })
+          if (!accepted || accepted.accepted !== true) await existing.navigate(target)
         } catch {
           await self.clients.openWindow(target)
         }

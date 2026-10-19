@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { NotificationService } from '../notification/notification.service';
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { NOTIFICATION_TYPE_META, NotificationType, isNotificationAllowed, resolveNotificationLevel } from '@bookorbit/types';
 import type { NotificationPreferences } from '@bookorbit/types';
@@ -25,7 +27,7 @@ interface UserBatch {
 }
 
 function allowsNewBookPush(settings: Record<string, unknown>): boolean {
-  const meta = NOTIFICATION_TYPE_META[NotificationType.ScanCompleted];
+  const meta = NOTIFICATION_TYPE_META[NotificationType.NewBooks];
   const prefs = settings.notificationPreferences as NotificationPreferences | undefined;
   return isNotificationAllowed(resolveNotificationLevel(prefs?.[meta.category]), meta.severity);
 }
@@ -44,6 +46,7 @@ export class NewBooksPushNotifier implements OnModuleDestroy {
   constructor(
     private readonly repo: PushRepository,
     private readonly pushService: PushService,
+    private readonly notifications: NotificationService,
   ) {}
 
   async onModuleDestroy(): Promise<void> {
@@ -105,7 +108,8 @@ export class NewBooksPushNotifier implements OnModuleDestroy {
     try {
       const groupsByLibrary = this.groupByLibrary(await this.repo.summarizeNewBooks(bookIds));
       const users = await this.collectUserBatches(groupsByLibrary);
-      const deliveries = await this.buildDeliveries(users);
+      const orderedBookIds = [...users.values()].some((user) => totalNewBooks(user.groups) > 1) ? await this.repo.orderNewBookIds(bookIds) : [];
+      const deliveries = await this.buildDeliveries(users, orderedBookIds);
       delivering = true;
       const result = await this.pushService.deliver(deliveries);
       this.logger.log(
@@ -156,7 +160,7 @@ export class NewBooksPushNotifier implements OnModuleDestroy {
     const byLibrary = new Map<number, NewBookGroup[]>();
     for (const row of rows) {
       const groups = byLibrary.get(row.libraryId) ?? [];
-      groups.push({ seriesId: row.seriesId, seriesName: row.seriesName, count: row.count, sampleBookId: row.sampleBookId });
+      groups.push({ seriesId: row.seriesId, seriesName: row.seriesName, count: row.count, sampleBookId: row.sampleBookId, bookIds: row.bookIds });
       byLibrary.set(row.libraryId, groups);
     }
     return byLibrary;
@@ -198,15 +202,43 @@ export class NewBooksPushNotifier implements OnModuleDestroy {
     }
   }
 
-  private async buildDeliveries(users: Map<number, UserBatch>): Promise<Array<{ recipient: PushRecipient; payload: PushPayload }>> {
+  private async buildDeliveries(
+    users: Map<number, UserBatch>,
+    orderedBookIds: number[],
+  ): Promise<Array<{ recipient: PushRecipient; payload: PushPayload }>> {
     const singleBookIds = [...users.values()].filter((user) => totalNewBooks(user.groups) === 1).map((user) => user.groups[0].sampleBookId);
     const launchTargets = new Map((await this.repo.findLaunchTargets([...new Set(singleBookIds)])).map((target) => [target.bookId, target]));
 
     const deliveries: Array<{ recipient: PushRecipient; payload: PushPayload }> = [];
-    for (const user of users.values()) {
+    for (const [userId, user] of users) {
       const launchTarget = totalNewBooks(user.groups) === 1 ? launchTargets.get(user.groups[0].sampleBookId) : null;
       const message = buildNewBooksMessage(user.groups, launchTarget);
       if (!message) continue;
+      if (totalNewBooks(user.groups) > 1) {
+        const startedAt = Date.now();
+        const allowed = new Set(user.groups.flatMap((group) => group.bookIds ?? []));
+        const token = randomUUID();
+        message.url = `/new-arrivals/${token}`;
+        try {
+          const persisted = await this.notifications.notify({
+            type: NotificationType.NewBooks,
+            scope: { kind: 'user', userId },
+            title: message.title,
+            message: message.body,
+            actionUrl: message.url,
+            meta: {
+              bookIds: orderedBookIds.filter((id) => allowed.has(id)),
+              seriesId: user.groups.length === 1 ? user.groups[0].seriesId : null,
+            },
+          });
+          if (!persisted) continue;
+        } catch (error) {
+          this.logger.warn(
+            `[push.new_books_snapshot] [fail] userId=${userId} durationMs=${Date.now() - startedAt} errorClass=${error instanceof Error ? error.name : 'Error'} error="${sanitizeLogValue(error instanceof Error ? error.message : String(error))}" - snapshot failed; skipping this recipient`,
+          );
+          continue;
+        }
+      }
       for (const recipient of user.recipients) deliveries.push({ recipient, payload: message });
     }
     return deliveries;
