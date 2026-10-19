@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { mkdtemp, rm, stat, rename } from 'fs/promises';
-import { inArray, type SQL } from 'drizzle-orm';
+import { and, inArray, type SQL } from 'drizzle-orm';
 
 import { MAX_BOOK_QUERY_OFFSET_ROWS, isBookQueryOffsetWithinLimit } from '../../common/constants/pagination.constants';
 import { compareAudioTracks, coverFetchInputs, resolveIsAudiobook } from '../../common/utils/book-media.utils';
@@ -1097,7 +1097,7 @@ export class BookService {
     return this.executeBooksQuery(user.id, where, query);
   }
 
-  async globalQuery(user: RequestUser, query: BookQuery): Promise<BooksPage> {
+  async globalQuery(user: RequestUser, query: BookQuery, bookIds?: readonly number[]): Promise<BooksPage> {
     this.assertPaginationWindow(query.pagination.page, query.pagination.size);
     const libs = await this.libraryService.findAll(user);
     const accessibleLibraryIds = libs.map((l) => l.id);
@@ -1109,7 +1109,7 @@ export class BookService {
       timeZone,
       contentFilters: this.isSuperuser(user) ? undefined : user.contentFilters,
     });
-    return this.executeBooksQuery(user.id, where, query);
+    return this.executeBooksQuery(user.id, bookIds ? and(where, inArray(books.id, [...bookIds])) : where, query);
   }
 
   /**

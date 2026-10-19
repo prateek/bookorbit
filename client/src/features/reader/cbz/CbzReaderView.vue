@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { flushProgressBeforeNavigation } from '../shared/lib/bounded-progress-flush'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useMediaQuery } from '@vueuse/core'
 import {
@@ -778,9 +779,17 @@ onMounted(async () => {
   schedulePreload(currentPage.value)
 })
 
-onBeforeRouteLeave(async () => {
+async function saveBeforeNavigation() {
   await flushPendingProgress()
-})
+  await progress.flush()
+}
+
+function handleNavigation() {
+  return flushProgressBeforeNavigation(saveBeforeNavigation)
+}
+
+onBeforeRouteUpdate(handleNavigation)
+onBeforeRouteLeave(handleNavigation)
 
 onUnmounted(() => {
   window.removeEventListener('resize', onResize)

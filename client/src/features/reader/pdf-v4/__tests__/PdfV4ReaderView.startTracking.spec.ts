@@ -8,6 +8,8 @@ const mockRouterReplace = vi.fn<(to: unknown) => Promise<void>>().mockResolvedVa
 const mockRoute = { params: { bookId: '42', fileId: '101' }, query: { format: 'pdf' } as LocationQuery }
 
 vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn<(guard: () => Promise<void>) => void>(),
+  onBeforeRouteUpdate: vi.fn<(guard: () => Promise<void>) => void>(),
   useRoute: () => mockRoute,
   useRouter: () => ({ back: vi.fn<() => void>(), replace: mockRouterReplace }),
 }))

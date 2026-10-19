@@ -12,6 +12,7 @@ import { useAuth } from './features/auth/composables/useAuth'
 import { useSetupStatus } from './features/auth/composables/useSetupStatus'
 import { useLoginOptions } from './features/auth/composables/useLoginOptions'
 import { waitForReachableSession } from './features/auth/lib/session-unavailable'
+import { installNotificationNavigation } from './features/push/lib/notification-navigation'
 import { installAppBadgeClearing } from './features/push/lib/app-badge'
 import { reconcilePushSubscription } from './features/push/composables/usePushNotifications'
 import { offlineMode, registerOfflineGuard, watchForReconnect } from './features/offline/offline-mode'
@@ -135,6 +136,7 @@ registerOfflineGuard(router)
 app.use(router)
 app.mount('#app')
 installAppBadgeClearing()
+installNotificationNavigation(router)
 installServiceWorkerUpdateChecks()
 watchForReconnect(router, init, () => !!user.value)
 watch(

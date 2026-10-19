@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   APP_FEATURES,
   NOTIFICATION_TYPE_META,
@@ -71,8 +71,8 @@ export class NotificationService {
     private readonly gateway: NotificationGateway,
   ) {}
 
-  async notify(payload: NotifyPayload): Promise<void> {
-    if (!APP_FEATURES.podcasts && PODCAST_NOTIFICATION_TYPES.has(payload.type)) return;
+  async notify(payload: NotifyPayload): Promise<boolean> {
+    if (!APP_FEATURES.podcasts && PODCAST_NOTIFICATION_TYPES.has(payload.type)) return false;
     const event = 'notification.notify';
     const scopeLabel = this.formatScope(payload.scope);
     this.logger.log(`[${event}] [start] type=${payload.type} ${scopeLabel} - notification dispatch started`);
@@ -84,7 +84,7 @@ export class NotificationService {
         this.logger.log(
           `[${event}] [end] type=${payload.type} targetUsers=0 eligible=0 durationMs=${Date.now() - startedAt} - notification dispatch completed`,
         );
-        return;
+        return false;
       }
 
       const settingsMap = await this.repo.findUserSettings(targetUserIds);
@@ -94,7 +94,7 @@ export class NotificationService {
         this.logger.log(
           `[${event}] [end] type=${payload.type} targetUsers=${targetUserIds.length} eligible=0 durationMs=${Date.now() - startedAt} - notification dispatch completed`,
         );
-        return;
+        return false;
       }
 
       const groupKey = this.buildGroupKey(payload);
@@ -130,6 +130,7 @@ export class NotificationService {
       this.logger.log(
         `[${event}] [end] type=${payload.type} targetUsers=${targetUserIds.length} eligible=${eligibleUserIds.length} inserted=${insertedCount} collapsed=${collapsedCount} durationMs=${Date.now() - startedAt} - notification dispatch completed`,
       );
+      return persisted.length > 0;
     } catch (error) {
       const errorClass = error instanceof Error ? error.name : 'Error';
       const errorMessage = sanitizeLogValue(error instanceof Error ? error.message : String(error));
@@ -143,6 +144,12 @@ export class NotificationService {
   async list(userId: number, limit: number, offset: number) {
     const { items, total } = await this.repo.findByUser(userId, limit, offset);
     return { items: items.map((n) => this.toItem(n)), total };
+  }
+
+  async getArrival(userId: number, token: string, limit: number, offset: number) {
+    const row = await this.repo.findArrival(userId, token, limit, offset);
+    if (!row) throw new NotFoundException('This notification has expired or was removed');
+    return row;
   }
 
   async markAsRead(userId: number, id: number): Promise<boolean> {
@@ -267,7 +274,7 @@ export class NotificationService {
       title: n.title,
       message: n.message,
       actionUrl: n.actionUrl,
-      meta: (n.meta as Record<string, unknown>) ?? null,
+      meta: n.type === NotificationType.NewBooks ? null : ((n.meta as Record<string, unknown>) ?? null),
       read: n.read,
       count: n.count,
       createdAt: n.createdAt.toISOString(),

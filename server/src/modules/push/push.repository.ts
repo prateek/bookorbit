@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Permission } from '@bookorbit/types';
 
+import { seriesReadingOrderBy } from '../../common/utils/series-index-sql.utils';
 import { chunk } from '../../common/utils/batch.utils';
 import { DB } from '../../db';
 import * as schema from '../../db/schema';
@@ -10,6 +11,7 @@ import {
   bookFiles,
   bookMetadata,
   bookSeries,
+  bookSeriesMemberships,
   books,
   pushSubscriptions,
   pushVapidKeys,
@@ -46,6 +48,7 @@ export interface NewBookGroupRow {
   seriesName: string | null;
   count: number;
   sampleBookId: number;
+  bookIds: number[];
 }
 
 export interface BookLaunchTarget {
@@ -159,6 +162,7 @@ export class PushRepository {
           seriesName: bookSeries.name,
           count: sql<number>`count(*)::int`,
           sampleBookId: sql<number>`min(${newBooks.bookId})::int`,
+          bookIds: sql<number[]>`array_agg(${newBooks.bookId} ORDER BY ${newBooks.bookId})`,
         })
         .from(newBooks)
         .leftJoin(bookSeries, eq(bookSeries.id, newBooks.seriesId))
@@ -169,6 +173,7 @@ export class PushRepository {
         const existing = merged.get(key);
         if (existing) {
           existing.count += row.count;
+          existing.bookIds = [...(existing.bookIds ?? []), ...row.bookIds];
           existing.sampleBookId = Math.min(existing.sampleBookId, row.sampleBookId);
         } else {
           merged.set(key, { ...row });
@@ -194,6 +199,29 @@ export class PushRepository {
       }
     }
     return byUser;
+  }
+
+  async orderNewBookIds(bookIds: number[]): Promise<number[]> {
+    if (bookIds.length === 0) return [];
+    const primarySeriesId = sql`(
+      SELECT m.series_id FROM book_series_memberships m
+      WHERE m.book_id = ${books.id} ORDER BY m.display_order, m.series_id LIMIT 1
+    )`;
+    const rows = await this.db
+      .select({ id: books.id })
+      .from(books)
+      .leftJoin(bookMetadata, eq(bookMetadata.bookId, books.id))
+      .leftJoin(bookSeriesMemberships, and(eq(bookSeriesMemberships.bookId, books.id), eq(bookSeriesMemberships.seriesId, primarySeriesId)))
+      .leftJoin(bookSeries, eq(bookSeries.id, bookSeriesMemberships.seriesId))
+      .where(sql`${books.id} IN (SELECT value::integer FROM jsonb_array_elements_text(${JSON.stringify(bookIds)}::jsonb))`)
+      .orderBy(
+        sql`${bookSeries.name} COLLATE "C" ASC NULLS LAST`,
+        asc(bookSeries.id),
+        ...seriesReadingOrderBy(bookSeriesMemberships.seriesIndex, bookMetadata.publishedDate, 'ASC'),
+        asc(bookMetadata.title),
+        asc(books.id),
+      );
+    return rows.map((row) => row.id);
   }
 
   async findLaunchTargets(bookIds: number[]): Promise<BookLaunchTarget[]> {
