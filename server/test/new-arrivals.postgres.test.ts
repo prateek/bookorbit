@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { NotificationType } from '@bookorbit/types';
@@ -28,6 +28,12 @@ describe.skipIf(!databaseUrl)('new arrivals with PostgreSQL', () => {
         read boolean DEFAULT false, group_key varchar(255), count integer DEFAULT 1,
         created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now()
       );
+    `);
+  });
+
+  beforeEach(async () => {
+    await pool.query(`
+      TRUNCATE books, book_metadata, book_series, book_series_memberships, users, notifications;
       INSERT INTO users VALUES (1, '{}'), (2, '{}');
       INSERT INTO book_series VALUES (7, 'A'), (8, 'B');
       INSERT INTO books SELECT n FROM generate_series(1,120) n;
@@ -67,6 +73,13 @@ describe.skipIf(!databaseUrl)('new arrivals with PostgreSQL', () => {
   });
 
   it('preserves owner-scoped destinations after dismissal and clearing the bell feed', async () => {
+    await pool.query('INSERT INTO notifications (user_id,type,title,action_url,meta) VALUES ($1,$2,$3,$4,$5)', [
+      1,
+      NotificationType.NewBooks,
+      'New chapters',
+      '/new-arrivals/order',
+      JSON.stringify({ bookIds: Array.from({ length: 120 }, (_, index) => 120 - index), seriesId: 7 }),
+    ]);
     await pool.query('INSERT INTO notifications (user_id,type,title,action_url,meta) VALUES ($1,$2,$3,$4,$5)', [
       2,
       NotificationType.NewBooks,
