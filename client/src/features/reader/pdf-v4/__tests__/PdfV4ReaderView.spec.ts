@@ -14,6 +14,8 @@ const mockRoute = {
 }
 
 vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn<(guard: () => Promise<void>) => void>(),
+  onBeforeRouteUpdate: vi.fn<(guard: () => Promise<void>) => void>(),
   useRoute: () => mockRoute,
   useRouter: () => ({ back: mockRouterBack, replace: mockRouterReplace }),
 }))

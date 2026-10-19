@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { flushProgressBeforeNavigation } from '../shared/lib/bounded-progress-flush'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useMediaQuery } from '@vueuse/core'
 import {
@@ -859,9 +860,17 @@ onMounted(() => {
   void initializeReader()
 })
 
-onBeforeRouteLeave(async () => {
+async function saveBeforeNavigation() {
   await flushPendingProgress()
-})
+  await progress.flush()
+}
+
+function handleNavigation() {
+  return flushProgressBeforeNavigation(saveBeforeNavigation)
+}
+
+onBeforeRouteUpdate(handleNavigation)
+onBeforeRouteLeave(handleNavigation)
 
 // Before unmount, because useReadingSession ends the session from its own unmounted hook, which
 // runs first and would otherwise miss a page turn still inside the save debounce.

@@ -2,10 +2,11 @@
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, RotateCw } from '@lucide/vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { sectionPagesOf, useFoliate, type RelocateDetail } from './epub/composables/useFoliate'
 import type { SelectionDetail } from './epub/composables/useFoliateSelection'
+import { flushProgressBeforeNavigation } from './shared/lib/bounded-progress-flush'
 import { useReaderProgress, type NewerPosition } from './shared/composables/useReaderProgress'
 import { useReadingSession } from './shared/composables/useReadingSession'
 import { useReaderPageTitle } from './shared/composables/useReaderPageTitle'
@@ -1599,6 +1600,13 @@ watch(
     }
   },
 )
+
+onBeforeRouteLeave(async () => {
+  if (!isSpecializedReader) await flushProgressBeforeNavigation(progress.flush)
+})
+onBeforeRouteUpdate(async () => {
+  if (!isSpecializedReader) await flushProgressBeforeNavigation(progress.flush)
+})
 
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleReaderReturn)

@@ -253,7 +253,8 @@ describe('sidebar nav registry', () => {
       'book-dock',
       'book-requests',
       'tools',
-      'downloads', 'authors',
+      'downloads',
+      'authors',
       'series',
       'annotations',
     ])

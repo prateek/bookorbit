@@ -3,6 +3,7 @@ export interface NewBookGroup {
   seriesName: string | null;
   count: number;
   sampleBookId: number;
+  bookIds?: number[];
 }
 
 export interface NewBookLaunchTarget {
@@ -28,6 +29,7 @@ export function mergeGroupsBySeries(groups: readonly NewBookGroup[]): NewBookGro
     const existing = merged.get(group.seriesId);
     if (existing) {
       existing.count += group.count;
+      if (group.bookIds) existing.bookIds = [...(existing.bookIds ?? []), ...group.bookIds];
       existing.sampleBookId = Math.min(existing.sampleBookId, group.sampleBookId);
     } else {
       merged.set(group.seriesId, { ...group });
@@ -67,7 +69,7 @@ export function buildNewBooksMessage(groups: readonly NewBookGroup[], launchTarg
     return {
       title: only ? 'New chapter' : 'New book',
       body: only?.seriesName ? `${only.seriesName}: ${bookTitle}` : bookTitle,
-      url: launchTarget ? launchUrl(launchTarget) : '/',
+      url: launchTarget ? launchUrl(launchTarget) : `/book/${groups[0].sampleBookId}`,
     };
   }
 
@@ -79,6 +81,6 @@ export function buildNewBooksMessage(groups: readonly NewBookGroup[], launchTarg
   return {
     title: standaloneCount === 0 ? 'New chapters' : 'New books',
     body: parts.join(', '),
-    url: series.length === 1 && standaloneCount === 0 ? `/series/${series[0].seriesId}` : '/',
+    url: '/new-arrivals',
   };
 }

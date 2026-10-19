@@ -14553,5 +14553,20 @@
         "budget": "More to send"
       }
     }
+  },
+  "newArrivals": {
+    "title": "New arrivals",
+    "viewSeries": "View series",
+    "unavailable": "This notification has expired or was removed. You can still find your books in your libraries.",
+    "failed": "Could not load these arrivals. Try again.",
+    "retry": "Try again",
+    "loading": "Loading arrivals...",
+    "empty": "These books are no longer available to you on this page.",
+    "untitled": "Untitled",
+    "details": "Book details",
+    "open": "Open",
+    "pages": "Arrivals pages",
+    "previous": "Previous",
+    "next": "Next"
   }
 }

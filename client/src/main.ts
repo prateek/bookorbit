@@ -10,6 +10,7 @@ import { i18n } from './i18n'
 import { useLocaleStore } from './stores/locale'
 import { useAuth } from './features/auth/composables/useAuth'
 import { bootstrapSession } from './features/auth/composables/useSessionBootstrap'
+import { installNotificationNavigation } from './features/push/lib/notification-navigation'
 import { installAppBadgeClearing } from './features/push/lib/app-badge'
 import { reconcilePushSubscription } from './features/push/composables/usePushNotifications'
 import { offlineMode, registerOfflineGuard, watchForReconnect } from './features/offline/offline-mode'
@@ -109,6 +110,7 @@ registerOfflineGuard(router)
 app.use(router)
 app.mount('#app')
 installAppBadgeClearing()
+installNotificationNavigation(router)
 installServiceWorkerUpdateChecks()
 watchForReconnect(router, init, () => !!user.value)
 watch(
