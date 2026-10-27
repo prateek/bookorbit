@@ -216,3 +216,7 @@ Copyright (C) 2025-2026 neon and BookOrbit contributors.
 BookOrbit is licensed under the **[GNU Affero General Public License v3.0 only](LICENSE)**.
 
 BookOrbit material whose copyright holders have authorized them is also subject to the **[BookOrbit Additional Terms](ADDITIONAL_TERMS.md)** under sections 7(b), 7(c), 7(d), and 7(e) of the GNU AGPL v3. See the **[Attribution and Legal Notice](NOTICE)** for the required attribution.
+
+### External tool runs
+
+The [external runner integration](docs/EXTERNAL_RUNNERS.md) provides user-scoped monitoring and run controls for separately hosted content tools. Adapters own execution, schedules and content delivery; BookOrbit provides authenticated controls and status views.

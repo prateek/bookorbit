@@ -1,4 +1,9 @@
 export enum AuditAction {
+  ExternalRunnerCreate = "external_runner.create",
+  ExternalRunnerUpdate = "external_runner.update",
+  ExternalRunnerDelete = "external_runner.delete",
+  ExternalRunnerStart = "external_runner.start",
+  ExternalRunnerCancel = "external_runner.cancel",
   AuthRegister = "auth.register",
   AuthLogin = "auth.login",
   AuthLoginFailed = "auth.login.failed",
@@ -156,6 +161,7 @@ export enum AuditAction {
 }
 
 export enum AuditResource {
+  ExternalRunner = "external_runner",
   User = "user",
   Library = "library",
   Book = "book",

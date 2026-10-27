@@ -4626,6 +4626,7 @@
       "other": "Other"
     },
     "resourceLabels": {
+      "ExternalRunner": "External tool",
       "User": "User",
       "Library": "Library",
       "Book": "Book",
@@ -4655,6 +4656,11 @@
       "ReadingInsightsProfile": "Reading insights profile"
     },
     "actionLabels": {
+      "ExternalRunnerCreate": "Add external tool connection",
+      "ExternalRunnerUpdate": "Update external tool connection",
+      "ExternalRunnerDelete": "Remove external tool connection",
+      "ExternalRunnerStart": "Start external tool run",
+      "ExternalRunnerCancel": "Cancel external tool run",
       "AuthRegister": "Register account",
       "AuthLogin": "Sign in",
       "AuthLoginFailed": "Failed sign-in",
@@ -13402,5 +13408,56 @@
     "pages": "Arrivals pages",
     "previous": "Previous",
     "next": "Next"
+  },
+  "externalRunner": {
+    "title": "External tools",
+    "remove": "Remove connection",
+    "removeHint": "This removes your connection only. External runs, history and schedules are unaffected.",
+    "subtitle": "Monitor and run your connected content tools.",
+    "add": "Add connection",
+    "connection": "Connection",
+    "requestFailed": "Runner request failed.",
+    "stale": "Last known results may be out of date.",
+    "keyRequired": "Set EXTERNAL_RUNNER_ENCRYPTION_KEY on the server to save credentials.",
+    "name": "Name",
+    "url": "Runner URL",
+    "token": "Access token",
+    "tokenHint": "Leave blank to keep the saved token. Enter it again when changing the URL or private-network policy.",
+    "private": "Allow a trusted private network (including HTTP)",
+    "enabled": "Enable this connection",
+    "scheduleBoundary": "Disabling a connection does not stop external schedules or running jobs.",
+    "save": "Save connection",
+    "close": "Close",
+    "empty": "Connect a runner to see its jobs and execution history.",
+    "moreConnections": "More connections",
+    "edit": "Edit connection",
+    "refresh": "Refresh",
+    "disabled": "This connection is disabled. External jobs may still be running.",
+    "externalSchedule": "Schedule managed externally",
+    "runNow": "Run now",
+    "history": "Recent runs",
+    "checked": "Last checked {time}",
+    "noRuns": "No execution history loaded.",
+    "older": "Older runs",
+    "details": "Run details",
+    "importUnconfirmed": "Tool execution and library import are separate. BookOrbit import has not been confirmed for this run.",
+    "cancel": "Request cancellation",
+    "cancelUnavailable": "This runner does not support safe remote cancellation.",
+    "moreEvents": "More events",
+    "finished": "{name}: run {state}",
+    "states": {
+      "queued": "Queued",
+      "running": "Running",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "interrupted": "Interrupted",
+      "busy": "Busy"
+    },
+    "origins": {
+      "manual": "Manual",
+      "schedule": "Scheduled",
+      "external": "External"
+    }
   }
 }
