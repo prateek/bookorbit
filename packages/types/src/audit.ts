@@ -1,4 +1,9 @@
 export enum AuditAction {
+  ExternalRunnerCreate = "external_runner.create",
+  ExternalRunnerUpdate = "external_runner.update",
+  ExternalRunnerDelete = "external_runner.delete",
+  ExternalRunnerStart = "external_runner.start",
+  ExternalRunnerCancel = "external_runner.cancel",
   AuthRegister = "auth.register",
   AuthLogin = "auth.login",
   AuthLoginFailed = "auth.login.failed",
@@ -156,6 +161,7 @@ export enum AuditAction {
 }
 
 export enum AuditResource {
+  ExternalRunner = "external_runner",
   User = "user",
   Library = "library",
   Book = "book",
@@ -243,7 +249,7 @@ export const AUDIT_CATEGORY_PREFIXES: Record<Exclude<AuditCategory, "other">, re
   requests: ["book_request.", "download_client.", "request_indexer."],
   collections: ["collection.", "smart_scope."],
   devices: ["kobo.", "email."],
-  settings: ["app_settings.", "entity_manager.", "author.", "maintenance."],
+  settings: ["app_settings.", "entity_manager.", "author.", "maintenance.", "external_runner."],
 };
 
 export function getAuditCategory(action: string): AuditCategory {

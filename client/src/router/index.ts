@@ -731,6 +731,12 @@ export const routes: RouteRecordRaw[] = [
         children: [
           { path: '', redirect: { name: 'tools-entity-manager' } },
           {
+            path: 'external-runners',
+            name: 'tools-external-runners',
+            component: () => import('@/features/external-runner/ExternalRunnersView.vue'),
+            meta: { requiredPermission: Permission.ManageLibraries, title: () => t('externalRunner.title') },
+          },
+          {
             path: 'entity-manager',
             name: 'tools-entity-manager',
             component: () => import('@/features/tools/entity-manager/views/EntityManagerView.vue'),

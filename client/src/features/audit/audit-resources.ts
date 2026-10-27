@@ -15,6 +15,7 @@ export const AUDIT_RESOURCE_OPTIONS = Object.entries(AuditResource).map(([key, v
 const resourceKeyByValue = new Map<string, keyof typeof AuditResource>(AUDIT_RESOURCE_OPTIONS.map((option) => [option.value, option.key]))
 
 const domainByResource: Record<AuditResource, AuditResourceDomain> = {
+  [AuditResource.ExternalRunner]: 'integrations',
   [AuditResource.User]: 'people',
   [AuditResource.Library]: 'content',
   [AuditResource.Book]: 'content',

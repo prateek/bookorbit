@@ -28,6 +28,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { GLOBAL_GUARDS } from './common/guards/global-guards';
 import { DbModule } from './db/db.module';
 import { AnnotationModule } from './modules/annotation/annotation.module';
+import { ExternalRunnerModule } from './modules/external-runner/external-runner.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { HealthModule } from './modules/health/health.module';
 import { AppSettingsModule } from './modules/app-settings/app-settings.module';
@@ -172,6 +173,7 @@ import { PushModule } from './modules/push/push.module';
     EpubModule,
     BookDockModule,
     BookRequestModule,
+    ExternalRunnerModule,
     EmailModule,
     MetadataScoreModule,
     StatisticsModule,

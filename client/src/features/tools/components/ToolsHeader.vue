@@ -21,6 +21,7 @@ const sections = computed<ToolSection[]>(() => {
   if (hasPermission('manage_libraries')) {
     result.push({ label: t('tools.header.entityManager'), routeName: 'tools-entity-manager' })
     result.push({ label: t('tools.header.bulkRename'), routeName: 'tools-bulk-rename' })
+    result.push({ label: t('externalRunner.title'), routeName: 'tools-external-runners' })
   }
 
   if (hasPermission('library_delete_books')) {
